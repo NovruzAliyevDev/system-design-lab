@@ -4,3 +4,5 @@ export function lessonPath(lessonId: string, anchor?: string): string {
 }
 
 export const LESSON_ROUTE = '/lessons/:lessonId'
+
+export const SETTINGS_ROUTE = '/settings'

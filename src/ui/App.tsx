@@ -3,9 +3,10 @@ import { BrowserRouter, Link, Route, Routes, useLocation, useMatch } from 'react
 import { Attribution } from './Attribution'
 import { LessonList } from './LessonList'
 import { LessonPage } from './LessonPage'
+import { SettingsPage } from './SettingsPage'
 import { TableOfContents } from './TableOfContents'
 import { t } from './i18n'
-import { LESSON_ROUTE } from './routes'
+import { LESSON_ROUTE, SETTINGS_ROUTE } from './routes'
 
 function Layout() {
   const lessonMatch = useMatch(LESSON_ROUTE)
@@ -33,6 +34,9 @@ function Layout() {
             {t('appTitle')}
           </Link>
           <span className="hidden text-sm text-zinc-500 sm:inline">{t('appTagline')}</span>
+          <Link to={SETTINGS_ROUTE} className="ml-auto text-sm text-zinc-400 hover:text-zinc-100">
+            {t('settingsTitle')}
+          </Link>
         </div>
       </header>
 
@@ -49,6 +53,7 @@ function Layout() {
             <Routes>
               <Route path="/" element={<LessonList />} />
               <Route path={LESSON_ROUTE} element={<LessonPage />} />
+              <Route path={SETTINGS_ROUTE} element={<SettingsPage />} />
             </Routes>
           </main>
           <footer className="mx-auto max-w-3xl border-t border-zinc-800 px-4 py-6 text-xs text-zinc-500">

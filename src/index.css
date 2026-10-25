@@ -12,6 +12,28 @@ html.dark {
   color-scheme: dark;
 }
 
+/*
+ * The UI is styled dark-first with the zinc and sky scales. The light theme mirrors those scales
+ * (zinc-950 becomes the lightest shade, zinc-50 the darkest), so components need no light variants.
+ * Typography for primer text switches with `dark:prose-invert` instead.
+ */
+html:not(.dark) {
+  color-scheme: light;
+  --color-zinc-50: oklch(14.1% 0.005 285.823);
+  --color-zinc-100: oklch(21% 0.006 285.885);
+  --color-zinc-200: oklch(27.4% 0.006 286.033);
+  --color-zinc-300: oklch(37% 0.013 285.805);
+  --color-zinc-400: oklch(44.2% 0.017 285.786);
+  --color-zinc-600: oklch(70.5% 0.015 286.067);
+  --color-zinc-700: oklch(87.1% 0.006 286.286);
+  --color-zinc-800: oklch(92% 0.004 286.32);
+  --color-zinc-900: oklch(96.7% 0.001 286.375);
+  --color-zinc-950: oklch(98.5% 0 none);
+  /* Accent text needs a darker sky on a light page to stay readable. */
+  --color-sky-300: oklch(44.3% 0.11 240.79);
+  --color-sky-400: oklch(50% 0.134 242.749);
+}
+
 body {
   @apply bg-zinc-950 text-zinc-200 antialiased;
 }

@@ -5,6 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <!-- The document title comes from the i18n layer at startup (see main.tsx). -->
     <title></title>
+    <script>
+      // Apply a light theme before first paint. The progress store (src/ui/progress/store.ts) keeps this copy current.
+      try {
+        if (localStorage.getItem('system-design-lab-theme') === 'light') document.documentElement.classList.remove('dark')
+      } catch {}
+    </script>
   </head>
   <body>
     <div id="root"></div>
