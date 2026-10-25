@@ -43,6 +43,12 @@ test('works offline after one visit', async ({ page, context }) => {
   await expectLoadBalancerLesson(page)
   await page.reload()
   await expectLoadBalancerLesson(page)
+
+  // Solution diagrams come from the primer repo, not imgur, so they are cached with the site.
+  await page.goto('solutions/pastebin')
+  const diagram = page.getByRole('article').locator('img').first()
+  await diagram.scrollIntoViewIfNeeded()
+  await expect.poll(() => diagram.evaluate((img: HTMLImageElement) => img.naturalWidth)).toBeGreaterThan(0)
 })
 
 /** Opens the site, lets the service worker install, then deploys a new version; returns its prompt. */

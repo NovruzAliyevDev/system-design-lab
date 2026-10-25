@@ -70,7 +70,7 @@ describe('findUnresolvedLinks', () => {
   it('lists links in Lesson text that resolve to nothing', () => {
     const broken = buildContentCatalog({ markdown: '## A\n[ok](#a) [bad](#missing)', source })
 
-    expect(findUnresolvedLinks(broken)).toEqual([{ lessonId: 'a', href: '#missing' }])
+    expect(findUnresolvedLinks(broken)).toEqual([{ location: 'a', href: '#missing' }])
     expect(findUnresolvedLinks(catalog)).toEqual([])
   })
 })

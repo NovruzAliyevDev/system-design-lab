@@ -4,12 +4,22 @@ import { Attribution } from './Attribution'
 import { GlossaryPage } from './GlossaryPage'
 import { LessonList } from './LessonList'
 import { LessonPage } from './LessonPage'
+import { SolutionPage, SolutionsPage } from './SolutionPages'
 import { Search } from './Search'
 import { SettingsPage } from './SettingsPage'
+import { StudyGuidePage } from './StudyGuidePage'
 import { TableOfContents } from './TableOfContents'
 import { UpdatePrompt } from './UpdatePrompt'
 import { t } from './i18n'
-import { GLOSSARY_ROUTE, LESSON_ROUTE, SETTINGS_ROUTE } from './routes'
+import {
+  GLOSSARY_ROUTE,
+  LESSON_ROUTE,
+  REFERENCE_PAGES,
+  SETTINGS_ROUTE,
+  SOLUTION_ROUTE,
+  SOLUTIONS_ROUTE,
+  STUDY_GUIDE_ROUTE,
+} from './routes'
 
 function Layout() {
   const lessonMatch = useMatch(LESSON_ROUTE)
@@ -36,14 +46,16 @@ function Layout() {
           <Link to="/" className="font-semibold text-zinc-50">
             {t('appTitle')}
           </Link>
-          <span className="hidden text-sm text-zinc-500 sm:inline">{t('appTagline')}</span>
+          <span className="hidden text-sm text-zinc-500 xl:inline">{t('appTagline')}</span>
           <div className="ml-auto self-center">
             <Search />
           </div>
-          {/* A phone's header has no room for it; the table of contents drawer links it there. */}
-          <Link to={GLOSSARY_ROUTE} className="hidden text-sm text-zinc-400 hover:text-zinc-100 sm:inline">
-            {t('glossaryTitle')}
-          </Link>
+          {/* A narrow header has no room for them; the table of contents drawer links them there. */}
+          {REFERENCE_PAGES.map(({ to, label }) => (
+            <Link key={to} to={to} className="hidden text-sm text-zinc-400 hover:text-zinc-100 md:inline">
+              {t(label)}
+            </Link>
+          ))}
           <Link to={SETTINGS_ROUTE} className="text-sm text-zinc-400 hover:text-zinc-100">
             {t('settingsTitle')}
           </Link>
@@ -64,6 +76,9 @@ function Layout() {
               <Route path="/" element={<LessonList />} />
               <Route path={LESSON_ROUTE} element={<LessonPage />} />
               <Route path={GLOSSARY_ROUTE} element={<GlossaryPage />} />
+              <Route path={SOLUTIONS_ROUTE} element={<SolutionsPage />} />
+              <Route path={SOLUTION_ROUTE} element={<SolutionPage />} />
+              <Route path={STUDY_GUIDE_ROUTE} element={<StudyGuidePage />} />
               <Route path={SETTINGS_ROUTE} element={<SettingsPage />} />
             </Routes>
           </main>

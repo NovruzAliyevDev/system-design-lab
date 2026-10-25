@@ -1,12 +1,13 @@
-import { useEffect, useRef, type RefObject } from 'react'
+import { useEffect, useMemo, useRef, type RefObject } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { findLesson } from '../core/content/catalog'
 import { adjacentLessons } from '../core/content/navigation'
 import { isLessonRead } from '../core/progress/reading'
+import { appendixTablesOf } from './AppendixTables'
 import { Attribution } from './Attribution'
 import { catalog } from './catalog'
 import { t } from './i18n'
-import { PrimerMarkdown } from './PrimerMarkdown'
+import { PRIMER_PROSE_CLASS, PrimerMarkdown } from './PrimerMarkdown'
 import { useProgress } from './progress/store'
 import { ReadMarker } from './ReadMarker'
 import { lessonPath } from './routes'
@@ -20,6 +21,7 @@ export function LessonPage() {
   const isRead = progress ? isLessonRead(progress.reading, lessonId) : undefined
   const endRef = useRef<HTMLDivElement>(null)
   const autoMark = useMarkReadAtEnd(lesson ? lessonId : undefined, isRead === false, endRef, markRead)
+  const appendixTables = useMemo(() => lesson && appendixTablesOf(lesson), [lesson])
 
   useScrollToHash()
 
@@ -55,8 +57,8 @@ export function LessonPage() {
         </p>
       )}
 
-      <div lang="en" className="prose dark:prose-invert mt-8 max-w-none prose-a:text-sky-400 prose-img:mx-auto prose-img:rounded-md prose-img:bg-white prose-img:p-2">
-        <PrimerMarkdown lesson={lesson} />
+      <div lang="en" className={`${PRIMER_PROSE_CLASS} mt-8`}>
+        <PrimerMarkdown text={lesson} codeBlocks={appendixTables} />
       </div>
       <div ref={endRef} aria-hidden />
 

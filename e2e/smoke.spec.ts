@@ -219,3 +219,74 @@ test('reads on a phone: wide tables scroll on their own and the table of content
   await expect(page.getByRole('heading', { level: 1, name: 'Load balancer' })).toBeVisible()
   await expect(toc).toBeHidden()
 })
+
+test('sorts and filters the latency numbers table of the appendix', async ({ page }) => {
+  await page.setViewportSize({ width: 1366, height: 900 })
+  await page.goto('/lessons/latency-numbers-every-programmer-should-know')
+  const table = page.getByRole('table', { name: 'Gecikmə rəqəmləri' })
+  const rows = table.locator('tbody tr')
+  await expect(rows).toHaveCount(15)
+  await expect(rows.first()).toContainText('L1 cache reference')
+
+  const sortByLatency = table.getByRole('button', { name: 'Gecikmə (ns)' })
+  await sortByLatency.click()
+  await expect(table.getByRole('columnheader', { name: 'Gecikmə (ns)' })).toHaveAttribute('aria-sort', 'ascending')
+  await sortByLatency.click()
+  await expect(table.getByRole('columnheader', { name: 'Gecikmə (ns)' })).toHaveAttribute('aria-sort', 'descending')
+  await expect(rows.first()).toContainText('Send packet CA->Netherlands->CA')
+  await expect(rows.first()).toContainText('150 ms')
+
+  await page.getByLabel('Cədvəldə süz').fill('memory')
+  await expect(page.getByText('5 / 15 sətir')).toBeVisible()
+  // Still sorted, slowest first.
+  await expect(rows.first()).toContainText('Read 1 MB sequentially from HDD')
+  await page.getByLabel('Cədvəldə süz').fill('no such operation')
+  await expect(page.getByText('Heç bir sətir uyğun gəlmir.')).toBeVisible()
+})
+
+test('reads a Solution page from the primer, with its diagrams and links back to Lessons', async ({ page }) => {
+  await page.setViewportSize({ width: 1366, height: 900 })
+  await page.goto('/lessons/system-design-interview-questions-with-solutions')
+  await page.getByRole('article').getByRole('link', { name: 'Solution', exact: true }).first().click()
+
+  await expect(page).toHaveURL(/\/solutions\/pastebin$/)
+  await expect(page.getByRole('heading', { level: 1, name: 'Design Pastebin.com (or Bit.ly)' })).toBeVisible()
+  await expect(page.getByRole('article').getByRole('link', { name: 'GitHub-da mənbəyə bax' })).toHaveAttribute(
+    'href',
+    /\/blob\/[0-9a-f]{40}\/solutions\/system_design\/pastebin\/README\.md$/,
+  )
+  const diagram = page.getByRole('article').locator('img').first()
+  await diagram.scrollIntoViewIfNeeded()
+  await expect.poll(() => diagram.evaluate((img: HTMLImageElement) => img.naturalWidth)).toBeGreaterThan(0)
+
+  // A link to a section of the primer on GitHub opens its Lesson in the app.
+  await page.getByRole('article').getByRole('link', { name: 'system design topics', exact: true }).first().click()
+  await expect(page).toHaveURL(/\/lessons\/index-of-system-design-topics$/)
+
+  await page.getByRole('banner').getByRole('link', { name: 'Həllər' }).click()
+  await expect(page.getByRole('main').getByRole('link')).toHaveCount(8)
+  await page.getByRole('main').getByRole('link', { name: 'Design a system that scales to millions of users on AWS' }).click()
+  await expect(page).toHaveURL(/\/solutions\/scaling_aws$/)
+  await expect(page.getByRole('heading', { level: 1, name: 'Design a system that scales to millions of users on AWS' })).toBeVisible()
+})
+
+test('follows the study guide of a chosen timeline to its Lessons', async ({ page }) => {
+  await page.setViewportSize({ width: 1366, height: 900 })
+  await page.goto('/')
+  await page.getByRole('banner').getByRole('link', { name: 'Öyrənmə planı' }).click()
+
+  await expect(page.getByRole('tab', { name: 'Qısa müddət' })).toHaveAttribute('aria-selected', 'true')
+  const panel = page.getByRole('tabpanel')
+  await expect(panel.getByRole('listitem')).toHaveCount(7)
+  await expect(panel).toContainText('bir neçəsini')
+
+  await page.getByRole('tab', { name: 'Uzun müddət' }).click()
+  await expect(page).toHaveURL(/\/study-guide\?timeline=long$/)
+  await expect(panel).toContainText('Practice by solving most interview questions.')
+  await expect(panel).toContainText('demək olar hamısını')
+
+  await page.reload()
+  await expect(page.getByRole('tab', { name: 'Uzun müddət' })).toHaveAttribute('aria-selected', 'true')
+  await panel.getByRole('link', { name: 'Real world architectures' }).click()
+  await expect(page.getByRole('heading', { level: 1, name: 'Real world architectures' })).toBeVisible()
+})

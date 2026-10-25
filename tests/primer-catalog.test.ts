@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { loadPrimerCatalog } from '../scripts/build-content'
-import { findUnresolvedLinks } from '../src/core/content/links'
+import { findUnresolvedLinks, resolveLink } from '../src/core/content/links'
+import { linkUrls } from '../src/core/content/markdown'
 
 describe('catalog of the pinned primer commit', () => {
   const catalog = loadPrimerCatalog()
@@ -15,8 +16,30 @@ describe('catalog of the pinned primer commit', () => {
     expect(catalog.lessons.some((lesson) => lesson.title === 'Source(s) and further reading')).toBe(false)
   })
 
-  it('resolves every internal link in the primer to a Lesson', () => {
+  it('resolves every internal link in the primer and its solutions to a page of the app', () => {
     expect(findUnresolvedLinks(catalog)).toEqual([])
+  })
+
+  it('has a Solution page for each of the eight system design questions, in primer order', () => {
+    expect(catalog.solutions.map((solution) => [solution.id, solution.title])).toEqual([
+      ['pastebin', 'Design Pastebin.com (or Bit.ly)'],
+      ['twitter', 'Design the Twitter timeline and search'],
+      ['web_crawler', 'Design a web crawler'],
+      ['mint', 'Design Mint.com'],
+      ['social_graph', 'Design the data structures for a social network'],
+      ['query_cache', 'Design a key-value cache to save the results of the most recent web server queries'],
+      ['sales_rank', "Design Amazon's sales rank by category feature"],
+      ['scaling_aws', 'Design a system that scales to millions of users on AWS'],
+    ])
+    expect(resolveLink(catalog, 'solutions/system_design/pastebin/README.md')).toEqual({ kind: 'solution', solutionId: 'pastebin' })
+  })
+
+  it('serves every diagram of the Solution pages with the site', () => {
+    for (const solution of catalog.solutions) {
+      const images = linkUrls(solution.body).filter((href) => /\.(png|jpe?g|gif|svg|webp)$/i.test(href))
+      expect(images.length, solution.id).toBeGreaterThan(0)
+      for (const src of images) expect(resolveLink(catalog, src, solution.path).kind, `${solution.id}: ${src}`).toBe('asset')
+    }
   })
 
   it("has Glossary Terms for the primer's core vocabulary", () => {
@@ -33,6 +56,52 @@ describe('catalog of the pinned primer commit', () => {
     ]
 
     expect(vocabulary.filter((term) => !forms.has(term))).toEqual([])
+  })
+
+  it('extracts the powers of two table from the appendix', () => {
+    const rows = catalog.appendix.powersOfTwo?.rows ?? []
+
+    expect(rows.map((row) => row.power)).toEqual([7, 8, 10, 16, 20, 30, 32, 40])
+    expect(rows.find((row) => row.power === 10)).toEqual({ power: 10, exactValue: 1024, approxValue: '1 thousand', bytes: '1 KB' })
+    expect(rows.find((row) => row.power === 16)).toEqual({ power: 16, exactValue: 65_536, bytes: '64 KB' })
+    expect(rows.find((row) => row.power === 40)?.exactValue).toBe(1_099_511_627_776)
+  })
+
+  it('extracts the latency numbers table from the appendix', () => {
+    const rows = catalog.appendix.latencyNumbers?.rows ?? []
+
+    expect(rows).toHaveLength(15)
+    expect(rows[0]).toEqual({ operation: 'L1 cache reference', nanoseconds: 0.5 })
+    expect(rows.find((row) => row.operation === 'Main memory reference')).toEqual({
+      operation: 'Main memory reference',
+      nanoseconds: 100,
+      note: '20x L2 cache, 200x L1 cache',
+    })
+    expect(rows.find((row) => row.operation === 'Read 1 MB sequentially from SSD*')).toEqual({
+      operation: 'Read 1 MB sequentially from SSD*',
+      nanoseconds: 1_000_000,
+      note: '~1GB/sec SSD, 4X memory',
+    })
+    expect(rows.at(-1)).toEqual({ operation: 'Send packet CA->Netherlands->CA', nanoseconds: 150_000_000 })
+  })
+
+  it("offers the primer's study guide as three timelines of steps through the Lessons", () => {
+    const guide = catalog.studyGuide
+
+    expect(guide?.timelines.map((timeline) => timeline.id)).toEqual(['short', 'medium', 'long'])
+    expect(guide?.timelines[0].summary).toBe(
+      'Aim for breadth with system design topics. Practice by solving some interview questions.',
+    )
+    expect(guide?.steps).toHaveLength(7)
+    expect(guide?.steps[0]).toEqual({
+      parts: [
+        { text: 'Read through the ' },
+        { text: 'System design topics', lessonId: 'index-of-system-design-topics' },
+        { text: ' to get a broad understanding of how systems work' },
+      ],
+      amounts: { short: 'yes', medium: 'yes', long: 'yes' },
+    })
+    expect(guide?.steps[4].amounts).toEqual({ short: 'some', medium: 'many', long: 'most' })
   })
 
   it('matches the recorded Lesson list', () => {

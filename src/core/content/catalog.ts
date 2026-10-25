@@ -1,8 +1,9 @@
-import { toString } from 'mdast-util-to-string'
-import GithubSlugger from 'github-slugger'
-import type { Heading } from 'mdast'
 import { validateGlossary, type GlossaryTerm } from '../glossary/glossary'
-import { parseMarkdown } from './markdown'
+import { extractAppendix, type Appendix } from './appendix'
+import { validateImageMirrors } from './image-mirrors'
+import { quoteUnquotedLinkUrls, readHeadings } from './markdown'
+import { buildSolutions, type Solution, type SolutionSource } from './solutions'
+import { extractStudyGuide, type StudyGuide } from './study-guide'
 
 export interface ContentSource {
   repoUrl: string
@@ -17,7 +18,14 @@ export interface LessonGroup {
   order: number
 }
 
-export interface Lesson {
+/** Primer markdown shown on a page of the app: a Lesson or a Solution page. */
+export interface PrimerText {
+  body: string
+  /** Anchors of the headings inside `body`, keyed by the offset in `body` where each heading starts. */
+  headingAnchors: HeadingAnchor[]
+}
+
+export interface Lesson extends PrimerText {
   id: string
   title: string
   groupId: string
@@ -27,11 +35,9 @@ export interface Lesson {
   sourceUrl: string
   /** Markdown under the Lesson heading, up to the next Lesson heading. */
   body: string
-  /** Anchors of the headings inside `body`, keyed by the offset in `body` where each heading starts. */
-  headingAnchors: HeadingAnchor[]
 }
 
-/** A heading inside a Lesson's text and the GitHub anchor it has in the source. */
+/** A heading inside a page's text and the GitHub anchor it has in its source file. */
 export interface HeadingAnchor {
   offset: number
   anchor: string
@@ -45,6 +51,14 @@ export interface Catalog {
   anchors: Record<string, string>
   /** In alphabetical order. */
   glossary: GlossaryTerm[]
+  /** The appendix tables as data, for the appendix Lessons, calculators and simulation defaults. */
+  appendix: Appendix
+  /** The primer's suggested path through the Lessons; absent only when the source has no study guide. */
+  studyGuide?: StudyGuide
+  /** The solution write-ups of the system design questions, in the order the README lists them. */
+  solutions: Solution[]
+  /** Image URLs used by primer text → the same image in the primer repo, served with the site. */
+  imageMirrors: Record<string, string>
 }
 
 /**
@@ -53,6 +67,7 @@ export interface Catalog {
  */
 export interface AuthoredContent {
   glossary?: unknown
+  imageMirrors?: unknown
 }
 
 /** Authored content that does not match its schema or references something that does not exist. */
@@ -79,10 +94,17 @@ interface SourceHeading {
   bodyStart: number
 }
 
-export function buildContentCatalog(input: { markdown: string; source: ContentSource; authored?: AuthoredContent }): Catalog {
-  const { markdown, source, authored = {} } = input
+export function buildContentCatalog(input: {
+  markdown: string
+  source: ContentSource
+  /** The primer's solution write-ups, in any order. */
+  solutions?: SolutionSource[]
+  authored?: AuthoredContent
+}): Catalog {
+  const { source, solutions = [], authored = {} } = input
+  const markdown = quoteUnquotedLinkUrls(input.markdown)
   const sourceBase = `${source.repoUrl}/blob/${source.commit}/${source.path}`
-  const headings = readHeadings(markdown)
+  const headings = readSourceHeadings(markdown)
   const sections = headings.filter((heading) => heading.startsSection)
 
   const groups: LessonGroup[] = []
@@ -116,29 +138,31 @@ export function buildContentCatalog(input: { markdown: string; source: ContentSo
 
   const lessonIds = new Set(lessons.map((lesson) => lesson.id))
   const glossary = validateGlossary(authored.glossary ?? [], lessonIds)
-  if (glossary.problems.length > 0) throw new ContentValidationError(glossary.problems)
+  const imageMirrors = validateImageMirrors(authored.imageMirrors ?? {})
+  const problems = [...glossary.problems, ...imageMirrors.problems]
+  if (problems.length > 0) throw new ContentValidationError(problems)
 
-  return { source, groups, lessons, anchors: mapAnchorsToLessons(headings, sectionsWithLesson), glossary: glossary.terms }
+  const catalog: Catalog = {
+    source,
+    groups,
+    lessons,
+    anchors: mapAnchorsToLessons(headings, sectionsWithLesson),
+    glossary: glossary.terms,
+    appendix: extractAppendix(lessons),
+    solutions: buildSolutions(solutions, source, markdown),
+    imageMirrors: imageMirrors.mirrors,
+  }
+  // The study guide's links resolve against the catalog itself.
+  const studyGuide = extractStudyGuide(catalog)
+  return studyGuide ? { ...catalog, studyGuide } : catalog
 }
 
-function readHeadings(markdown: string): SourceHeading[] {
-  const tree = parseMarkdown(markdown)
-  const slugger = new GithubSlugger()
-  return tree.children
-    .filter((node): node is Heading => node.type === 'heading')
-    .map((heading) => {
-      const title = toString(heading)
-      return {
-        // Every heading is slugged, in order, so ids match GitHub's anchors including duplicate suffixes.
-        id: slugger.slug(title),
-        title,
-        depth: heading.depth,
-        startsSection:
-          heading.depth < LESSON_HEADING_DEPTH || (heading.depth === LESSON_HEADING_DEPTH && !FOOTER_HEADING.test(title)),
-        headingStart: heading.position!.start.offset!,
-        bodyStart: heading.position!.end.offset!,
-      }
-    })
+function readSourceHeadings(markdown: string): SourceHeading[] {
+  return readHeadings(markdown).map((heading) => ({
+    ...heading,
+    startsSection:
+      heading.depth < LESSON_HEADING_DEPTH || (heading.depth === LESSON_HEADING_DEPTH && !FOOTER_HEADING.test(heading.title)),
+  }))
 }
 
 /**
@@ -167,7 +191,11 @@ export function findLesson(catalog: Catalog, lessonId: string): Lesson | undefin
   return catalog.lessons.find((lesson) => lesson.id === lessonId)
 }
 
-/** The source anchor of the heading that starts at `offset` in the Lesson's text, if any. */
-export function headingAnchorAt(lesson: Lesson, offset: number | undefined): string | undefined {
-  return lesson.headingAnchors.find((heading) => heading.offset === offset)?.anchor
+export function findSolution(catalog: Catalog, solutionId: string): Solution | undefined {
+  return catalog.solutions.find((solution) => solution.id === solutionId)
+}
+
+/** The source anchor of the heading that starts at `offset` in the page's text, if any. */
+export function headingAnchorAt(text: PrimerText, offset: number | undefined): string | undefined {
+  return text.headingAnchors.find((heading) => heading.offset === offset)?.anchor
 }

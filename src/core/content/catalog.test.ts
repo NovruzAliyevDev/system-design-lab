@@ -158,4 +158,21 @@ describe('buildContentCatalog', () => {
       ['cap-theorem', 'availability-vs-consistency', 0],
     ])
   })
+
+  it('quotes the unquoted link URLs the primer writes in raw HTML, so they render as links', () => {
+    const markdown = [
+      '## CDN',
+      '<p><i><a href=https://example.com/cdn/>Source: why use a CDN</a></i></p>',
+      'Text.<sup><a href=https://example.com#x>1</a></sup>',
+    ].join('\n')
+
+    const [cdn] = buildContentCatalog({ markdown, source }).lessons
+
+    expect(cdn.body).toBe(
+      [
+        '<p><i><a href="https://example.com/cdn/">Source: why use a CDN</a></i></p>',
+        'Text.<sup><a href="https://example.com#x">1</a></sup>',
+      ].join('\n'),
+    )
+  })
 })
