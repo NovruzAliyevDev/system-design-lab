@@ -1,4 +1,5 @@
 import { slug } from 'github-slugger'
+import type { LessonReference } from '../content/catalog'
 
 /** A Glossary Term as it is authored. */
 export interface GlossaryTermInput {
@@ -35,7 +36,7 @@ export function validateGlossary(
   const owners = new Map<string, string>()
   const ids = new Map<string, string>()
   input.forEach((item: unknown, i) => {
-    const name = isRecord(item) && isText(item.term) ? `Glossary Term "${item.term}"` : `Glossary Term #${i + 1}`
+    const name = termName(item, i)
     const problem = (message: string) => problems.push(`${name}: ${message}`)
     if (!isRecord(item)) return problem('must be an object')
 
@@ -65,6 +66,23 @@ export function validateGlossary(
 
   terms.sort((a, b) => a.term.localeCompare(b.term, 'en', { sensitivity: 'base' }))
   return { terms, problems }
+}
+
+/**
+ * The Lesson ids an authored Glossary references, per term. Malformed terms contribute what they
+ * can: reporting them is `validateGlossary`'s job.
+ */
+export function glossaryLessonReferences(input: unknown): LessonReference[] {
+  if (!Array.isArray(input)) return []
+  return input.flatMap((item: unknown, i) => {
+    if (!isRecord(item) || !Array.isArray(item.lessonIds)) return []
+    return item.lessonIds.filter(isText).map((lessonId) => ({ referrer: termName(item, i), lessonId }))
+  })
+}
+
+/** How problems and references name an authored term: by its name, or by its position when it has none. */
+function termName(item: unknown, index: number): string {
+  return isRecord(item) && isText(item.term) ? `Glossary Term "${item.term}"` : `Glossary Term #${index + 1}`
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

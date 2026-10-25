@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "content": "tsx scripts/build-content.ts",
+    "pin-report": "tsx scripts/pin-report.ts",
     "predev": "npm run content",
     "dev": "vite",
     "prebuild": "npm run content",

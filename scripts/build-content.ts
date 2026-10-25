@@ -11,8 +11,9 @@ import type { SolutionSource } from '../src/core/content/solutions'
 import { buildSearchIndex, searchDocuments } from '../src/core/search/search'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
-const PRIMER_PATH = 'vendor/system-design-primer'
-const PRIMER_DIR = join(root, PRIMER_PATH)
+export const PRIMER_PATH = 'vendor/system-design-primer'
+export const PRIMER_DIR = join(root, PRIMER_PATH)
+export const PRIMER_REPO_URL = 'https://github.com/donnemartin/system-design-primer'
 /** Each system design question has a folder here with its write-up in `README.md`. */
 const SOLUTIONS_PATH = 'solutions/system_design'
 const GENERATED_DIR = join(root, 'src', 'generated')
@@ -21,8 +22,9 @@ const SEARCH_OUTPUT = join(GENERATED_DIR, 'search-index.json')
 /** Primer files the Lessons display are copied here and served under `<base>/primer/`. */
 const ASSET_DIR = join(root, 'public', 'primer')
 
-function git(args: string[]): string {
-  return execFileSync('git', args, { cwd: root, encoding: 'utf8' }).trim()
+/** Runs git in this repo, or in `cwd` (e.g. the primer checkout). The primer README is a few hundred KB. */
+export function git(args: string[], cwd = root): string {
+  return execFileSync('git', args, { cwd, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 }).trim()
 }
 
 /** The commit the repo pins the primer to; fails if the submodule checkout has drifted from it. */
@@ -53,7 +55,7 @@ export function loadPrimerCatalog() {
   const commit = pinnedPrimerCommit()
   return buildContentCatalog({
     markdown,
-    source: { repoUrl: 'https://github.com/donnemartin/system-design-primer', commit, path: 'README.md' },
+    source: { repoUrl: PRIMER_REPO_URL, commit, path: 'README.md' },
     solutions: readSolutions(),
     authored: { glossary, imageMirrors },
   })

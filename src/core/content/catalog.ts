@@ -70,6 +70,13 @@ export interface AuthoredContent {
   imageMirrors?: unknown
 }
 
+/** A Lesson that an authored item references. */
+export interface LessonReference {
+  /** The authored item, as build errors name it (e.g. `Glossary Term "Cache"`). */
+  referrer: string
+  lessonId: string
+}
+
 /** Authored content that does not match its schema or references something that does not exist. */
 export class ContentValidationError extends Error {
   constructor(readonly problems: string[]) {
@@ -103,6 +110,38 @@ export function buildContentCatalog(input: {
 }): Catalog {
   const { source, solutions = [], authored = {} } = input
   const markdown = quoteUnquotedLinkUrls(input.markdown)
+  const { headings, groups, lessons, sectionsWithLesson } = splitIntoLessons(markdown, source)
+
+  const lessonIds = new Set(lessons.map((lesson) => lesson.id))
+  const glossary = validateGlossary(authored.glossary ?? [], lessonIds)
+  const imageMirrors = validateImageMirrors(authored.imageMirrors ?? {})
+  const problems = [...glossary.problems, ...imageMirrors.problems]
+  if (problems.length > 0) throw new ContentValidationError(problems)
+
+  const catalog: Catalog = {
+    source,
+    groups,
+    lessons,
+    anchors: mapAnchorsToLessons(headings, sectionsWithLesson),
+    glossary: glossary.terms,
+    appendix: extractAppendix(lessons),
+    solutions: buildSolutions(solutions, source, markdown),
+    imageMirrors: imageMirrors.mirrors,
+  }
+  // The study guide's links resolve against the catalog itself.
+  const studyGuide = extractStudyGuide(catalog)
+  return studyGuide ? { ...catalog, studyGuide } : catalog
+}
+
+/**
+ * Only the Lessons of the source, as `buildContentCatalog` splits them. Unlike the full catalog it
+ * reads nothing else, so it never fails on the appendix, the study guide or authored content.
+ */
+export function readLessons(input: { markdown: string; source: ContentSource }): Lesson[] {
+  return splitIntoLessons(quoteUnquotedLinkUrls(input.markdown), input.source).lessons
+}
+
+function splitIntoLessons(markdown: string, source: ContentSource) {
   const sourceBase = `${source.repoUrl}/blob/${source.commit}/${source.path}`
   const headings = readSourceHeadings(markdown)
   const sections = headings.filter((heading) => heading.startsSection)
@@ -135,26 +174,7 @@ export function buildContentCatalog(input: {
         .map((heading) => ({ offset: heading.headingStart - bodyStart, anchor: heading.id })),
     })
   })
-
-  const lessonIds = new Set(lessons.map((lesson) => lesson.id))
-  const glossary = validateGlossary(authored.glossary ?? [], lessonIds)
-  const imageMirrors = validateImageMirrors(authored.imageMirrors ?? {})
-  const problems = [...glossary.problems, ...imageMirrors.problems]
-  if (problems.length > 0) throw new ContentValidationError(problems)
-
-  const catalog: Catalog = {
-    source,
-    groups,
-    lessons,
-    anchors: mapAnchorsToLessons(headings, sectionsWithLesson),
-    glossary: glossary.terms,
-    appendix: extractAppendix(lessons),
-    solutions: buildSolutions(solutions, source, markdown),
-    imageMirrors: imageMirrors.mirrors,
-  }
-  // The study guide's links resolve against the catalog itself.
-  const studyGuide = extractStudyGuide(catalog)
-  return studyGuide ? { ...catalog, studyGuide } : catalog
+  return { headings, groups, lessons, sectionsWithLesson }
 }
 
 function readSourceHeadings(markdown: string): SourceHeading[] {

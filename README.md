@@ -34,6 +34,38 @@ npm run test:e2e
 
 `npm test` runs Vitest (Core and pipeline tests). `npm run test:e2e` runs the Playwright tests; run `npx playwright install chromium` once before the first run. The `chromium` project runs against the dev server. The `pages` project builds the site under the base path `/system-design-lab/` and serves it like GitHub Pages, to test deep links, offline use and updates.
 
+## Update the primer
+
+The app shows the primer at the pinned commit only. To move the pin to a newer commit:
+
+1. Check out the new commit in the submodule:
+
+   ```bash
+   git -C vendor/system-design-primer fetch origin
+   git -C vendor/system-design-primer checkout origin/master
+   ```
+
+2. See what changes:
+
+   ```bash
+   npm run pin-report
+   ```
+
+   It compares the Lesson catalog at the pin committed in `HEAD` with the one at the submodule's checkout, and lists the Lessons added, removed and renamed. A renamed Lesson is one whose heading changed: the same anchor with a new title, or a removed and an added Lesson with similar anchors and titles. It then lists the authored content (Glossary Terms in `content/`) that references a Lesson the new commit no longer has, with the new id when the Lesson was renamed, and exits with 1 if there is any. To compare other commits, pass them: `npm run pin-report -- <from> [<to>]`.
+
+3. Fix the authored references the report lists, and run it again until it reports none. The build would fail on any that are left.
+4. Stage the new pin, rebuild and test:
+
+   ```bash
+   git add vendor/system-design-primer
+   npm run content
+   npm test
+   ```
+
+   The Content Pipeline only builds from a checkout that matches the staged pin. The `primer-catalog` test compares the Lesson list with a recorded snapshot, so it fails whenever Lessons change. Once the report's changes are the ones you expect, update the snapshot with `npx vitest run tests/primer-catalog.test.ts -u`.
+
+5. Commit the pin together with the authored content and snapshot changes.
+
 ## Deploy
 
 `.github/workflows/deploy.yml` runs the Vitest and Playwright tests, builds the site and publishes it to GitHub Pages on every push to `main`. The build reads the Pages base path from `actions/configure-pages`, so the repository can have any name. To build for a base path locally, set `BASE_PATH` (for example `BASE_PATH=/system-design-lab npm run build`).
