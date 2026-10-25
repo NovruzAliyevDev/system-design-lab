@@ -5,6 +5,7 @@ import { LessonList } from './LessonList'
 import { LessonPage } from './LessonPage'
 import { SettingsPage } from './SettingsPage'
 import { TableOfContents } from './TableOfContents'
+import { UpdatePrompt } from './UpdatePrompt'
 import { t } from './i18n'
 import { LESSON_ROUTE, SETTINGS_ROUTE } from './routes'
 
@@ -61,6 +62,7 @@ function Layout() {
           </footer>
         </div>
       </div>
+      <UpdatePrompt />
     </div>
   )
 }

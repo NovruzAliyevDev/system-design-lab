@@ -7,6 +7,8 @@
     "module": "ESNext",
     "moduleResolution": "bundler",
     "verbatimModuleSyntax": true,
+    // Vite's native config loader needs explicit `.ts` extensions in vite.config.ts imports.
+    "allowImportingTsExtensions": true,
     "resolveJsonModule": true,
     "noEmit": true,
     "strict": true,

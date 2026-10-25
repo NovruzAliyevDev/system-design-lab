@@ -39,4 +39,7 @@ export const az = {
   resetConfirmYes: 'Bəli, sıfırla',
   cancel: 'Ləğv et',
   resetDone: 'Sıfırlandı.',
+  updateAvailable: 'Yeni versiya hazırdır.',
+  updateReload: 'Yenilə',
+  updateLater: 'Sonra',
 } as const
