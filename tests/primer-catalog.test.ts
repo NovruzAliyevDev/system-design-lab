@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { loadPrimerCatalog } from '../scripts/build-content'
+import { findUnresolvedLinks } from '../src/core/content/links'
 
 describe('catalog of the pinned primer commit', () => {
   const catalog = loadPrimerCatalog()
@@ -12,6 +13,10 @@ describe('catalog of the pinned primer commit', () => {
     expect(byId.get('relational-database-management-system-rdbms')?.groupId).toBe('database')
     expect(byId.get('latency-numbers-every-programmer-should-know')?.groupId).toBe('appendix')
     expect(catalog.lessons.some((lesson) => lesson.title === 'Source(s) and further reading')).toBe(false)
+  })
+
+  it('resolves every internal link in the primer to a Lesson', () => {
+    expect(findUnresolvedLinks(catalog)).toEqual([])
   })
 
   it('matches the recorded Lesson list', () => {

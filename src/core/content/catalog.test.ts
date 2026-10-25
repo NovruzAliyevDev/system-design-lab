@@ -97,6 +97,55 @@ describe('buildContentCatalog', () => {
     )
   })
 
+  it('maps every heading anchor to the Lesson that shows it', () => {
+    const markdown = [
+      '## Availability vs consistency',
+      '### CAP theorem',
+      'CAP text.',
+      '#### CP - consistency and partition tolerance',
+      'CP text.',
+      '### Source(s) and further reading',
+      'Links.',
+      '## Cache',
+      'Cache text.',
+      '### Source(s) and further reading',
+      'More links.',
+    ].join('\n')
+
+    const catalog = buildContentCatalog({ markdown, source })
+
+    expect(catalog.anchors).toEqual({
+      'availability-vs-consistency': 'cap-theorem',
+      'cap-theorem': 'cap-theorem',
+      'cp---consistency-and-partition-tolerance': 'cap-theorem',
+      'sources-and-further-reading': 'cap-theorem',
+      cache: 'cache',
+      'sources-and-further-reading-1': 'cache',
+    })
+  })
+
+  it("gives each Lesson the anchors of the headings inside its body, by offset in the body", () => {
+    const markdown = [
+      '## Cache',
+      'Cache text.',
+      '#### Sharding',
+      'A.',
+      '### Source(s) and further reading',
+      'Links.',
+      '## Database',
+      '#### Sharding',
+      'B.',
+    ].join('\n')
+
+    const [cache, database] = buildContentCatalog({ markdown, source }).lessons
+
+    expect(cache.headingAnchors).toEqual([
+      { offset: cache.body.indexOf('#### Sharding'), anchor: 'sharding' },
+      { offset: cache.body.indexOf('### Source(s)'), anchor: 'sources-and-further-reading' },
+    ])
+    expect(database.headingAnchors).toEqual([{ offset: 0, anchor: 'sharding-1' }])
+  })
+
   it('does not create a Lesson for a section with no text of its own', () => {
     const markdown = ['## Availability vs consistency', '', '### CAP theorem', 'CAP text.'].join('\n')
 

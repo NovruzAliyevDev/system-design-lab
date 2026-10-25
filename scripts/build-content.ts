@@ -1,14 +1,17 @@
 // Content Pipeline: turns the pinned primer submodule into the static catalog the app loads.
 import { execFileSync } from 'node:child_process'
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { copyFileSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { buildContentCatalog } from '../src/core/content/catalog'
+import { buildContentCatalog, type Catalog } from '../src/core/content/catalog'
+import { findUnresolvedLinks, referencedAssets } from '../src/core/content/links'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const PRIMER_PATH = 'vendor/system-design-primer'
 const PRIMER_DIR = join(root, PRIMER_PATH)
 const OUTPUT = join(root, 'src', 'generated', 'catalog.json')
+/** Primer files the Lessons display are copied here and served under `<base>/primer/`. */
+const ASSET_DIR = join(root, 'public', 'primer')
 
 function git(args: string[]): string {
   return execFileSync('git', args, { cwd: root, encoding: 'utf8' }).trim()
@@ -37,9 +40,31 @@ export function loadPrimerCatalog() {
   })
 }
 
+function assertLinksResolve(catalog: Catalog) {
+  const unresolved = findUnresolvedLinks(catalog)
+  if (unresolved.length > 0) {
+    const list = unresolved.map(({ lessonId, href }) => `  ${lessonId}: ${href}`).join('\n')
+    throw new Error(`Links in the primer that match no heading:\n${list}`)
+  }
+}
+
+function copyAssets(catalog: Catalog): number {
+  const assets = referencedAssets(catalog)
+  rmSync(ASSET_DIR, { recursive: true, force: true })
+  for (const path of assets) {
+    mkdirSync(dirname(join(ASSET_DIR, path)), { recursive: true })
+    copyFileSync(join(PRIMER_DIR, path), join(ASSET_DIR, path))
+  }
+  return assets.length
+}
+
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   const catalog = loadPrimerCatalog()
+  assertLinksResolve(catalog)
+  const assetCount = copyAssets(catalog)
   mkdirSync(dirname(OUTPUT), { recursive: true })
   writeFileSync(OUTPUT, JSON.stringify(catalog))
-  console.log(`Content catalog: ${catalog.lessons.length} Lessons in ${catalog.groups.length} groups (${catalog.source.commit.slice(0, 7)})`)
+  console.log(
+    `Content catalog: ${catalog.lessons.length} Lessons in ${catalog.groups.length} groups, ${assetCount} images (${catalog.source.commit.slice(0, 7)})`,
+  )
 }

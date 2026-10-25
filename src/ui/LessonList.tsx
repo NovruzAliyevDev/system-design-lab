@@ -15,7 +15,7 @@ export function LessonList() {
               className="flex items-baseline gap-3 px-4 py-2.5 hover:bg-zinc-900 focus-visible:bg-zinc-900 focus-visible:outline-none"
             >
               <span aria-hidden className="w-8 shrink-0 text-right font-mono text-xs text-zinc-500">{lesson.order + 1}</span>
-              <span className="text-zinc-100">{lesson.title}</span>
+              <span lang="en" className="text-zinc-100">{lesson.title}</span>
             </Link>
           </li>
         ))}
