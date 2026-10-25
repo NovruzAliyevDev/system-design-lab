@@ -19,7 +19,8 @@ test('moves through Lessons with the sidebar, primer links and next/previous', a
 
   const diagram = page.getByRole('article').locator('img').first()
   await expect(diagram).toBeVisible()
-  expect(await diagram.evaluate((img: HTMLImageElement) => img.naturalWidth)).toBeGreaterThan(0)
+  // e2e code is typechecked without DOM types; the callback runs in the browser.
+  expect(await diagram.evaluate((img) => (img as unknown as { naturalWidth: number }).naturalWidth)).toBeGreaterThan(0)
 
   await page.getByRole('link', { name: 'active-passive' }).first().click()
   await expect(page).toHaveURL(/\/lessons\/fail-over#active-passive$/)
