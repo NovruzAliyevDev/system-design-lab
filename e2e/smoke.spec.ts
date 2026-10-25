@@ -346,3 +346,53 @@ test('completes a daily review of a Deck with the keyboard, within the new-card 
   const stats = page.getByRole('listitem', { name: 'OO Design' })
   await expect(stats.getByRole('definition')).toHaveText(['4', '0', '2', '0', '0'])
 })
+
+test('answers the quiz at the end of a Lesson, with feedback per option, and keeps the best score', async ({ page }) => {
+  await page.goto('/lessons/when-to-update-the-cache')
+  const quiz = page.getByRole('region', { name: 'Test' })
+  const question = (prompt: RegExp) => quiz.getByRole('listitem').filter({ has: page.getByRole('group', { name: prompt }) })
+
+  // Ordering: move each step up to its place, first step first.
+  const ordering = question(/addımlarını sıraya düzün/)
+  const steps = ['Girişi keşdə axtar', 'Girişi bazadan yüklə', 'Girişi keşə əlavə et', 'Girişi qaytar']
+  for (const [target, step] of steps.entries()) {
+    const texts = await ordering.getByRole('listitem').allInnerTexts()
+    const current = texts.findIndex((text) => text.includes(step))
+    for (let i = current; i > target; i--) await ordering.getByRole('button', { name: `Yuxarı: ${step}` }).click()
+  }
+  await ordering.getByRole('button', { name: 'Yoxla' }).click()
+  await expect(ordering.getByRole('status')).toHaveText('Doğrudur!')
+
+  const writeThrough = question(/sinxron yazır/)
+  await writeThrough.getByLabel('Cache-aside').check()
+  await writeThrough.getByRole('button', { name: 'Yoxla' }).click()
+  await expect(writeThrough.getByRole('status')).toHaveText('Səhvdir.')
+  await expect(writeThrough.getByText('Sizin seçiminiz səhvdir')).toBeVisible()
+  await expect(writeThrough.getByText('Doğru cavab')).toBeVisible()
+  await expect(writeThrough.getByText('keş bazaya toxunmur')).toBeVisible()
+  await expect(writeThrough.getByText('bazaya asinxron, sonradan ötürür')).toBeVisible()
+  await expect(writeThrough.getByLabel('Write-through')).toBeDisabled()
+
+  const dataLoss = question(/məlumat itə bilər/)
+  await dataLoss.getByLabel('Write-behind (write-back)').check()
+  await dataLoss.getByRole('button', { name: 'Yoxla' }).click()
+
+  const drawbacks = question(/Cache-aside-ın çatışmazlıqları/)
+  await expect(drawbacks.getByRole('button', { name: 'Yoxla' })).toBeDisabled()
+  await drawbacks.getByLabel('Hər cache miss üç səfər tələb edir').check()
+  await drawbacks.getByLabel('Bazada yenilənən məlumat keşdə köhnələ bilər').check()
+  await drawbacks.getByRole('button', { name: 'Yoxla' }).click()
+  await expect(drawbacks.getByRole('status')).toHaveText('Qismən doğrudur: 67%')
+
+  await expect(quiz.getByText(/^Nəticə:/)).toBeHidden()
+  const refreshAhead = question(/Refresh-ahead/)
+  await refreshAhead.getByLabel(/düzgün proqnozlaşdırılmayanda/).check()
+  await refreshAhead.getByRole('button', { name: 'Yoxla' }).click()
+
+  // 1 + 0 + 1 + 2/3 + 1 of 5 points.
+  await expect(quiz.getByText('Nəticə: 3,7 / 5 bal (73%)')).toBeVisible()
+  await expect(quiz.getByText('Nəticə yadda saxlanıldı.')).toBeVisible()
+  await page.reload()
+  await expect(quiz.getByText(/^Ən yaxşı nəticə: 73% · son cəhd:/)).toBeVisible()
+  await expect(quiz.getByRole('button', { name: 'Yoxla' })).toHaveCount(5)
+})

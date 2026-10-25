@@ -4,8 +4,10 @@ import { findLesson } from '../core/content/catalog'
 import { adjacentLessons } from '../core/content/navigation'
 import { selectCards } from '../core/flashcards/deck'
 import { isLessonRead } from '../core/progress/reading'
+import { findLessonQuiz } from '../core/quizzes/quiz'
 import { appendixTablesOf } from './AppendixTables'
 import { Attribution } from './Attribution'
+import { LessonQuiz } from './LessonQuiz'
 import { catalog } from './catalog'
 import { t } from './i18n'
 import { PRIMER_PROSE_CLASS, PrimerMarkdown } from './PrimerMarkdown'
@@ -24,6 +26,7 @@ export function LessonPage() {
   const autoMark = useMarkReadAtEnd(lesson ? lessonId : undefined, isRead === false, endRef, markRead)
   const appendixTables = useMemo(() => lesson && appendixTablesOf(lesson), [lesson])
   const cardCount = useMemo(() => selectCards(catalog.decks, { kind: 'lesson', lessonId }).length, [lessonId])
+  const quiz = findLessonQuiz(catalog.quizzes, lessonId)
 
   useScrollToHash()
 
@@ -71,6 +74,8 @@ export function LessonPage() {
         <PrimerMarkdown text={lesson} codeBlocks={appendixTables} />
       </div>
       <div ref={endRef} aria-hidden />
+
+      {quiz && progress && <LessonQuiz key={quiz.id} quiz={quiz} />}
 
       <nav aria-label={t('lessonNavigation')} className="mt-12 grid gap-3 border-t border-zinc-800 pt-6 sm:grid-cols-2">
         {previous && (

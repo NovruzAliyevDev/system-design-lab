@@ -1,5 +1,6 @@
 import { flashcardLessonReferences } from '../flashcards/deck'
 import { glossaryLessonReferences } from '../glossary/glossary'
+import { quizLessonReferences } from '../quizzes/quiz'
 import { readLessons, type AuthoredContent, type ContentSource, type LessonReference } from './catalog'
 
 /** The primer README at one commit. */
@@ -117,7 +118,11 @@ export function formatPinChangeReport(report: PinChangeReport): string {
 
 /** Every Lesson reference in authored content. Tickets that add authored content that references Lessons add it here. */
 function authoredLessonReferences(authored: AuthoredContent): LessonReference[] {
-  return [...glossaryLessonReferences(authored.glossary), ...flashcardLessonReferences(authored.flashcards)]
+  return [
+    ...glossaryLessonReferences(authored.glossary),
+    ...flashcardLessonReferences(authored.flashcards),
+    ...quizLessonReferences(authored.quizzes),
+  ]
 }
 
 /** Pairs removed and added Lessons that are similar enough, most similar first; each Lesson pairs at most once. */

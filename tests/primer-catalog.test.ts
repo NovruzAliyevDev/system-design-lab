@@ -3,6 +3,7 @@ import { loadPrimerCatalog } from '../scripts/build-content'
 import { findUnresolvedLinks, resolveLink } from '../src/core/content/links'
 import { linkUrls } from '../src/core/content/markdown'
 import { htmlLinkUrls } from '../src/core/flashcards/deck'
+import { findLessonQuiz } from '../src/core/quizzes/quiz'
 
 describe('catalog of the pinned primer commit', () => {
   const catalog = loadPrimerCatalog()
@@ -141,6 +142,13 @@ describe('catalog of the pinned primer commit', () => {
       amounts: { short: 'yes', medium: 'yes', long: 'yes' },
     })
     expect(guide?.steps[4].amounts).toEqual({ short: 'some', medium: 'many', long: 'most' })
+  })
+
+  it('has a Quiz at the end of every Lesson of the Cache group, the first content set', () => {
+    const cacheLessons = catalog.lessons.filter((lesson) => lesson.groupId === 'cache').map((lesson) => lesson.id)
+
+    expect(cacheLessons).toHaveLength(10)
+    expect(cacheLessons.filter((lessonId) => !findLessonQuiz(catalog.quizzes, lessonId))).toEqual([])
   })
 
   it('matches the recorded Lesson list', () => {

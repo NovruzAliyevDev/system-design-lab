@@ -7,6 +7,7 @@ import { glossary } from '../content/glossary'
 import { flashcardFormerRepoUrls, flashcardLinkFixes, flashcardPlaceholderLinks } from '../content/flashcard-link-fixes'
 import { flashcards } from '../content/flashcards'
 import { imageMirrors } from '../content/image-mirrors'
+import { quizzes } from '../content/quizzes'
 import { buildContentCatalog, type Catalog } from '../src/core/content/catalog'
 import { findUnresolvedLinks, isImagePath, referencedAssets } from '../src/core/content/links'
 import type { DeckSource } from '../src/core/flashcards/deck'
@@ -81,7 +82,7 @@ export function loadPrimerCatalog() {
     solutions: readSolutions(),
     decks: readDecks(),
     primerImages: primerImages(),
-    authored: { glossary, imageMirrors, flashcardLinkFixes, flashcardPlaceholderLinks, flashcardFormerRepoUrls, flashcards },
+    authored: { glossary, imageMirrors, flashcardLinkFixes, flashcardPlaceholderLinks, flashcardFormerRepoUrls, flashcards, quizzes },
   })
 }
 
@@ -126,6 +127,6 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   writeFileSync(CATALOG_OUTPUT, JSON.stringify(catalog))
   writeFileSync(SEARCH_OUTPUT, JSON.stringify(buildSearchIndex(searchDocuments(catalog))))
   console.log(
-    `Content catalog: ${catalog.lessons.length} Lessons in ${catalog.groups.length} groups, ${catalog.solutions.length} Solutions, ${catalog.glossary.length} Glossary Terms, ${catalog.decks.reduce((count, deck) => count + deck.cards.length, 0)} Flashcards, ${assetCount} images (${catalog.source.commit.slice(0, 7)})`,
+    `Content catalog: ${catalog.lessons.length} Lessons in ${catalog.groups.length} groups, ${catalog.solutions.length} Solutions, ${catalog.glossary.length} Glossary Terms, ${catalog.decks.reduce((count, deck) => count + deck.cards.length, 0)} Flashcards, ${catalog.quizzes.length} Quizzes, ${assetCount} images (${catalog.source.commit.slice(0, 7)})`,
   )
 }

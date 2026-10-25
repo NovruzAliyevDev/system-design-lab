@@ -1,5 +1,6 @@
 import { buildDeck, linkCards, validateFormerRepoUrls, validateLinkFixes, type Deck, type DeckSource } from '../flashcards/deck'
 import { validateGlossary, type GlossaryTerm } from '../glossary/glossary'
+import { validateQuizzes, type Quiz } from '../quizzes/quiz'
 import { extractAppendix, type Appendix } from './appendix'
 import { validateImageMirrors } from './image-mirrors'
 import { quoteUnquotedLinkUrls, readHeadings } from './markdown'
@@ -62,6 +63,8 @@ export interface Catalog {
   imageMirrors: Record<string, string>
   /** The primer's Anki Decks as Flashcards. */
   decks: Deck[]
+  /** Authored Quizzes, at most one per Lesson, in authored order. */
+  quizzes: Quiz[]
 }
 
 /**
@@ -76,6 +79,8 @@ export interface AuthoredContent {
   flashcardPlaceholderLinks?: unknown
   /** Per card: the Lessons it links to and its Azerbaijani explanation. */
   flashcards?: unknown
+  /** Quizzes shown at the end of Lessons. */
+  quizzes?: unknown
 }
 
 /** A Lesson that an authored item references. */
@@ -147,7 +152,16 @@ export function buildContentCatalog(input: {
     authored.flashcards ?? [],
     lessonIds,
   )
-  const problems = [...glossary.problems, ...imageMirrors.problems, ...linkFixes.problems, ...placeholderLinks.problems, ...formerRepoUrls.problems, ...flashcards.problems]
+  const quizzes = validateQuizzes(authored.quizzes ?? [], lessonIds)
+  const problems = [
+    ...glossary.problems,
+    ...imageMirrors.problems,
+    ...linkFixes.problems,
+    ...placeholderLinks.problems,
+    ...formerRepoUrls.problems,
+    ...flashcards.problems,
+    ...quizzes.problems,
+  ]
   if (problems.length > 0) throw new ContentValidationError(problems)
 
   const catalog: Catalog = {
@@ -160,6 +174,7 @@ export function buildContentCatalog(input: {
     solutions: buildSolutions(solutions, source, markdown),
     imageMirrors: imageMirrors.mirrors,
     decks: flashcards.decks,
+    quizzes: quizzes.quizzes,
   }
   // The study guide's links resolve against the catalog itself.
   const studyGuide = extractStudyGuide(catalog)

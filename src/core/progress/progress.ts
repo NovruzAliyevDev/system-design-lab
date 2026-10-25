@@ -25,22 +25,40 @@ export interface FlashcardProgress {
   cards: CardStates
 }
 
+export interface QuizResult {
+  /** The best share of points of any attempt, from 0 to 1. */
+  bestScore: number
+  /** When the quiz was last completed (ISO timestamp). */
+  lastAttemptAt: string
+}
+
+export interface QuizProgress {
+  /** Quiz id → its result; a quiz without one has not been completed. */
+  results: Record<string, QuizResult>
+}
+
 /** Everything the learner has done, split into areas that are stored and reset separately. */
 export interface Progress {
   reading: ReadingProgress
   settings: Settings
   flashcards: FlashcardProgress
+  quizzes: QuizProgress
 }
 
 export type ProgressArea = keyof Progress
 
-export const PROGRESS_AREAS: readonly ProgressArea[] = ['reading', 'settings', 'flashcards']
+export const PROGRESS_AREAS: readonly ProgressArea[] = ['reading', 'settings', 'flashcards', 'quizzes']
 
 export function emptyProgress(): Progress {
-  return { reading: { readLessons: {} }, settings: { theme: 'dark', newCardsPerDay: DEFAULT_NEW_CARDS_PER_DAY }, flashcards: { cards: {} } }
+  return {
+    reading: { readLessons: {} },
+    settings: { theme: 'dark', newCardsPerDay: DEFAULT_NEW_CARDS_PER_DAY },
+    flashcards: { cards: {} },
+    quizzes: { results: {} },
+  }
 }
 
-export const PROGRESS_SCHEMA_VERSION = 3
+export const PROGRESS_SCHEMA_VERSION = 4
 
 /** The export file: all progress, versioned so that older files can be migrated on import. */
 export interface ProgressExport {
@@ -116,6 +134,11 @@ const UPGRADES: Record<number, (data: Record<string, unknown>) => Record<string,
     const settings = { ...progress.settings, newCardsPerDay: DEFAULT_NEW_CARDS_PER_DAY }
     return { schemaVersion: 3, exportedAt, progress: { ...progress, settings } }
   },
+  // v3 had no quiz results.
+  3: ({ exportedAt, progress }) => {
+    if (!isRecord(progress)) throw malformed('progress is missing')
+    return { schemaVersion: 4, exportedAt, progress: { ...progress, quizzes: { results: {} } } }
+  },
 }
 
 function validateCurrent(data: Record<string, unknown>): ProgressExport {
@@ -126,7 +149,7 @@ function validateCurrent(data: Record<string, unknown>): ProgressExport {
 }
 
 function validateProgress(progress: Record<string, unknown>): Progress {
-  const { reading, settings, flashcards } = progress
+  const { reading, settings, flashcards, quizzes } = progress
   if (!isRecord(reading) || !isRecord(reading.readLessons)) throw malformed('reading is missing')
   const readLessons = Object.entries(reading.readLessons)
   for (const [lessonId, readAt] of readLessons) {
@@ -146,12 +169,26 @@ function validateProgress(progress: Record<string, unknown>): Progress {
     return [cardId, state]
   })
 
+  if (!isRecord(quizzes) || !isRecord(quizzes.results)) throw malformed('quizzes is missing')
+  const results = Object.entries(quizzes.results).map(([quizId, value]): [string, QuizResult] => {
+    if (!isRecord(value) || !isQuizScore(value.bestScore) || !isTimestamp(value.lastAttemptAt)) {
+      throw malformed(`the result of quiz ${quizId} is invalid`)
+    }
+    return [quizId, { bestScore: value.bestScore, lastAttemptAt: value.lastAttemptAt }]
+  })
+
   // Object.fromEntries defines keys as own properties, so an id such as `__proto__` stays data.
   return {
     reading: { readLessons: Object.fromEntries(readLessons) as Record<string, string> },
     settings: { theme, newCardsPerDay },
     flashcards: { cards: Object.fromEntries(cards) },
+    quizzes: { results: Object.fromEntries(results) },
   }
+}
+
+/** A quiz score: the share of points earned, from 0 to 1. */
+export function isQuizScore(value: unknown): value is number {
+  return typeof value === 'number' && value >= 0 && value <= 1
 }
 
 /** A daily new-card limit: a whole number from 0 to `MAX_NEW_CARDS_PER_DAY`. */

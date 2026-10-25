@@ -124,6 +124,19 @@ describe('comparePrimerVersions', () => {
     expect(report.brokenReferences).toEqual([{ referrer: 'Flashcard "system-design/1"', lessonId: 'queues' }])
   })
 
+  it('lists authored Quizzes shown in Lessons the new pin does not have', () => {
+    const before = version('old', ['## Queues', 'b', '## Cache', 'c'])
+    const after = version('new', ['## Cache', 'c'])
+    const quizzes = [
+      { id: 'queues-basics', lessonId: 'queues', questions: [] },
+      { id: 'cache-basics', lessonId: 'cache', questions: [] },
+    ]
+
+    const report = comparePrimerVersions({ before, after, authored: { quizzes } })
+
+    expect(report.brokenReferences).toEqual([{ referrer: 'Quiz "queues-basics"', lessonId: 'queues' }])
+  })
+
   it('reports no broken references when every authored reference resolves', () => {
     const lines = ['## Cache', 'a']
     const glossary = [{ term: 'Cache', explanation: 'x', lessonIds: ['cache'] }]

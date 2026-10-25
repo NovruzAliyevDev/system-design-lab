@@ -13,12 +13,15 @@ const cardState = {
   lapses: 1,
 } as const
 
+const quizResult = { bestScore: 0.75, lastAttemptAt: '2026-10-25T10:00:00.000Z' }
+
 describe('ProgressRepository', () => {
   it('round-trips all progress through export and import without loss', async () => {
     const source = createInMemoryProgressRepository()
     await source.put('reading', { readLessons: { cache: '2026-10-20T08:00:00.000Z', 'load-balancer': '2026-10-21T09:30:00.000Z' } })
     await source.put('settings', { theme: 'light', newCardsPerDay: 5 })
     await source.put('flashcards', { cards: { 'system-design/1482325088071': cardState } })
+    await source.put('quizzes', { results: { 'cache-basics': quizResult } })
     const exported = await source.exportAll(NOW)
 
     const target = createInMemoryProgressRepository()
@@ -30,6 +33,7 @@ describe('ProgressRepository', () => {
     })
     expect(await target.get('settings')).toEqual({ theme: 'light', newCardsPerDay: 5 })
     expect(await target.get('flashcards')).toEqual({ cards: { 'system-design/1482325088071': cardState } })
+    expect(await target.get('quizzes')).toEqual({ results: { 'cache-basics': quizResult } })
   })
 
   it('starts empty, with the dark theme and 20 new cards a day', async () => {
@@ -38,10 +42,12 @@ describe('ProgressRepository', () => {
     expect(await repository.get('reading')).toEqual({ readLessons: {} })
     expect(await repository.get('settings')).toEqual({ theme: 'dark', newCardsPerDay: 20 })
     expect(await repository.get('flashcards')).toEqual({ cards: {} })
+    expect(await repository.get('quizzes')).toEqual({ results: {} })
     expect(await repository.getAll()).toEqual({
       reading: { readLessons: {} },
       settings: { theme: 'dark', newCardsPerDay: 20 },
       flashcards: { cards: {} },
+      quizzes: { results: {} },
     })
   })
 
@@ -70,12 +76,14 @@ describe('ProgressRepository', () => {
     await repository.put('reading', { readLessons: { dns: '2026-10-22T10:00:00.000Z' } })
     await repository.put('settings', { theme: 'light', newCardsPerDay: 20 })
     await repository.put('flashcards', { cards: { 'system-design/1': cardState } })
+    await repository.put('quizzes', { results: { 'cache-basics': quizResult } })
 
     await repository.reset()
 
     expect(await repository.get('reading')).toEqual({ readLessons: {} })
     expect(await repository.get('settings')).toEqual({ theme: 'dark', newCardsPerDay: 20 })
     expect(await repository.get('flashcards')).toEqual({ cards: {} })
+    expect(await repository.get('quizzes')).toEqual({ results: {} })
   })
 
   it('backs up the current progress before a valid import replaces it', async () => {
@@ -98,13 +106,14 @@ describe('ProgressRepository', () => {
     await repository.importAll(JSON.stringify(v0Export), NOW)
 
     expect(await repository.exportAll(NOW)).toEqual({
-      schemaVersion: 3,
+      schemaVersion: 4,
       exportedAt: NOW.toISOString(),
       progress: {
         // v0 did not record when a Lesson was read; the export time is the latest it can have been.
         reading: { readLessons: { cache: '2026-01-15T18:00:00.000Z', dns: '2026-01-15T18:00:00.000Z' } },
         settings: { theme: 'dark', newCardsPerDay: 20 },
         flashcards: { cards: {} },
+        quizzes: { results: {} },
       },
     })
   })
@@ -123,6 +132,7 @@ describe('ProgressRepository', () => {
       reading: v1Export.progress.reading,
       settings: { theme: 'light', newCardsPerDay: 20 },
       flashcards: { cards: {} },
+      quizzes: { results: {} },
     })
   })
 
@@ -136,7 +146,28 @@ describe('ProgressRepository', () => {
 
     await repository.importAll(JSON.stringify(v2Export), NOW)
 
-    expect(await repository.getAll()).toEqual({ ...v2Export.progress, settings: { theme: 'light', newCardsPerDay: 20 } })
+    expect(await repository.getAll()).toEqual({
+      ...v2Export.progress,
+      settings: { theme: 'light', newCardsPerDay: 20 },
+      quizzes: { results: {} },
+    })
+  })
+
+  it('migrates a v3 export, which had no quiz results', async () => {
+    const v3Export = {
+      schemaVersion: 3,
+      exportedAt: '2026-10-26T18:00:00.000Z',
+      progress: {
+        reading: { readLessons: { cache: '2026-10-26T08:00:00.000Z' } },
+        settings: { theme: 'dark', newCardsPerDay: 10 },
+        flashcards: { cards: { 'system-design/1': cardState } },
+      },
+    }
+    const repository = createInMemoryProgressRepository()
+
+    await repository.importAll(JSON.stringify(v3Export), NOW)
+
+    expect(await repository.getAll()).toEqual({ ...v3Export.progress, quizzes: { results: {} } })
   })
 
   it('keeps when each card was started', async () => {
@@ -161,10 +192,13 @@ describe('ProgressRepository', () => {
     reading: { readLessons: { cache: '2026-10-20T08:00:00.000Z' } },
     settings: { theme: 'dark', newCardsPerDay: 20 },
     flashcards: { cards: { 'system-design/1': cardState } },
+    quizzes: { results: { 'cache-basics': quizResult } },
   }
-  const withSettings = (settings: unknown) => JSON.stringify({ schemaVersion: 3, exportedAt: NOW.toISOString(), progress: { ...validProgress, settings } })
+  const withSettings = (settings: unknown) => JSON.stringify({ schemaVersion: 4, exportedAt: NOW.toISOString(), progress: { ...validProgress, settings } })
   const withCard = (card: unknown) =>
-    JSON.stringify({ schemaVersion: 3, exportedAt: NOW.toISOString(), progress: { ...validProgress, flashcards: { cards: { 'system-design/1': card } } } })
+    JSON.stringify({ schemaVersion: 4, exportedAt: NOW.toISOString(), progress: { ...validProgress, flashcards: { cards: { 'system-design/1': card } } } })
+  const withQuizResult = (result: unknown) =>
+    JSON.stringify({ schemaVersion: 4, exportedAt: NOW.toISOString(), progress: { ...validProgress, quizzes: { results: { 'cache-basics': result } } } })
 
   it.each([
     ['not JSON', '{"schemaVersion": 1,', 'not-json'],
@@ -173,6 +207,12 @@ describe('ProgressRepository', () => {
     ['a newer schemaVersion', JSON.stringify({ schemaVersion: 99, exportedAt: NOW.toISOString(), progress: validProgress }), 'unsupported-version'],
     ['a missing area', JSON.stringify({ schemaVersion: 1, exportedAt: NOW.toISOString(), progress: { reading: validProgress.reading } }), 'malformed'],
     ['no flashcards area', JSON.stringify({ schemaVersion: 3, exportedAt: NOW.toISOString(), progress: { ...validProgress, flashcards: undefined } }), 'malformed'],
+    ['no quizzes area', JSON.stringify({ schemaVersion: 4, exportedAt: NOW.toISOString(), progress: { ...validProgress, quizzes: undefined } }), 'malformed'],
+    ['a best quiz score above 1', withQuizResult({ ...quizResult, bestScore: 1.5 }), 'malformed'],
+    ['a negative best quiz score', withQuizResult({ ...quizResult, bestScore: -0.1 }), 'malformed'],
+    ['a best quiz score that is not a number', withQuizResult({ ...quizResult, bestScore: '80%' }), 'malformed'],
+    ['a last quiz attempt that is not a timestamp', withQuizResult({ ...quizResult, lastAttemptAt: 'yesterday' }), 'malformed'],
+    ['a quiz result that is not an object', withQuizResult(0.5), 'malformed'],
     ['a card state of an unknown phase', withCard({ ...cardState, phase: 'mastered' }), 'malformed'],
     ['a card state without a due time', withCard({ ...cardState, due: 'soon' }), 'malformed'],
     ['a card state with a negative interval', withCard({ ...cardState, intervalDays: -1 }), 'malformed'],

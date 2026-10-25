@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { scheduleReview, type Grade } from '../../core/flashcards/scheduler'
 import type { Progress, ProgressArea, Theme } from '../../core/progress/progress'
 import { markLessonRead, markLessonUnread } from '../../core/progress/reading'
+import { recordQuizResult } from '../../core/quizzes/results'
 import { progressRepository } from './repository'
 
 interface ProgressState {
@@ -13,6 +14,8 @@ interface ProgressState {
   setNewCardsPerDay(count: number): Promise<void>
   /** Records a review of a Flashcard and schedules its next one. */
   gradeCard(cardId: string, grade: Grade): Promise<void>
+  /** Records a completed attempt of a quiz, scored from 0 to 1. */
+  recordQuiz(quizId: string, score: number): Promise<void>
   /** Imports an export file; throws `InvalidProgressFileError` and changes nothing when it is invalid. */
   importProgress(fileText: string): Promise<void>
   /** Resets one area, or everything when no area is given. */
@@ -26,6 +29,7 @@ export const useProgress = create<ProgressState>()(() => ({
   setNewCardsPerDay: (newCardsPerDay) => update('settings', (settings) => ({ ...settings, newCardsPerDay })),
   gradeCard: (cardId, grade) =>
     update('flashcards', ({ cards }) => ({ cards: { ...cards, [cardId]: scheduleReview(cards[cardId], grade, new Date()) } })),
+  recordQuiz: (quizId, score) => update('quizzes', (quizzes) => recordQuizResult(quizzes, quizId, score, new Date())),
   async importProgress(fileText) {
     await progressRepository.importAll(fileText, new Date())
     await load()

@@ -7,6 +7,7 @@
 // may be any revision the submodule knows. Exits with 1 when authored content needs fixing.
 import { flashcards } from '../content/flashcards'
 import { glossary } from '../content/glossary'
+import { quizzes } from '../content/quizzes'
 import { comparePrimerVersions, formatPinChangeReport, type PrimerVersion } from '../src/core/content/pin-change-report'
 import { git, PRIMER_DIR, PRIMER_PATH, PRIMER_REPO_URL } from './build-content'
 
@@ -21,6 +22,6 @@ function primerVersion(revision: string): PrimerVersion {
 }
 
 const [from = git(['rev-parse', `HEAD:${PRIMER_PATH}`]), to = 'HEAD'] = process.argv.slice(2)
-const report = comparePrimerVersions({ before: primerVersion(from), after: primerVersion(to), authored: { glossary, flashcards } })
+const report = comparePrimerVersions({ before: primerVersion(from), after: primerVersion(to), authored: { glossary, flashcards, quizzes } })
 console.log(formatPinChangeReport(report))
 if (report.brokenReferences.length > 0) process.exitCode = 1
