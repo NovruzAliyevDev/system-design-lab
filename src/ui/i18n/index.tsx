@@ -19,6 +19,16 @@ export function formatDecimal(value: number): string {
   return String(rounded).replace('.', ',')
 }
 
+/** A number as written in Azerbaijani, unrounded, e.g. "0,501". */
+export function formatNumber(value: number): string {
+  return String(value).replace('.', ',')
+}
+
+/** A whole number with its thousands grouped by spaces, e.g. "50 000". */
+export function formatInteger(value: number): string {
+  return String(Math.round(value)).replace(/\B(?=(\d{3})+(?!\d))/g, ' ')
+}
+
 /** A date in the local time zone, e.g. "26.10.2026". */
 export function formatDate(date: Date): string {
   const pad = (part: number) => String(part).padStart(2, '0')

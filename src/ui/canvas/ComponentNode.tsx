@@ -1,0 +1,47 @@
+import { Handle, Position, type Node, type NodeProps } from '@xyflow/react'
+import { componentDefinition, type AnyConfig } from '../../core/design/components'
+import type { DesignNode } from '../../core/design/design'
+import { t } from '../i18n'
+import { COMPONENT_TAGS, componentName, fieldLabel, optionLabel } from './componentText'
+
+export type ComponentFlowNode = Node<{ node: DesignNode }, 'component'>
+
+/** The choices made in a Node's config, e.g. "Layer 7 · Round robin · ×2". */
+function configSummary(node: DesignNode): string {
+  const config: AnyConfig = node.config
+  const parts = Object.entries(componentDefinition(node.componentType).config).flatMap(([key, field]) => {
+    const value = config[key]
+    // Defaults that say nothing (one instance, no replicas, no shard key) are left out.
+    if (field.kind === 'choice') return [optionLabel(String(value))]
+    if (value === field.default) return []
+    if (key === 'instances') return [`×${value}`]
+    if (key === 'replicas') return [t('nodeReplicas', { count: value })]
+    if (key === 'shardKey') return [t('nodeShardKey', { key: value })]
+    return [`${fieldLabel(key)}: ${value}`]
+  })
+  return parts.join(' · ')
+}
+
+export function ComponentNode({ data: { node }, selected, isConnectable }: NodeProps<ComponentFlowNode>) {
+  const summary = configSummary(node)
+  return (
+    <div
+      className={`w-44 rounded-md border bg-zinc-900 px-3 py-2 text-left shadow ${selected ? 'border-sky-400 ring-1 ring-sky-400' : 'border-zinc-700'}`}
+      data-testid={`node-${node.id}`}
+    >
+      <Handle type="target" position={Position.Left} isConnectable={isConnectable} className="!h-3 !w-3 !border-zinc-950 !bg-zinc-400" />
+      <div className="flex items-baseline gap-2">
+        <span className="shrink-0 rounded bg-zinc-800 px-1 font-mono text-[10px] text-zinc-400">{COMPONENT_TAGS[node.componentType]}</span>
+        <span className="truncate text-sm font-medium text-zinc-50">{node.label || componentName(node.componentType)}</span>
+        {node.notes && (
+          <span className="ml-auto text-xs text-zinc-500" aria-hidden>
+            ✎
+          </span>
+        )}
+      </div>
+      <div className="mt-0.5 truncate text-xs text-zinc-400">{componentName(node.componentType)}</div>
+      {summary && <div className="mt-0.5 truncate text-xs text-zinc-500">{summary}</div>}
+      <Handle type="source" position={Position.Right} isConnectable={isConnectable} className="!h-3 !w-3 !border-zinc-950 !bg-sky-400" />
+    </div>
+  )
+}

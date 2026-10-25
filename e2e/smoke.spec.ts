@@ -396,3 +396,88 @@ test('answers the quiz at the end of a Lesson, with feedback per option, and kee
   await expect(quiz.getByText(/^Ən yaxşı nəticə: 73% · son cəhd:/)).toBeVisible()
   await expect(quiz.getByRole('button', { name: 'Yoxla' })).toHaveCount(5)
 })
+
+test('builds a sandbox Design by drag and drop, and keeps it after a reload', async ({ page }) => {
+  await page.setViewportSize({ width: 1366, height: 900 })
+  await page.goto('/sandbox')
+  const palette = page.getByRole('navigation', { name: 'Komponentlər' })
+  const canvas = page.getByTestId('rf__wrapper')
+
+  await palette.getByRole('button', { name: 'Web server: kətana əlavə et' }).dragTo(canvas, { targetPosition: { x: 200, y: 150 } })
+  await palette.getByRole('button', { name: 'Cache: kətana əlavə et' }).dragTo(canvas, { targetPosition: { x: 550, y: 300 } })
+  const webServer = page.getByTestId('node-web-server-1')
+  const cache = page.getByTestId('node-cache-1')
+  await expect(webServer).toBeVisible()
+  await expect(cache).toBeVisible()
+
+  // The panel configures the Node just added.
+  const panel = page.getByRole('region', { name: 'Tənzimləmə' })
+  await panel.getByLabel('Ad').fill('Redis')
+  await panel.getByLabel('Keşləmə strategiyası').selectOption('write-through')
+  const instances = panel.getByLabel('Nüsxə sayı')
+  await instances.fill('0')
+  await expect(panel.getByRole('alert')).toHaveText('Ən az 1, ən çox 1000 ola bilər.')
+  await expect(cache).not.toContainText('×0')
+  await instances.fill('3')
+  await expect(cache).toContainText('Redis')
+  await expect(cache).toContainText('Write-through · LRU · ×3')
+  await expect(panel.getByText('50 000 sorğu/san')).toBeVisible()
+
+  await webServer.locator('.react-flow__handle.source').dragTo(cache.locator('.react-flow__handle.target'))
+  const edge = page.locator('.react-flow__edge')
+  await expect(edge).toHaveCount(1)
+  await edge.locator('.react-flow__edge-textwrapper').click()
+  await panel.getByLabel('Rejim').selectOption('async')
+  await panel.getByLabel('Trafik').selectOption('read')
+  await expect(edge.locator('path.react-flow__edge-path')).toHaveAttribute('style', /stroke-dasharray: 6,? 4/)
+  await expect(edge.getByText('Oxuma', { exact: true })).toBeVisible()
+
+  await page.reload()
+  await expect(page.getByTestId('node-cache-1')).toContainText('Redis')
+  await expect(page.getByTestId('node-cache-1')).toContainText('×3')
+  await expect(page.locator('.react-flow__edge path.react-flow__edge-path')).toHaveAttribute('style', /stroke-dasharray/)
+})
+
+test('deletes, undoes and redoes on the canvas with the keyboard', async ({ page }) => {
+  await page.setViewportSize({ width: 1366, height: 900 })
+  await page.goto('/sandbox')
+  const palette = page.getByRole('navigation', { name: 'Komponentlər' })
+  await palette.getByRole('button', { name: 'Load balancer: kətana əlavə et' }).click()
+  await palette.getByRole('button', { name: 'Web server: kətana əlavə et' }).click()
+  const loadBalancer = page.getByTestId('node-load-balancer-1')
+  const webServer = page.getByTestId('node-web-server-1')
+  await loadBalancer.locator('.react-flow__handle.source').dragTo(webServer.locator('.react-flow__handle.target'))
+  await expect(page.locator('.react-flow__edge')).toHaveCount(1)
+
+  await loadBalancer.click()
+  await page.keyboard.press('Delete')
+  await expect(loadBalancer).toBeHidden()
+  await expect(page.locator('.react-flow__edge')).toHaveCount(0)
+
+  await page.keyboard.press('Control+z')
+  await expect(loadBalancer).toBeVisible()
+  await expect(page.locator('.react-flow__edge')).toHaveCount(1)
+
+  await page.keyboard.press('Control+Shift+z')
+  await expect(loadBalancer).toBeHidden()
+
+  // The deletion is saved like any other change.
+  await page.reload()
+  await expect(webServer).toBeVisible()
+  await expect(loadBalancer).toBeHidden()
+})
+
+test('shows the sandbox read-only with a notice on a phone', async ({ page }) => {
+  await page.setViewportSize({ width: 1366, height: 900 })
+  await page.goto('/sandbox')
+  await page.getByRole('button', { name: 'SQL database: kətana əlavə et' }).click()
+  await expect(page.getByTestId('node-sql-database-1')).toBeVisible()
+
+  await page.setViewportSize({ width: 375, height: 812 })
+
+  await expect(page.getByRole('status')).toContainText('Kətan böyük ekranda daha yaxşı işləyir')
+  await expect(page.getByRole('navigation', { name: 'Komponentlər' })).toBeHidden()
+  await expect(page.getByTestId('node-sql-database-1')).toBeVisible()
+  await page.getByTestId('node-sql-database-1').click()
+  await expect(page.getByRole('region', { name: 'Tənzimləmə' }).getByLabel('Rol')).toBeDisabled()
+})

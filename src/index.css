@@ -12,6 +12,19 @@ html.dark {
   color-scheme: dark;
 }
 
+/* Design Canvas edges are coloured by the traffic they carry. */
+:root {
+  --canvas-read: oklch(74.6% 0.16 232.661);
+  --canvas-write: oklch(82.8% 0.189 84.429);
+  --canvas-both: oklch(70.5% 0.015 286.067);
+}
+
+html:not(.dark) {
+  --canvas-read: oklch(50% 0.134 242.749);
+  --canvas-write: oklch(55.5% 0.163 48.998);
+  --canvas-both: oklch(44.2% 0.017 285.786);
+}
+
 /*
  * The UI is styled dark-first with the zinc and sky scales. The light theme mirrors those scales
  * (zinc-950 becomes the lightest shade, zinc-50 the darkest), so components need no light variants.

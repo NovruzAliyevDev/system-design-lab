@@ -1,3 +1,4 @@
+import { readDesign, type Design } from '../design/design'
 import type { CardStates } from '../flashcards/queue'
 import { readCardState, type CardState } from '../flashcards/scheduler'
 
@@ -37,17 +38,26 @@ export interface QuizProgress {
   results: Record<string, QuizResult>
 }
 
+/** The id of the free sandbox Design among the drafts. */
+export const SANDBOX_DRAFT_ID = 'sandbox'
+
+export interface DesignProgress {
+  /** Draft id → the Design being edited there, auto-saved as it changes. */
+  drafts: Record<string, Design>
+}
+
 /** Everything the learner has done, split into areas that are stored and reset separately. */
 export interface Progress {
   reading: ReadingProgress
   settings: Settings
   flashcards: FlashcardProgress
   quizzes: QuizProgress
+  designs: DesignProgress
 }
 
 export type ProgressArea = keyof Progress
 
-export const PROGRESS_AREAS: readonly ProgressArea[] = ['reading', 'settings', 'flashcards', 'quizzes']
+export const PROGRESS_AREAS: readonly ProgressArea[] = ['reading', 'settings', 'flashcards', 'quizzes', 'designs']
 
 export function emptyProgress(): Progress {
   return {
@@ -55,10 +65,11 @@ export function emptyProgress(): Progress {
     settings: { theme: 'dark', newCardsPerDay: DEFAULT_NEW_CARDS_PER_DAY },
     flashcards: { cards: {} },
     quizzes: { results: {} },
+    designs: { drafts: {} },
   }
 }
 
-export const PROGRESS_SCHEMA_VERSION = 4
+export const PROGRESS_SCHEMA_VERSION = 5
 
 /** The export file: all progress, versioned so that older files can be migrated on import. */
 export interface ProgressExport {
@@ -139,6 +150,11 @@ const UPGRADES: Record<number, (data: Record<string, unknown>) => Record<string,
     if (!isRecord(progress)) throw malformed('progress is missing')
     return { schemaVersion: 4, exportedAt, progress: { ...progress, quizzes: { results: {} } } }
   },
+  // v4 had no Designs.
+  4: ({ exportedAt, progress }) => {
+    if (!isRecord(progress)) throw malformed('progress is missing')
+    return { schemaVersion: 5, exportedAt, progress: { ...progress, designs: { drafts: {} } } }
+  },
 }
 
 function validateCurrent(data: Record<string, unknown>): ProgressExport {
@@ -149,7 +165,7 @@ function validateCurrent(data: Record<string, unknown>): ProgressExport {
 }
 
 function validateProgress(progress: Record<string, unknown>): Progress {
-  const { reading, settings, flashcards, quizzes } = progress
+  const { reading, settings, flashcards, quizzes, designs } = progress
   if (!isRecord(reading) || !isRecord(reading.readLessons)) throw malformed('reading is missing')
   const readLessons = Object.entries(reading.readLessons)
   for (const [lessonId, readAt] of readLessons) {
@@ -177,12 +193,20 @@ function validateProgress(progress: Record<string, unknown>): Progress {
     return [quizId, { bestScore: value.bestScore, lastAttemptAt: value.lastAttemptAt }]
   })
 
+  if (!isRecord(designs) || !isRecord(designs.drafts)) throw malformed('designs is missing')
+  const drafts = Object.entries(designs.drafts).map(([draftId, value]): [string, Design] => {
+    const { design, problems } = readDesign(value)
+    if (!design) throw malformed(`the Design draft ${draftId} is invalid: ${problems.join('; ')}`)
+    return [draftId, design]
+  })
+
   // Object.fromEntries defines keys as own properties, so an id such as `__proto__` stays data.
   return {
     reading: { readLessons: Object.fromEntries(readLessons) as Record<string, string> },
     settings: { theme, newCardsPerDay },
     flashcards: { cards: Object.fromEntries(cards) },
     quizzes: { results: Object.fromEntries(results) },
+    designs: { drafts: Object.fromEntries(drafts) },
   }
 }
 

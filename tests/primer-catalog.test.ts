@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { loadPrimerCatalog } from '../scripts/build-content'
 import { findUnresolvedLinks, resolveLink } from '../src/core/content/links'
 import { linkUrls } from '../src/core/content/markdown'
+import { PRIMER_LATENCY_NS } from '../src/core/design/components'
 import { htmlLinkUrls } from '../src/core/flashcards/deck'
 import { findLessonQuiz } from '../src/core/quizzes/quiz'
 
@@ -123,6 +124,14 @@ describe('catalog of the pinned primer commit', () => {
       note: '~1GB/sec SSD, 4X memory',
     })
     expect(rows.at(-1)).toEqual({ operation: 'Send packet CA->Netherlands->CA', nanoseconds: 150_000_000 })
+  })
+
+  it("builds component latencies from the primer's own latency numbers", () => {
+    const rows = catalog.appendix.latencyNumbers?.rows ?? []
+
+    for (const [operation, nanoseconds] of Object.entries(PRIMER_LATENCY_NS)) {
+      expect(rows.find((row) => row.operation === operation)?.nanoseconds, operation).toBe(nanoseconds)
+    }
   })
 
   it("offers the primer's study guide as three timelines of steps through the Lessons", () => {

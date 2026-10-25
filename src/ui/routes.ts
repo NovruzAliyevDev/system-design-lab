@@ -30,6 +30,9 @@ export const STUDY_GUIDE_ROUTE = '/study-guide'
 
 export const FLASHCARDS_ROUTE = '/flashcards'
 
+/** The free Design Canvas, outside any Challenge. */
+export const SANDBOX_ROUTE = '/sandbox'
+
 /** The query of the Flashcard review's URL for a selection of cards: `?deck=<id>`, `?lesson=<id>`, or none for all. */
 export function flashcardsQuery(selection: CardSelection): Record<string, string> {
   if (selection.kind === 'deck') return { deck: selection.deckId }
@@ -55,6 +58,7 @@ export function flashcardsPath(selection: CardSelection): string {
 /** Pages besides the Lessons, linked from the header (from `md` up) and the table of contents drawer. */
 export const HEADER_PAGES: { to: string; label: StringKey }[] = [
   { to: FLASHCARDS_ROUTE, label: 'flashcardsTitle' },
+  { to: SANDBOX_ROUTE, label: 'sandboxTitle' },
   { to: STUDY_GUIDE_ROUTE, label: 'studyGuideTitle' },
   { to: SOLUTIONS_ROUTE, label: 'solutionsTitle' },
   { to: GLOSSARY_ROUTE, label: 'glossaryTitle' },

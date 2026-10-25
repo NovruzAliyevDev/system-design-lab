@@ -5,6 +5,7 @@ import { FlashcardsPage } from './FlashcardsPage'
 import { GlossaryPage } from './GlossaryPage'
 import { LessonList } from './LessonList'
 import { LessonPage } from './LessonPage'
+import { SandboxPage } from './SandboxPage'
 import { SolutionPage, SolutionsPage } from './SolutionPages'
 import { Search } from './Search'
 import { SettingsPage } from './SettingsPage'
@@ -17,6 +18,7 @@ import {
   GLOSSARY_ROUTE,
   LESSON_ROUTE,
   HEADER_PAGES,
+  SANDBOX_ROUTE,
   SETTINGS_ROUTE,
   SOLUTION_ROUTE,
   SOLUTIONS_ROUTE,
@@ -26,6 +28,8 @@ import {
 function Layout() {
   const lessonMatch = useMatch(LESSON_ROUTE)
   const currentLessonId = lessonMatch?.params.lessonId
+  // The canvas needs the whole width: the table of contents is only a drawer there.
+  const isCanvasPage = useMatch(SANDBOX_ROUTE) !== null
   const { pathname } = useLocation()
   const [tocOpen, setTocOpen] = useState(false)
 
@@ -67,13 +71,13 @@ function Layout() {
       <div className="lg:flex">
         <aside
           id="toc-drawer"
-          className={`${tocOpen ? 'block' : 'hidden'} fixed inset-x-0 top-12 bottom-0 z-20 overflow-y-auto bg-zinc-950 px-3 py-4 lg:sticky lg:top-12 lg:block lg:h-[calc(100vh-3rem)] lg:w-72 lg:shrink-0 lg:border-r lg:border-zinc-800`}
+          className={`${tocOpen ? 'block' : 'hidden'} fixed inset-x-0 top-12 bottom-0 z-20 overflow-y-auto bg-zinc-950 px-3 py-4 lg:w-72 lg:border-r lg:border-zinc-800 ${isCanvasPage ? '' : 'lg:sticky lg:top-12 lg:block lg:h-[calc(100vh-3rem)] lg:shrink-0'}`}
         >
           <TableOfContents currentLessonId={currentLessonId} />
         </aside>
 
         <div className="min-w-0 flex-1">
-          <main className="mx-auto max-w-3xl px-4 py-8">
+          <main className={isCanvasPage ? 'px-4 py-6' : 'mx-auto max-w-3xl px-4 py-8'}>
             <Routes>
               <Route path="/" element={<LessonList />} />
               <Route path={LESSON_ROUTE} element={<LessonPage />} />
@@ -82,6 +86,7 @@ function Layout() {
               <Route path={SOLUTION_ROUTE} element={<SolutionPage />} />
               <Route path={STUDY_GUIDE_ROUTE} element={<StudyGuidePage />} />
               <Route path={FLASHCARDS_ROUTE} element={<FlashcardsPage />} />
+              <Route path={SANDBOX_ROUTE} element={<SandboxPage />} />
               <Route path={SETTINGS_ROUTE} element={<SettingsPage />} />
             </Routes>
           </main>
