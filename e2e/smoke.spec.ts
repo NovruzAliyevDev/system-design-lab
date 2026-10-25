@@ -19,7 +19,8 @@ test('moves through Lessons with the sidebar, primer links and next/previous', a
 
   const diagram = page.getByRole('article').locator('img').first()
   await expect(diagram).toBeVisible()
-  expect(await diagram.evaluate((img: HTMLImageElement) => img.naturalWidth)).toBeGreaterThan(0)
+  // Visible means laid out, not loaded: wait for the image itself.
+  await expect.poll(() => diagram.evaluate((img: HTMLImageElement) => img.naturalWidth)).toBeGreaterThan(0)
 
   await page.getByRole('link', { name: 'active-passive' }).first().click()
   await expect(page).toHaveURL(/\/lessons\/fail-over#active-passive$/)
