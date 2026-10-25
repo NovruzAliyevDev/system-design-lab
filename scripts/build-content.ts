@@ -5,11 +5,14 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { buildContentCatalog, type Catalog } from '../src/core/content/catalog'
 import { findUnresolvedLinks, referencedAssets } from '../src/core/content/links'
+import { buildSearchIndex, searchDocuments } from '../src/core/search/search'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const PRIMER_PATH = 'vendor/system-design-primer'
 const PRIMER_DIR = join(root, PRIMER_PATH)
-const OUTPUT = join(root, 'src', 'generated', 'catalog.json')
+const GENERATED_DIR = join(root, 'src', 'generated')
+const CATALOG_OUTPUT = join(GENERATED_DIR, 'catalog.json')
+const SEARCH_OUTPUT = join(GENERATED_DIR, 'search-index.json')
 /** Primer files the Lessons display are copied here and served under `<base>/primer/`. */
 const ASSET_DIR = join(root, 'public', 'primer')
 
@@ -62,8 +65,9 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   const catalog = loadPrimerCatalog()
   assertLinksResolve(catalog)
   const assetCount = copyAssets(catalog)
-  mkdirSync(dirname(OUTPUT), { recursive: true })
-  writeFileSync(OUTPUT, JSON.stringify(catalog))
+  mkdirSync(GENERATED_DIR, { recursive: true })
+  writeFileSync(CATALOG_OUTPUT, JSON.stringify(catalog))
+  writeFileSync(SEARCH_OUTPUT, JSON.stringify(buildSearchIndex(searchDocuments(catalog))))
   console.log(
     `Content catalog: ${catalog.lessons.length} Lessons in ${catalog.groups.length} groups, ${assetCount} images (${catalog.source.commit.slice(0, 7)})`,
   )

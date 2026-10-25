@@ -35,6 +35,36 @@ test('moves through Lessons with the sidebar, primer links and next/previous', a
   await expect(page.getByRole('heading', { level: 1, name: 'CAP theorem' })).toBeVisible()
 })
 
+test('jumps from a Lesson to another through search, by keyboard', async ({ page }) => {
+  await page.goto('/lessons/load-balancer')
+  await expect(page.getByRole('heading', { level: 1, name: 'Load balancer' })).toBeVisible()
+
+  // The emulated desktop is not a Mac, so the shortcut is Ctrl+K.
+  await page.keyboard.press('Control+k')
+  const dialog = page.getByRole('dialog', { name: 'Axtar' })
+  const input = dialog.getByRole('combobox', { name: 'Axtar' })
+  await expect(input).toBeFocused()
+  await page.keyboard.press('Escape')
+  await expect(dialog).toBeHidden()
+
+  await page.keyboard.press('Control+k')
+  await input.fill('eventual consistency')
+  const results = dialog.getByRole('option')
+  await expect(results.first()).toContainText('Eventual consistency')
+  await expect(results.first()).toContainText('Consistency patterns')
+  await expect(results.first().locator('mark').first()).toHaveText(/^eventual$/i)
+
+  await input.press('ArrowDown')
+  await expect(results.nth(1)).toHaveAttribute('aria-selected', 'true')
+  await input.press('ArrowUp')
+  await expect(results.first()).toHaveAttribute('aria-selected', 'true')
+  await input.press('Enter')
+
+  await expect(page).toHaveURL(/\/lessons\/eventual-consistency$/)
+  await expect(page.getByRole('heading', { level: 1, name: 'Eventual consistency' })).toBeVisible()
+  await expect(dialog).toBeHidden()
+})
+
 test('remembers read Lessons and restores them from an exported file after a reset', async ({ page }) => {
   await page.setViewportSize({ width: 1366, height: 900 })
   const toc = page.getByRole('navigation', { name: 'Mündəricat' })

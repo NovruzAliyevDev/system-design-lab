@@ -3,6 +3,7 @@ import { BrowserRouter, Link, Route, Routes, useLocation, useMatch } from 'react
 import { Attribution } from './Attribution'
 import { LessonList } from './LessonList'
 import { LessonPage } from './LessonPage'
+import { Search } from './Search'
 import { SettingsPage } from './SettingsPage'
 import { TableOfContents } from './TableOfContents'
 import { UpdatePrompt } from './UpdatePrompt'
@@ -21,7 +22,7 @@ function Layout() {
   return (
     <div className="min-h-screen">
       <header className="sticky top-0 z-30 border-b border-zinc-800 bg-zinc-950/90 backdrop-blur">
-        <div className="flex items-baseline gap-3 px-4 py-3">
+        <div className="flex items-baseline gap-2 px-4 py-3 sm:gap-3">
           <button
             type="button"
             className="rounded border border-zinc-700 px-2 py-0.5 text-sm text-zinc-300 lg:hidden"
@@ -35,7 +36,10 @@ function Layout() {
             {t('appTitle')}
           </Link>
           <span className="hidden text-sm text-zinc-500 sm:inline">{t('appTagline')}</span>
-          <Link to={SETTINGS_ROUTE} className="ml-auto text-sm text-zinc-400 hover:text-zinc-100">
+          <div className="ml-auto self-center">
+            <Search />
+          </div>
+          <Link to={SETTINGS_ROUTE} className="text-sm text-zinc-400 hover:text-zinc-100">
             {t('settingsTitle')}
           </Link>
         </div>
