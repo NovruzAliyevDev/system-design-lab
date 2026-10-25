@@ -226,7 +226,7 @@ A web app (UI in Azerbaijani, source content kept in English) that turns the who
 
 All Core functions are deterministic. Time (`now`) and randomness (seed) are passed in, never read globally.
 
-- **Content Catalog**: `buildContentCatalog(sourceMarkdown, authoredContent) → Catalog`. Returns Lessons, groups, Glossary Terms, Challenges, Decks and the Skill Tree graph. Used by the pipeline; its output is what the UI loads.
+- **Content Catalog**: `buildContentCatalog({ markdown, source, authored }) → Catalog`, where `source` is the primer repo, pinned commit and file path, and `authored` is added by the tickets that introduce authored content. Returns Lessons, groups, Glossary Terms, Challenges, Decks and the Skill Tree graph. Used by the pipeline; its output is what the UI loads.
 - **Design model** (shared by Canvas, UML builder, Rules and Simulation):
   - A **Design** is a graph of **Nodes** and **Edges**.
   - A Node has a `componentType`, a typed `config` (per component type), a label, an optional zone id and a position. Position is not used by Rules or Simulation.

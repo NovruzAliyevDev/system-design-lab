@@ -14,3 +14,10 @@
 - [ ] Each Lesson shows a source link (pinned commit) and the CC BY 4.0 attribution; the site footer credits the primer.
 - [ ] Reader layout is usable on mobile width.
 - [ ] Seam A test: every internal anchor in the catalog resolves.
+
+## Comments
+
+**From ticket 01.** The catalog has some behaviour that affects this ticket:
+- Anchors that point at a group with no text of its own must also resolve, e.g. `#availability-vs-consistency`, which the primer's index links to. It has a group but no Lesson, so map it to the group's first Lesson.
+- H4+ headings and folded "Source(s) and further reading" sections have anchors that live inside a Lesson. Resolving them needs a heading-anchor → Lesson map, not just Lesson ids.
+- `LessonPage` currently passes `skipHtml` to react-markdown, so the primer's raw HTML (mostly `<p align="center"><img …></p>` blocks) is dropped. The intro Lesson "The System Design Primer" renders blank until this ticket renders that HTML.

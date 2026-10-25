@@ -1,12 +1,13 @@
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { Link, useParams } from 'react-router-dom'
-import { findLesson } from './catalog'
+import { findLesson } from '../core/content/catalog'
+import { catalog } from './catalog'
 import { t } from './i18n'
 
 export function LessonPage() {
   const { lessonId = '' } = useParams()
-  const lesson = findLesson(lessonId)
+  const lesson = findLesson(catalog, lessonId)
 
   return (
     <article>

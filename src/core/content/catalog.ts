@@ -41,13 +41,22 @@ const LESSON_HEADING_DEPTH = 3
 /** H3 sections that are a footer of the section above them rather than a topic of their own. */
 const FOOTER_HEADING = /^Source\(s\) and further reading$/
 
+/** An H1–H3 heading that may start a Lesson, with the offsets of its heading line and its text. */
+interface SectionHeading {
+  id: string
+  title: string
+  depth: number
+  headingStart: number
+  bodyStart: number
+}
+
 export function buildContentCatalog(input: { markdown: string; source: ContentSource }): Catalog {
   const { markdown, source } = input
   const sourceBase = `${source.repoUrl}/blob/${source.commit}/${source.path}`
   const tree = unified().use(remarkParse).use(remarkGfm).parse(markdown)
   const slugger = new GithubSlugger()
 
-  const starts: { id: string; title: string; depth: number; headingStart: number; bodyStart: number }[] = []
+  const sections: SectionHeading[] = []
   for (const node of tree.children) {
     if (node.type !== 'heading') continue
     const heading = node as Heading
@@ -56,7 +65,7 @@ export function buildContentCatalog(input: { markdown: string; source: ContentSo
     const id = slugger.slug(title)
     if (heading.depth > LESSON_HEADING_DEPTH) continue
     if (heading.depth === LESSON_HEADING_DEPTH && FOOTER_HEADING.test(title)) continue
-    starts.push({
+    sections.push({
       id,
       title,
       depth: heading.depth,
@@ -67,22 +76,28 @@ export function buildContentCatalog(input: { markdown: string; source: ContentSo
 
   const groups: LessonGroup[] = []
   const lessons: Lesson[] = []
-  starts.forEach((start, i) => {
-    if (start.depth <= GROUP_HEADING_DEPTH || groups.length === 0) {
-      groups.push({ id: start.id, title: start.title, order: groups.length })
+  sections.forEach((section, i) => {
+    if (section.depth <= GROUP_HEADING_DEPTH || groups.length === 0) {
+      groups.push({ id: section.id, title: section.title, order: groups.length })
     }
-    const end = i + 1 < starts.length ? starts[i + 1].headingStart : markdown.length
-    const body = markdown.slice(start.bodyStart, end).trim()
+    const end = i + 1 < sections.length ? sections[i + 1].headingStart : markdown.length
+    const body = markdown.slice(section.bodyStart, end).trim()
+    // A section with no markdown at all before the next section (e.g. an H2 directly followed by
+    // its first H3) is only a group heading. Raw HTML such as an image block counts as content.
     if (!body) return
     lessons.push({
-      id: start.id,
-      title: start.title,
+      id: section.id,
+      title: section.title,
       groupId: groups[groups.length - 1].id,
       order: lessons.length,
-      sourceUrl: `${sourceBase}#${start.id}`,
+      sourceUrl: `${sourceBase}#${section.id}`,
       body,
     })
   })
 
   return { source, groups, lessons }
+}
+
+export function findLesson(catalog: Catalog, lessonId: string): Lesson | undefined {
+  return catalog.lessons.find((lesson) => lesson.id === lessonId)
 }
