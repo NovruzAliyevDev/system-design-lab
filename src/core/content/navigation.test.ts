@@ -15,6 +15,14 @@ describe('tableOfContents', () => {
       ['database', ['database']],
     ])
   })
+
+  it('marks a group that is just one Lesson of the same name', () => {
+    expect(tableOfContents(catalog).map(({ group, isSingleLesson }) => [group.id, isSingleLesson])).toEqual([
+      ['primer', true],
+      ['cache', false],
+      ['database', true],
+    ])
+  })
 })
 
 describe('adjacentLessons', () => {

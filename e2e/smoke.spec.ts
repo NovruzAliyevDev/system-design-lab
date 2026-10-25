@@ -19,8 +19,7 @@ test('moves through Lessons with the sidebar, primer links and next/previous', a
 
   const diagram = page.getByRole('article').locator('img').first()
   await expect(diagram).toBeVisible()
-  // e2e code is typechecked without DOM types; the callback runs in the browser.
-  expect(await diagram.evaluate((img) => (img as unknown as { naturalWidth: number }).naturalWidth)).toBeGreaterThan(0)
+  expect(await diagram.evaluate((img: HTMLImageElement) => img.naturalWidth)).toBeGreaterThan(0)
 
   await page.getByRole('link', { name: 'active-passive' }).first().click()
   await expect(page).toHaveURL(/\/lessons\/fail-over#active-passive$/)
@@ -33,4 +32,22 @@ test('moves through Lessons with the sidebar, primer links and next/previous', a
 
   await toc.getByRole('link', { name: 'CAP theorem' }).click()
   await expect(page.getByRole('heading', { level: 1, name: 'CAP theorem' })).toBeVisible()
+})
+
+test('reads on a phone: wide tables scroll on their own and the table of contents is a drawer', async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 812 })
+  await page.goto('/lessons/study-guide')
+
+  await expect(page.getByRole('heading', { level: 1, name: 'Study guide' })).toBeVisible()
+  await expect(page.getByRole('article')).not.toContainText(':+1:')
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)
+  expect(overflow).toBeLessThanOrEqual(0)
+
+  const toc = page.getByRole('navigation', { name: 'Mündəricat' })
+  await expect(toc).toBeHidden()
+  await page.getByRole('button', { name: 'Mündəricat' }).click()
+  await toc.getByRole('link', { name: 'Load balancer', exact: true }).click()
+
+  await expect(page.getByRole('heading', { level: 1, name: 'Load balancer' })).toBeVisible()
+  await expect(toc).toBeHidden()
 })

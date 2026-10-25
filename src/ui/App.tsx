@@ -5,9 +5,10 @@ import { LessonList } from './LessonList'
 import { LessonPage } from './LessonPage'
 import { TableOfContents } from './TableOfContents'
 import { t } from './i18n'
+import { LESSON_ROUTE } from './routes'
 
 function Layout() {
-  const lessonMatch = useMatch('/lessons/:lessonId')
+  const lessonMatch = useMatch(LESSON_ROUTE)
   const currentLessonId = lessonMatch?.params.lessonId
   const { pathname } = useLocation()
   const [tocOpen, setTocOpen] = useState(false)
@@ -47,7 +48,7 @@ function Layout() {
           <main className="mx-auto max-w-3xl px-4 py-8">
             <Routes>
               <Route path="/" element={<LessonList />} />
-              <Route path="/lessons/:lessonId" element={<LessonPage />} />
+              <Route path={LESSON_ROUTE} element={<LessonPage />} />
             </Routes>
           </main>
           <footer className="mx-auto max-w-3xl border-t border-zinc-800 px-4 py-6 text-xs text-zinc-500">

@@ -1,9 +1,7 @@
-import { unified } from 'unified'
-import remarkParse from 'remark-parse'
-import remarkGfm from 'remark-gfm'
 import { toString } from 'mdast-util-to-string'
 import GithubSlugger from 'github-slugger'
 import type { Heading } from 'mdast'
+import { parseMarkdown } from './markdown'
 
 export interface ContentSource {
   repoUrl: string
@@ -29,7 +27,13 @@ export interface Lesson {
   /** Markdown under the Lesson heading, up to the next Lesson heading. */
   body: string
   /** Anchors of the headings inside `body`, keyed by the offset in `body` where each heading starts. */
-  headingAnchors: { offset: number; anchor: string }[]
+  headingAnchors: HeadingAnchor[]
+}
+
+/** A heading inside a Lesson's text and the GitHub anchor it has in the source. */
+export interface HeadingAnchor {
+  offset: number
+  anchor: string
 }
 
 export interface Catalog {
@@ -64,8 +68,8 @@ export function buildContentCatalog(input: { markdown: string; source: ContentSo
 
   const groups: LessonGroup[] = []
   const lessons: Lesson[] = []
-  /** Section id → id of the Lesson that shows it, for sections that became Lessons. */
-  const lessonOfSection = new Map<string, string>()
+  /** Sections that became Lessons; a Lesson's id is its section's id. */
+  const sectionsWithLesson = new Set<string>()
   sections.forEach((section, i) => {
     if (section.depth <= GROUP_HEADING_DEPTH || groups.length === 0) {
       groups.push({ id: section.id, title: section.title, order: groups.length })
@@ -76,7 +80,7 @@ export function buildContentCatalog(input: { markdown: string; source: ContentSo
     // A section with no markdown at all before the next section (e.g. an H2 directly followed by
     // its first H3) is only a group heading. Raw HTML such as an image block counts as content.
     if (!body) return
-    lessonOfSection.set(section.id, section.id)
+    sectionsWithLesson.add(section.id)
     const bodyStart = section.bodyStart + (rawBody.length - rawBody.trimStart().length)
     lessons.push({
       id: section.id,
@@ -91,11 +95,11 @@ export function buildContentCatalog(input: { markdown: string; source: ContentSo
     })
   })
 
-  return { source, groups, lessons, anchors: mapAnchorsToLessons(headings, lessonOfSection) }
+  return { source, groups, lessons, anchors: mapAnchorsToLessons(headings, sectionsWithLesson) }
 }
 
 function readHeadings(markdown: string): SourceHeading[] {
-  const tree = unified().use(remarkParse).use(remarkGfm).parse(markdown)
+  const tree = parseMarkdown(markdown)
   const slugger = new GithubSlugger()
   return tree.children
     .filter((node): node is Heading => node.type === 'heading')
@@ -118,23 +122,29 @@ function readHeadings(markdown: string): SourceHeading[] {
  * A heading belongs to the Lesson of the section it sits in. A section without a Lesson of its own
  * (a bare group heading) is shown by the next Lesson, its first subsection.
  */
-function mapAnchorsToLessons(headings: SourceHeading[], lessonOfSection: Map<string, string>): Record<string, string> {
+function mapAnchorsToLessons(headings: SourceHeading[], sectionsWithLesson: Set<string>): Record<string, string> {
   const anchors: Record<string, string> = {}
-  let pending: string[] = []
-  let current: string | undefined
+  /** Anchors seen since the last section with a Lesson, waiting for the next Lesson to show them. */
+  let unplaced: string[] = []
+  let currentLesson: string | undefined
   for (const heading of headings) {
-    if (heading.startsSection) current = lessonOfSection.get(heading.id)
-    if (current === undefined) {
-      pending.push(heading.id)
+    if (heading.startsSection) currentLesson = sectionsWithLesson.has(heading.id) ? heading.id : undefined
+    if (currentLesson === undefined) {
+      unplaced.push(heading.id)
       continue
     }
-    for (const id of pending) anchors[id] = current
-    pending = []
-    anchors[heading.id] = current
+    for (const id of unplaced) anchors[id] = currentLesson
+    unplaced = []
+    anchors[heading.id] = currentLesson
   }
   return anchors
 }
 
 export function findLesson(catalog: Catalog, lessonId: string): Lesson | undefined {
   return catalog.lessons.find((lesson) => lesson.id === lessonId)
+}
+
+/** The source anchor of the heading that starts at `offset` in the Lesson's text, if any. */
+export function headingAnchorAt(lesson: Lesson, offset: number | undefined): string | undefined {
+  return lesson.headingAnchors.find((heading) => heading.offset === offset)?.anchor
 }

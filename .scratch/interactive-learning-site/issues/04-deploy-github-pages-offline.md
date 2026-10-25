@@ -11,3 +11,9 @@
 - [ ] Service worker caches the app shell and content; the app loads offline after one visit.
 - [ ] New deploys replace the cached version (no stale-forever cache), with a small "new version available" prompt.
 - [ ] The repo README documents the one-time manual steps (create the repo, enable Pages).
+
+## Comments
+
+**From ticket 02.**
+- Primer images are copied to `public/primer/` at build time and served under `<base>/primer/`. The service worker must cache them.
+- One image in the "Latency numbers every programmer should know" Lesson is hot-linked from `camo.githubusercontent.com` in the primer itself. It is not in the repo, so it stays external and won't load offline unless it is cached at runtime.

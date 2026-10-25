@@ -209,7 +209,7 @@ A web app (UI in Azerbaijani, source content kept in English) that turns the who
   - its parent group;
   - its order;
   - its source URL at the pinned commit.
-- Images are copied and their paths rewritten. In-document anchors are rewritten to app routes.
+- Images used by Lessons are copied at build time. Links and image paths stay as written in the primer. Core's `resolveLink` turns each one into an app route, an asset URL or a GitHub URL when the page renders. The build fails if any in-document anchor resolves to nothing.
 - Solution READMEs become **Solution pages** attached to their Challenge. OOD Python solutions are rendered as code.
 - Appendix tables (powers of two, latency numbers) are extracted into structured data used by calculators and simulation defaults.
 - The three `.apkg` decks (zipped SQLite) are converted at build time into Flashcard JSON. HTML in card fields is sanitised.

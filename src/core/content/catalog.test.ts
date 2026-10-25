@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildContentCatalog } from './catalog'
+import { buildContentCatalog, headingAnchorAt } from './catalog'
 
 const source = {
   repoUrl: 'https://github.com/donnemartin/system-design-primer',
@@ -144,6 +144,8 @@ describe('buildContentCatalog', () => {
       { offset: cache.body.indexOf('### Source(s)'), anchor: 'sources-and-further-reading' },
     ])
     expect(database.headingAnchors).toEqual([{ offset: 0, anchor: 'sharding-1' }])
+    expect(headingAnchorAt(cache, cache.body.indexOf('#### Sharding'))).toBe('sharding')
+    expect(headingAnchorAt(cache, 1)).toBeUndefined()
   })
 
   it('does not create a Lesson for a section with no text of its own', () => {

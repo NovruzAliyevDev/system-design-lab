@@ -3,6 +3,7 @@ import { NavLink } from 'react-router-dom'
 import { tableOfContents } from '../core/content/navigation'
 import { catalog } from './catalog'
 import { t } from './i18n'
+import { lessonPath } from './routes'
 
 const toc = tableOfContents(catalog)
 
@@ -23,12 +24,10 @@ export function TableOfContents({ currentLessonId }: { currentLessonId?: string 
   return (
     <nav ref={navRef} aria-label={t('tableOfContents')}>
       <ol className="space-y-4">
-        {toc.map(({ group, lessons }) => {
-          // A group that is a single Lesson of the same name is shown as just that Lesson.
-          const singleLesson = lessons.length === 1 && lessons[0].id === group.id
+        {toc.map(({ group, lessons, isSingleLesson }) => {
           return (
             <li key={group.id}>
-              {!singleLesson && (
+              {!isSingleLesson && (
                 <p lang="en" className="px-2 pb-1 text-xs font-semibold uppercase tracking-wide text-zinc-500">
                   {group.title}
                 </p>
@@ -37,8 +36,8 @@ export function TableOfContents({ currentLessonId }: { currentLessonId?: string 
               <ol lang="en">
                 {lessons.map((lesson) => (
                   <li key={lesson.id}>
-                    <NavLink to={`/lessons/${lesson.id}`} className={lessonLinkClass}>
-                      {singleLesson ? <span className="font-medium">{lesson.title}</span> : lesson.title}
+                    <NavLink to={lessonPath(lesson.id)} className={lessonLinkClass}>
+                      {isSingleLesson ? <span className="font-medium">{lesson.title}</span> : lesson.title}
                     </NavLink>
                   </li>
                 ))}

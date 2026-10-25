@@ -45,6 +45,11 @@ describe('resolveLink', () => {
     expect(resolveLink(catalog, '#nowhere')).toEqual({ kind: 'unresolved', href: '#nowhere' })
   })
 
+  it('matches percent-encoded anchors and reports malformed ones as unresolved', () => {
+    expect(resolveLink(catalog, '#load%2Dbalancer')).toEqual({ kind: 'lesson', lessonId: 'load-balancer' })
+    expect(resolveLink(catalog, '#100%')).toEqual({ kind: 'unresolved', href: '#100%' })
+  })
+
   it('treats a primer image path as an asset', () => {
     expect(resolveLink(catalog, 'images/OfVllex.png')).toEqual({ kind: 'asset', path: 'images/OfVllex.png' })
   })

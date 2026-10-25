@@ -6,19 +6,21 @@ import { Attribution } from './Attribution'
 import { catalog } from './catalog'
 import { t } from './i18n'
 import { PrimerMarkdown } from './PrimerMarkdown'
+import { lessonPath } from './routes'
 
 export function LessonPage() {
   const { lessonId = '' } = useParams()
-  const { hash } = useLocation()
+  const { hash, key } = useLocation()
   const lesson = findLesson(catalog, lessonId)
   const { previous, next } = adjacentLessons(catalog, lessonId)
 
-  // A new Lesson starts at the top, unless the link points at a heading inside it.
+  // Every navigation starts at the top of the Lesson, unless it points at a heading inside it.
+  // Keyed on the location, so following the same anchor link again scrolls again.
   useEffect(() => {
-    const target = hash ? document.getElementById(decodeURIComponent(hash.slice(1))) : null
+    const target = hash ? document.getElementById(safeDecode(hash.slice(1))) : null
     if (target) target.scrollIntoView()
     else window.scrollTo(0, 0)
-  }, [lessonId, hash])
+  }, [key, hash])
 
   if (!lesson) return <p className="text-zinc-400">{t('lessonNotFound')}</p>
 
@@ -42,7 +44,7 @@ export function LessonPage() {
       <nav aria-label={t('lessonNavigation')} className="mt-12 grid gap-3 border-t border-zinc-800 pt-6 sm:grid-cols-2">
         {previous && (
           <Link
-            to={`/lessons/${previous.id}`}
+            to={lessonPath(previous.id)}
             rel="prev"
             className="rounded-lg border border-zinc-800 p-4 hover:border-zinc-600"
           >
@@ -52,7 +54,7 @@ export function LessonPage() {
         )}
         {next && (
           <Link
-            to={`/lessons/${next.id}`}
+            to={lessonPath(next.id)}
             rel="next"
             className="rounded-lg border border-zinc-800 p-4 text-right hover:border-zinc-600 sm:col-start-2"
           >
@@ -63,4 +65,12 @@ export function LessonPage() {
       </nav>
     </article>
   )
+}
+
+function safeDecode(fragment: string): string {
+  try {
+    return decodeURIComponent(fragment)
+  } catch {
+    return fragment
+  }
 }
