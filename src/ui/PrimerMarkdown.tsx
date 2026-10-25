@@ -1,14 +1,43 @@
 import type { ComponentProps, ElementType } from 'react'
-import Markdown, { type Components, type ExtraProps } from 'react-markdown'
+import Markdown, { type Components, type ExtraProps, type Options } from 'react-markdown'
 import rehypeRaw from 'rehype-raw'
-import rehypeSanitize from 'rehype-sanitize'
+import rehypeSanitize, { defaultSchema } from 'rehype-sanitize'
 import remarkEmoji from 'remark-emoji'
 import remarkGfm from 'remark-gfm'
+import type { Root } from 'mdast'
 import { Link } from 'react-router-dom'
 import { headingAnchorAt, type Lesson } from '../core/content/catalog'
 import { resolveLink, type ResolvedLink } from '../core/content/links'
+import { createGlossaryMatcher, markGlossaryTerms, type GlossaryTermNode } from '../core/glossary/matching'
 import { catalog } from './catalog'
+import { GlossaryTooltip } from './GlossaryTooltip'
 import { lessonPath } from './routes'
+
+const glossaryMatcher = createGlossaryMatcher(catalog.glossary)
+const glossaryTerms = new Map(catalog.glossary.map((term) => [term.id, term]))
+
+/** Marks Glossary Terms in the Lesson text (Core decides which occurrences get a tooltip). */
+function remarkGlossary() {
+  return (tree: Root) => markGlossaryTerms(tree, glossaryMatcher)
+}
+
+/** A marked term becomes a `<span data-glossary-term>`, which `PrimerSpan` renders with its tooltip. */
+const remarkRehypeOptions: Options['remarkRehypeOptions'] = {
+  handlers: {
+    glossaryTerm: (state, node: GlossaryTermNode) => ({
+      type: 'element',
+      tagName: 'span',
+      properties: { dataGlossaryTerm: node.termId },
+      children: state.all(node),
+    }),
+  },
+}
+
+/** GitHub's sanitising rules, plus the attribute that marks a Glossary Term. */
+const sanitizeSchema = {
+  ...defaultSchema,
+  attributes: { ...defaultSchema.attributes, span: [...(defaultSchema.attributes?.span ?? []), 'dataGlossaryTerm'] },
+}
 
 /** The URL a non-Lesson link or image points at in the app. */
 function hrefFor(link: Exclude<ResolvedLink, { kind: 'lesson' }>): string {
@@ -45,6 +74,14 @@ function PrimerImage({ src = '', alt = '', node: _node, ...rest }: ComponentProp
   return <img {...rest} src={resolved} alt={alt} loading="lazy" />
 }
 
+/** A span the primer's HTML could also contain, so only a known term id gets a tooltip. */
+function PrimerSpan({ node, ...rest }: ComponentProps<'span'> & ExtraProps) {
+  const termId = node?.properties.dataGlossaryTerm
+  const term = typeof termId === 'string' ? glossaryTerms.get(termId) : undefined
+  if (!term) return <span {...rest} />
+  return <GlossaryTooltip term={term}>{rest.children}</GlossaryTooltip>
+}
+
 /** Wide primer tables scroll on their own instead of widening the page on phones. */
 function PrimerTable({ node: _node, ...rest }: ComponentProps<'table'> & ExtraProps) {
   return (
@@ -65,6 +102,7 @@ export function PrimerMarkdown({ lesson }: { lesson: Lesson }) {
   const components: Components = {
     a: PrimerLink,
     img: PrimerImage,
+    span: PrimerSpan,
     table: PrimerTable,
     h1: headingWithAnchor('h2', lesson),
     h2: headingWithAnchor('h2', lesson),
@@ -76,8 +114,9 @@ export function PrimerMarkdown({ lesson }: { lesson: Lesson }) {
   return (
     // The primer's raw HTML (centred image blocks, captions) is rendered, then sanitised.
     <Markdown
-      remarkPlugins={[remarkGfm, remarkEmoji]}
-      rehypePlugins={[rehypeRaw, rehypeSanitize]}
+      remarkPlugins={[remarkGfm, remarkEmoji, remarkGlossary]}
+      remarkRehypeOptions={remarkRehypeOptions}
+      rehypePlugins={[rehypeRaw, [rehypeSanitize, sanitizeSchema]]}
       components={components}
     >
       {lesson.body}

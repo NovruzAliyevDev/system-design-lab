@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboa
 import { useNavigate } from 'react-router-dom'
 import { loadSearchIndex, search, type Highlight, type SearchIndex, type SearchResult, type SerializedSearchIndex } from '../core/search/search'
 import { t } from './i18n'
-import { lessonPath } from './routes'
+import { glossaryPath, lessonPath } from './routes'
 
 /** The index is loaded on the first search only, so it stays out of the app bundle. */
 let indexPromise: Promise<SearchIndex> | undefined
@@ -17,10 +17,14 @@ function loadIndex(): Promise<SearchIndex> {
   return indexPromise
 }
 
-function resultPath(result: SearchResult): string {
+/** Where a result leads, what is shown next to its title, and the language of its text. */
+function resultDetails(result: SearchResult): { path: string; context: string; contextLang: string; textLang: string } {
   switch (result.kind) {
     case 'lesson':
-      return lessonPath(result.id)
+      return { path: lessonPath(result.id), context: result.context, contextLang: 'en', textLang: 'en' }
+    case 'glossary':
+      // A Glossary Term's explanation is Azerbaijani.
+      return { path: glossaryPath(result.id), context: t('glossaryTitle'), contextLang: 'az', textLang: 'az' }
   }
 }
 
@@ -106,7 +110,7 @@ function SearchDialog({ onClose }: { onClose: () => void }) {
   }
 
   function openResult(result: SearchResult) {
-    navigate(resultPath(result))
+    navigate(resultDetails(result).path)
     close()
   }
 
@@ -155,27 +159,32 @@ function SearchDialog({ onClose }: { onClose: () => void }) {
         onKeyDown={onInputKeyDown}
       />
       <ul id="search-results" role="listbox" aria-label={t('searchResults')} className="min-h-0 overflow-y-auto p-2">
-        {results.map((result, i) => (
-          <li
-            key={`${result.kind}:${result.id}`}
-            id={resultId(i)}
-            role="option"
-            aria-selected={i === activeIndex}
-            className={`cursor-pointer rounded px-3 py-2 ${i === activeIndex ? 'bg-sky-500/15' : ''}`}
-            onMouseMove={() => setActiveIndex(i)}
-            onClick={() => openResult(result)}
-          >
-            <div lang="en" className="flex flex-wrap items-baseline gap-x-2">
-              <span className="font-medium text-zinc-50">
-                <Highlighted text={result.title} highlights={result.titleHighlights} />
-              </span>
-              <span className="text-xs text-zinc-500">{result.context}</span>
-            </div>
-            <p lang="en" className="mt-0.5 text-sm text-zinc-400">
-              <Highlighted text={result.snippet.text} highlights={result.snippet.highlights} />
-            </p>
-          </li>
-        ))}
+        {results.map((result, i) => {
+          const { context, contextLang, textLang } = resultDetails(result)
+          return (
+            <li
+              key={`${result.kind}:${result.id}`}
+              id={resultId(i)}
+              role="option"
+              aria-selected={i === activeIndex}
+              className={`cursor-pointer rounded px-3 py-2 ${i === activeIndex ? 'bg-sky-500/15' : ''}`}
+              onMouseMove={() => setActiveIndex(i)}
+              onClick={() => openResult(result)}
+            >
+              <div className="flex flex-wrap items-baseline gap-x-2">
+                <span lang="en" className="font-medium text-zinc-50">
+                  <Highlighted text={result.title} highlights={result.titleHighlights} />
+                </span>
+                <span lang={contextLang} className="text-xs text-zinc-500">
+                  {context}
+                </span>
+              </div>
+              <p lang={textLang} className="mt-0.5 text-sm text-zinc-400">
+                <Highlighted text={result.snippet.text} highlights={result.snippet.highlights} />
+              </p>
+            </li>
+          )
+        })}
       </ul>
       {message && (
         <p role="status" className="px-4 pb-3 text-sm text-zinc-500">

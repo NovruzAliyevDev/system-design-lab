@@ -1,5 +1,5 @@
 import { useEffect, useRef, type RefObject } from 'react'
-import { Link, useLocation, useParams } from 'react-router-dom'
+import { Link, useParams } from 'react-router-dom'
 import { findLesson } from '../core/content/catalog'
 import { adjacentLessons } from '../core/content/navigation'
 import { isLessonRead } from '../core/progress/reading'
@@ -10,10 +10,10 @@ import { PrimerMarkdown } from './PrimerMarkdown'
 import { useProgress } from './progress/store'
 import { ReadMarker } from './ReadMarker'
 import { lessonPath } from './routes'
+import { useScrollToHash } from './useScrollToHash'
 
 export function LessonPage() {
   const { lessonId = '' } = useParams()
-  const { hash, key } = useLocation()
   const lesson = findLesson(catalog, lessonId)
   const { previous, next } = adjacentLessons(catalog, lessonId)
   const { progress, markRead, markUnread } = useProgress()
@@ -21,13 +21,7 @@ export function LessonPage() {
   const endRef = useRef<HTMLDivElement>(null)
   const autoMark = useMarkReadAtEnd(lesson ? lessonId : undefined, isRead === false, endRef, markRead)
 
-  // Every navigation starts at the top of the Lesson, unless it points at a heading inside it.
-  // Keyed on the location, so following the same anchor link again scrolls again.
-  useEffect(() => {
-    const target = hash ? document.getElementById(safeDecode(hash.slice(1))) : null
-    if (target) target.scrollIntoView()
-    else window.scrollTo(0, 0)
-  }, [key, hash])
+  useScrollToHash()
 
   if (!lesson) return <p className="text-zinc-400">{t('lessonNotFound')}</p>
 
@@ -143,12 +137,4 @@ function imagesLoaded(container: Element): Promise<unknown> {
         }),
     ),
   )
-}
-
-function safeDecode(fragment: string): string {
-  try {
-    return decodeURIComponent(fragment)
-  } catch {
-    return fragment
-  }
 }

@@ -3,6 +3,7 @@ import { execFileSync } from 'node:child_process'
 import { copyFileSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { glossary } from '../content/glossary'
 import { buildContentCatalog, type Catalog } from '../src/core/content/catalog'
 import { findUnresolvedLinks, referencedAssets } from '../src/core/content/links'
 import { buildSearchIndex, searchDocuments } from '../src/core/search/search'
@@ -40,6 +41,7 @@ export function loadPrimerCatalog() {
   return buildContentCatalog({
     markdown,
     source: { repoUrl: 'https://github.com/donnemartin/system-design-primer', commit, path: 'README.md' },
+    authored: { glossary },
   })
 }
 
@@ -69,6 +71,6 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   writeFileSync(CATALOG_OUTPUT, JSON.stringify(catalog))
   writeFileSync(SEARCH_OUTPUT, JSON.stringify(buildSearchIndex(searchDocuments(catalog))))
   console.log(
-    `Content catalog: ${catalog.lessons.length} Lessons in ${catalog.groups.length} groups, ${assetCount} images (${catalog.source.commit.slice(0, 7)})`,
+    `Content catalog: ${catalog.lessons.length} Lessons in ${catalog.groups.length} groups, ${catalog.glossary.length} Glossary Terms, ${assetCount} images (${catalog.source.commit.slice(0, 7)})`,
   )
 }

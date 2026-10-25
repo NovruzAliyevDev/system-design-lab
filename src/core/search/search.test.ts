@@ -120,6 +120,21 @@ describe('search', () => {
     expect(marked(result.title, result.titleHighlights)).toBe('CAP [theorem]')
   })
 
+  it('finds a Glossary Term by its name or an alias, with its explanation as the snippet', () => {
+    const glossary = [
+      { term: 'Write-behind', aliases: ['write-back'], explanation: 'Yazma keşə gedir, bazaya isə sonra yazılır.', lessonIds: ['cache'] },
+    ]
+    const index = roundTrippedIndex(searchDocuments(buildContentCatalog({ markdown: primer, source, authored: { glossary } })))
+
+    const [byName] = search(index, 'write-behind')
+    const [byAlias] = search(index, 'write-back')
+
+    expect(byName).toMatchObject({ kind: 'glossary', id: 'write-behind', title: 'Write-behind', context: '' })
+    expect(byName.snippet.text).toContain('Yazma keşə gedir')
+    expect(byAlias).toMatchObject({ kind: 'glossary', id: 'write-behind' })
+    expect(marked(byAlias.snippet.text, byAlias.snippet.highlights)).toContain('[write]-[back]')
+  })
+
   it('returns nothing for an empty query and at most `limit` results', () => {
     const index = indexOfMarkdown(primer)
 

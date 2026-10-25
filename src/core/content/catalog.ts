@@ -1,6 +1,7 @@
 import { toString } from 'mdast-util-to-string'
 import GithubSlugger from 'github-slugger'
 import type { Heading } from 'mdast'
+import { validateGlossary, type GlossaryTerm } from '../glossary/glossary'
 import { parseMarkdown } from './markdown'
 
 export interface ContentSource {
@@ -42,6 +43,24 @@ export interface Catalog {
   lessons: Lesson[]
   /** Every heading anchor of the source (as GitHub generates it) → id of the Lesson that shows it. */
   anchors: Record<string, string>
+  /** In alphabetical order. */
+  glossary: GlossaryTerm[]
+}
+
+/**
+ * Content authored for the app rather than taken from the primer. It is typed `unknown` because the
+ * catalog checks it whatever its source file claims: the pipeline runs before typechecking.
+ */
+export interface AuthoredContent {
+  glossary?: unknown
+}
+
+/** Authored content that does not match its schema or references something that does not exist. */
+export class ContentValidationError extends Error {
+  constructor(readonly problems: string[]) {
+    super(`Authored content is invalid:\n${problems.map((problem) => `  ${problem}`).join('\n')}`)
+    this.name = 'ContentValidationError'
+  }
 }
 
 const GROUP_HEADING_DEPTH = 2
@@ -60,8 +79,8 @@ interface SourceHeading {
   bodyStart: number
 }
 
-export function buildContentCatalog(input: { markdown: string; source: ContentSource }): Catalog {
-  const { markdown, source } = input
+export function buildContentCatalog(input: { markdown: string; source: ContentSource; authored?: AuthoredContent }): Catalog {
+  const { markdown, source, authored = {} } = input
   const sourceBase = `${source.repoUrl}/blob/${source.commit}/${source.path}`
   const headings = readHeadings(markdown)
   const sections = headings.filter((heading) => heading.startsSection)
@@ -95,7 +114,11 @@ export function buildContentCatalog(input: { markdown: string; source: ContentSo
     })
   })
 
-  return { source, groups, lessons, anchors: mapAnchorsToLessons(headings, sectionsWithLesson) }
+  const lessonIds = new Set(lessons.map((lesson) => lesson.id))
+  const glossary = validateGlossary(authored.glossary ?? [], lessonIds)
+  if (glossary.problems.length > 0) throw new ContentValidationError(glossary.problems)
+
+  return { source, groups, lessons, anchors: mapAnchorsToLessons(headings, sectionsWithLesson), glossary: glossary.terms }
 }
 
 function readHeadings(markdown: string): SourceHeading[] {

@@ -19,6 +19,22 @@ describe('catalog of the pinned primer commit', () => {
     expect(findUnresolvedLinks(catalog)).toEqual([])
   })
 
+  it("has Glossary Terms for the primer's core vocabulary", () => {
+    const forms = new Set(catalog.glossary.flatMap((term) => [term.term, ...term.aliases].map((form) => form.toLowerCase())))
+    // The topics that head primer sections, and common terms used across them.
+    const vocabulary = [
+      'performance', 'scalability', 'latency', 'throughput', 'availability', 'cap theorem', 'consistency', 'weak consistency', 'eventual consistency',
+      'strong consistency', 'fail-over', 'replication', 'dns', 'cdn', 'push cdn', 'pull cdn', 'load balancer',
+      'layer 4 load balancing', 'layer 7 load balancing', 'horizontal scaling', 'reverse proxy', 'application layer',
+      'microservices', 'service discovery', 'rdbms', 'nosql', 'master-slave replication', 'master-master replication',
+      'federation', 'sharding', 'denormalization', 'sql tuning', 'key-value store', 'document store', 'wide column store',
+      'graph database', 'cache', 'cache-aside', 'write-through', 'write-behind', 'refresh-ahead', 'asynchronism',
+      'message queue', 'task queue', 'back pressure', 'http', 'tcp', 'udp', 'rpc', 'rest', 'quorum',
+    ]
+
+    expect(vocabulary.filter((term) => !forms.has(term))).toEqual([])
+  })
+
   it('matches the recorded Lesson list', () => {
     expect(catalog.lessons.map((lesson) => `${lesson.id} | ${lesson.title}`)).toMatchSnapshot()
   })

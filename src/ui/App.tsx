@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { BrowserRouter, Link, Route, Routes, useLocation, useMatch } from 'react-router-dom'
 import { Attribution } from './Attribution'
+import { GlossaryPage } from './GlossaryPage'
 import { LessonList } from './LessonList'
 import { LessonPage } from './LessonPage'
 import { Search } from './Search'
@@ -8,7 +9,7 @@ import { SettingsPage } from './SettingsPage'
 import { TableOfContents } from './TableOfContents'
 import { UpdatePrompt } from './UpdatePrompt'
 import { t } from './i18n'
-import { LESSON_ROUTE, SETTINGS_ROUTE } from './routes'
+import { GLOSSARY_ROUTE, LESSON_ROUTE, SETTINGS_ROUTE } from './routes'
 
 function Layout() {
   const lessonMatch = useMatch(LESSON_ROUTE)
@@ -39,6 +40,10 @@ function Layout() {
           <div className="ml-auto self-center">
             <Search />
           </div>
+          {/* A phone's header has no room for it; the table of contents drawer links it there. */}
+          <Link to={GLOSSARY_ROUTE} className="hidden text-sm text-zinc-400 hover:text-zinc-100 sm:inline">
+            {t('glossaryTitle')}
+          </Link>
           <Link to={SETTINGS_ROUTE} className="text-sm text-zinc-400 hover:text-zinc-100">
             {t('settingsTitle')}
           </Link>
@@ -58,6 +63,7 @@ function Layout() {
             <Routes>
               <Route path="/" element={<LessonList />} />
               <Route path={LESSON_ROUTE} element={<LessonPage />} />
+              <Route path={GLOSSARY_ROUTE} element={<GlossaryPage />} />
               <Route path={SETTINGS_ROUTE} element={<SettingsPage />} />
             </Routes>
           </main>

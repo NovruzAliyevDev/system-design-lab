@@ -2,8 +2,8 @@ import MiniSearch, { type AsPlainObject, type Options } from 'minisearch'
 import type { Catalog } from '../content/catalog'
 import { markdownToPlainText } from '../content/markdown'
 
-/** What a search result opens. Glossary Terms and Challenges join here as their tickets add them to the catalog. */
-export type SearchKind = 'lesson'
+/** What a search result opens. Challenges join here as their ticket adds them to the catalog. */
+export type SearchKind = 'lesson' | 'glossary'
 
 /** One searchable item; `searchDocuments` collects them from the catalog. */
 export interface SearchDocument {
@@ -11,7 +11,7 @@ export interface SearchDocument {
   /** Id of the item within its kind, e.g. a Lesson id. */
   id: string
   title: string
-  /** Where the item sits, shown under its title: the Lesson group for a Lesson. */
+  /** Where the item sits, shown next to its title: the Lesson group for a Lesson; empty for a Glossary Term. */
   context: string
   /** Plain text that is searched and that snippets are cut from. */
   text: string
@@ -49,6 +49,7 @@ const DEFAULT_LIMIT = 20
 const SNIPPET_LENGTH = 160
 /** How much text the snippet shows before its first hit. */
 const SNIPPET_LEAD = 40
+const GLOSSARY_BOOST = 0.5
 
 const OPTIONS: Options<IndexedDocument> = {
   idField: 'key',
@@ -56,12 +57,19 @@ const OPTIONS: Options<IndexedDocument> = {
   storeFields: ['kind', 'id', 'title', 'context', 'text'],
   tokenize: (text) => text.match(WORD) ?? [],
   // One typo is forgiven in longer words; more would let e.g. "replication" find "application".
-  searchOptions: { boost: { title: 3 }, prefix: true, fuzzy: (term) => (term.length >= 5 ? 1 : false), combineWith: 'AND' },
+  searchOptions: {
+    boost: { title: 3 },
+    // A Lesson about a topic leads over the Glossary Term of the same name, which is its short summary.
+    boostDocument: (_key, _term, stored) => (stored?.kind === 'glossary' ? GLOSSARY_BOOST : 1),
+    prefix: true,
+    fuzzy: (term) => (term.length >= 5 ? 1 : false),
+    combineWith: 'AND',
+  },
 }
 
 /** Everything in the catalog that search finds. A new kind of content adds its documents here. */
 export function searchDocuments(catalog: Catalog): SearchDocument[] {
-  return lessonDocuments(catalog)
+  return [...lessonDocuments(catalog), ...glossaryDocuments(catalog)]
 }
 
 function lessonDocuments(catalog: Catalog): SearchDocument[] {
@@ -72,6 +80,17 @@ function lessonDocuments(catalog: Catalog): SearchDocument[] {
     title: lesson.title,
     context: groupTitles.get(lesson.groupId) ?? '',
     text: markdownToPlainText(lesson.body),
+  }))
+}
+
+function glossaryDocuments(catalog: Catalog): SearchDocument[] {
+  return catalog.glossary.map((term) => ({
+    kind: 'glossary',
+    id: term.id,
+    title: term.term,
+    context: '',
+    // Aliases are searchable too, and the snippet shows them before the explanation.
+    text: term.aliases.length > 0 ? `${term.aliases.join(', ')} — ${term.explanation}` : term.explanation,
   }))
 }
 

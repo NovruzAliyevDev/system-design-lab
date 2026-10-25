@@ -6,7 +6,7 @@ import { catalog } from './catalog'
 import { t } from './i18n'
 import { useProgress } from './progress/store'
 import { ReadMarker } from './ReadMarker'
-import { lessonPath } from './routes'
+import { GLOSSARY_ROUTE, lessonPath } from './routes'
 
 const toc = tableOfContents(catalog)
 
@@ -27,6 +27,10 @@ export function TableOfContents({ currentLessonId }: { currentLessonId?: string 
 
   return (
     <nav ref={navRef} aria-label={t('tableOfContents')}>
+      {/* Wider screens link the Glossary from the header. */}
+      <NavLink to={GLOSSARY_ROUTE} className={(state) => `${lessonLinkClass(state)} mb-4 font-medium sm:hidden`}>
+        {t('glossaryTitle')}
+      </NavLink>
       <ol className="space-y-4">
         {toc.map(({ group, lessons, isSingleLesson }) => {
           return (

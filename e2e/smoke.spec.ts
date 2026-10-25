@@ -65,6 +65,68 @@ test('jumps from a Lesson to another through search, by keyboard', async ({ page
   await expect(dialog).toBeHidden()
 })
 
+test('explains a Glossary Term in a Lesson and lists it on the Glossary page', async ({ page }) => {
+  await page.setViewportSize({ width: 1366, height: 900 })
+  await page.goto('/lessons/fail-over')
+  const term = page.getByRole('article').getByRole('button', { name: 'heartbeats' })
+  const explanation = page.getByText('Serverlərin bir-birinə müntəzəm göndərdiyi')
+
+  // Hovering shows the explanation until the mouse moves away.
+  await term.hover()
+  await expect(explanation).toBeVisible()
+  await page.mouse.move(0, 0)
+  await expect(explanation).toBeHidden()
+
+  // A click keeps it open, Esc closes it.
+  await term.click()
+  await page.mouse.move(0, 0)
+  await expect(explanation).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(explanation).toBeHidden()
+
+  await term.click()
+  await page.getByRole('link', { name: 'Lüğətdə bax' }).click()
+  await expect(page).toHaveURL(/\/glossary#heartbeat$/)
+  const entry = page.locator('#heartbeat')
+  await expect(entry).toBeInViewport()
+  await expect(entry).toContainText('Serverlərin bir-birinə müntəzəm göndərdiyi')
+
+  await entry.getByRole('link', { name: 'Fail-over' }).click()
+  await expect(page.getByRole('heading', { level: 1, name: 'Fail-over' })).toBeVisible()
+})
+
+test('finds a Glossary Term through search', async ({ page }) => {
+  await page.goto('/')
+  await expect(page.getByRole('heading', { level: 1, name: 'Dərslər' })).toBeVisible()
+  await page.keyboard.press('Control+k')
+  const dialog = page.getByRole('dialog', { name: 'Axtar' })
+  await dialog.getByRole('combobox', { name: 'Axtar' }).fill('quorum')
+  await expect(dialog.getByRole('option').first()).toContainText('Lüğət')
+  await page.keyboard.press('Enter')
+
+  await expect(page).toHaveURL(/\/glossary#quorum$/)
+  await expect(page.locator('#quorum')).toBeInViewport()
+})
+
+test.describe('on a touch phone', () => {
+  test.use({ viewport: { width: 375, height: 812 }, hasTouch: true })
+
+  test('opens a Glossary tooltip with a tap and keeps it on screen', async ({ page }) => {
+    await page.goto('/lessons/fail-over')
+    const term = page.getByRole('article').getByRole('button', { name: 'heartbeats' })
+    const explanation = page.getByText('Serverlərin bir-birinə müntəzəm göndərdiyi')
+
+    await term.tap()
+    await expect(explanation).toBeVisible()
+    const box = await explanation.locator('..').boundingBox()
+    expect(box!.x).toBeGreaterThanOrEqual(0)
+    expect(box!.x + box!.width).toBeLessThanOrEqual(375)
+
+    await page.getByRole('heading', { level: 1 }).tap()
+    await expect(explanation).toBeHidden()
+  })
+})
+
 test('remembers read Lessons and restores them from an exported file after a reset', async ({ page }) => {
   await page.setViewportSize({ width: 1366, height: 900 })
   const toc = page.getByRole('navigation', { name: 'Mündəricat' })

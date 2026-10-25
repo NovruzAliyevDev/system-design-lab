@@ -43,7 +43,7 @@ export const az = {
   updateReload: 'Yenilə',
   updateLater: 'Sonra',
   search: 'Axtar',
-  searchPlaceholder: 'Dərslərdə axtarın…',
+  searchPlaceholder: 'Dərslərdə və lüğətdə axtarın…',
   searchResults: 'Axtarış nəticələri',
   searchHint: 'Axtarmaq istədiyiniz sözü yazın.',
   searchLoading: 'Axtarış hazırlanır…',
@@ -52,4 +52,9 @@ export const az = {
   searchKeys: '↑ ↓ seçmək, Enter açmaq, Esc bağlamaq üçün',
   searchShortcutMac: '⌘K',
   searchShortcut: 'Ctrl K',
+  glossaryTitle: 'Lüğət',
+  glossaryDescription: '{count} termin: ingiliscə adı, qısa izahı və haqqında oxuya biləcəyiniz dərslər.',
+  glossaryAliases: 'Digər adları:',
+  glossaryLessons: 'Dərslər:',
+  glossaryOpenEntry: 'Lüğətdə bax',
 } as const
