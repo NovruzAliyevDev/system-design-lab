@@ -2,6 +2,7 @@
 // repo, so Solution pages serve them with the site and keep working offline. Each solution's first
 // (high-level) diagram is its `<name>_basic.png` and its last (scaled) one is `<name>.png`, also
 // copied into `images/`; the scaling_aws steps were matched to `scaling_aws_<n>.png` by their content.
+// Flashcard images the primer has in `images/` under their imgur name need no entry here.
 export const imageMirrors: Record<string, string> = {
   'http://i.imgur.com/BKsBnmG.png': 'solutions/system_design/pastebin/pastebin_basic.png',
   'http://i.imgur.com/4edXG0T.png': 'images/4edXG0T.png',
@@ -24,4 +25,6 @@ export const imageMirrors: Record<string, string> = {
   'http://i.imgur.com/OZCxJr0.png': 'solutions/system_design/scaling_aws/scaling_aws_4.png',
   'http://i.imgur.com/3X8nmdL.png': 'solutions/system_design/scaling_aws/scaling_aws_5.png',
   'http://i.imgur.com/jj3A5N8.png': 'images/jj3A5N8.png',
+  // The Reverse proxy card has the diagram the README replaced as wrong (primer issue #1) with this one.
+  'http://i.imgur.com/p7xHS4Z.png': 'images/n41Azff.png',
 }

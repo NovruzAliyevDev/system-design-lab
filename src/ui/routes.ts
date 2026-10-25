@@ -27,8 +27,11 @@ export function solutionPath(solutionId: string, anchor?: string): string {
 
 export const STUDY_GUIDE_ROUTE = '/study-guide'
 
-/** Pages of reference material, linked from the header (from `md` up) and the table of contents drawer. */
-export const REFERENCE_PAGES: { to: string; label: StringKey }[] = [
+export const FLASHCARDS_ROUTE = '/flashcards'
+
+/** Pages besides the Lessons, linked from the header (from `md` up) and the table of contents drawer. */
+export const HEADER_PAGES: { to: string; label: StringKey }[] = [
+  { to: FLASHCARDS_ROUTE, label: 'flashcardsTitle' },
   { to: STUDY_GUIDE_ROUTE, label: 'studyGuideTitle' },
   { to: SOLUTIONS_ROUTE, label: 'solutionsTitle' },
   { to: GLOSSARY_ROUTE, label: 'glossaryTitle' },

@@ -1,3 +1,4 @@
+import { htmlLinkUrls } from '../flashcards/deck'
 import type { Catalog } from './catalog'
 import { linkUrls } from './markdown'
 
@@ -10,7 +11,7 @@ export type ResolvedLink =
   | { kind: 'unresolved'; href: string }
 
 export interface UnresolvedLink {
-  /** The Lesson id, or the path of the solution file, that has the link. */
+  /** The Lesson id, the path of the solution file, or the Flashcard id that has the link. */
   location: string
   href: string
 }
@@ -61,27 +62,29 @@ function resolveInReadme(catalog: Catalog, href: string, hash: string | undefine
   return insideLesson ? { kind: 'lesson', lessonId, anchor } : { kind: 'lesson', lessonId }
 }
 
-/** Every primer page's text, with where its links are written. */
-function primerTexts(catalog: Catalog): { location: string; from: string; body: string }[] {
+/** The link and image URLs of every primer text the app shows, with where they are written. */
+function primerTextUrls(catalog: Catalog): { location: string; from: string; urls: string[] }[] {
   return [
-    ...catalog.lessons.map((lesson) => ({ location: lesson.id, from: catalog.source.path, body: lesson.body })),
-    ...catalog.solutions.map((solution) => ({ location: solution.path, from: solution.path, body: solution.body })),
+    ...catalog.lessons.map((lesson) => ({ location: lesson.id, from: catalog.source.path, urls: linkUrls(lesson.body) })),
+    ...catalog.solutions.map((solution) => ({ location: solution.path, from: solution.path, urls: linkUrls(solution.body) })),
+    // Card HTML was copied from GitHub's page of the README, so its relative links are relative to the README.
+    ...catalog.decks.flatMap((deck) =>
+      deck.cards.map((card) => ({ location: card.id, from: catalog.source.path, urls: [...htmlLinkUrls(card.front), ...htmlLinkUrls(card.back)] })),
+    ),
   ]
 }
 
-/** Links in Lesson and Solution text that lead nowhere; the Content Pipeline fails the build on any. */
+/** Links in Lesson, Solution and Flashcard text that lead nowhere; the Content Pipeline fails the build on any. */
 export function findUnresolvedLinks(catalog: Catalog): UnresolvedLink[] {
-  return primerTexts(catalog).flatMap(({ location, from, body }) =>
-    linkUrls(body)
-      .filter((href) => resolveLink(catalog, href, from).kind === 'unresolved')
-      .map((href) => ({ location, href })),
+  return primerTextUrls(catalog).flatMap(({ location, from, urls }) =>
+    urls.filter((href) => resolveLink(catalog, href, from).kind === 'unresolved').map((href) => ({ location, href })),
   )
 }
 
-/** Primer files (images) that Lessons and Solution pages display, in first-use order, each once. */
+/** Primer files (images) that Lessons, Solution pages and Flashcards display, in first-use order, each once. */
 export function referencedAssets(catalog: Catalog): string[] {
-  const paths = primerTexts(catalog).flatMap(({ from, body }) =>
-    linkUrls(body).flatMap((href) => {
+  const paths = primerTextUrls(catalog).flatMap(({ from, urls }) =>
+    urls.flatMap((href) => {
       const link = resolveLink(catalog, href, from)
       return link.kind === 'asset' ? [link.path] : []
     }),

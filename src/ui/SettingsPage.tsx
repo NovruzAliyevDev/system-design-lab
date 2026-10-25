@@ -25,6 +25,7 @@ type ResetTarget = ProgressArea | 'all'
 
 const RESETS: { target: ResetTarget; label: StringKey }[] = [
   { target: 'reading', label: 'resetReading' },
+  { target: 'flashcards', label: 'resetFlashcards' },
   { target: 'settings', label: 'resetSettings' },
   { target: 'all', label: 'resetAll' },
 ]

@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { scheduleReview, type Grade } from '../../core/flashcards/scheduler'
 import type { Progress, ProgressArea, Theme } from '../../core/progress/progress'
 import { markLessonRead, markLessonUnread } from '../../core/progress/reading'
 import { progressRepository } from './repository'
@@ -9,6 +10,8 @@ interface ProgressState {
   markRead(lessonId: string): Promise<void>
   markUnread(lessonId: string): Promise<void>
   setTheme(theme: Theme): Promise<void>
+  /** Records a review of a Flashcard and schedules its next one. */
+  gradeCard(cardId: string, grade: Grade): Promise<void>
   /** Imports an export file; throws `InvalidProgressFileError` and changes nothing when it is invalid. */
   importProgress(fileText: string): Promise<void>
   /** Resets one area, or everything when no area is given. */
@@ -19,6 +22,8 @@ export const useProgress = create<ProgressState>()(() => ({
   markRead: (lessonId) => update('reading', (reading) => markLessonRead(reading, lessonId, new Date())),
   markUnread: (lessonId) => update('reading', (reading) => markLessonUnread(reading, lessonId)),
   setTheme: (theme) => update('settings', (settings) => ({ ...settings, theme })),
+  gradeCard: (cardId, grade) =>
+    update('flashcards', ({ cards }) => ({ cards: { ...cards, [cardId]: scheduleReview(cards[cardId], grade, new Date()) } })),
   async importProgress(fileText) {
     await progressRepository.importAll(fileText, new Date())
     await load()

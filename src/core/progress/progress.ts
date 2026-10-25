@@ -1,3 +1,6 @@
+import type { CardStates } from '../flashcards/queue'
+import { readCardState, type CardState } from '../flashcards/scheduler'
+
 export const THEMES = ['dark', 'light'] as const
 
 export type Theme = (typeof THEMES)[number]
@@ -11,21 +14,27 @@ export interface Settings {
   theme: Theme
 }
 
+export interface FlashcardProgress {
+  /** Flashcard id → where the Review Scheduler left it; a card without a state is new. */
+  cards: CardStates
+}
+
 /** Everything the learner has done, split into areas that are stored and reset separately. */
 export interface Progress {
   reading: ReadingProgress
   settings: Settings
+  flashcards: FlashcardProgress
 }
 
 export type ProgressArea = keyof Progress
 
-export const PROGRESS_AREAS: readonly ProgressArea[] = ['reading', 'settings']
+export const PROGRESS_AREAS: readonly ProgressArea[] = ['reading', 'settings', 'flashcards']
 
 export function emptyProgress(): Progress {
-  return { reading: { readLessons: {} }, settings: { theme: 'dark' } }
+  return { reading: { readLessons: {} }, settings: { theme: 'dark' }, flashcards: { cards: {} } }
 }
 
-export const PROGRESS_SCHEMA_VERSION = 1
+export const PROGRESS_SCHEMA_VERSION = 2
 
 /** The export file: all progress, versioned so that older files can be migrated on import. */
 export interface ProgressExport {
@@ -90,6 +99,11 @@ const UPGRADES: Record<number, (data: Record<string, unknown>) => Record<string,
       },
     }
   },
+  // v1 had no Flashcards.
+  1: ({ exportedAt, progress }) => {
+    if (!isRecord(progress)) throw malformed('progress is missing')
+    return { schemaVersion: 2, exportedAt, progress: { ...progress, flashcards: { cards: {} } } }
+  },
 }
 
 function validateCurrent(data: Record<string, unknown>): ProgressExport {
@@ -100,7 +114,7 @@ function validateCurrent(data: Record<string, unknown>): ProgressExport {
 }
 
 function validateProgress(progress: Record<string, unknown>): Progress {
-  const { reading, settings } = progress
+  const { reading, settings, flashcards } = progress
   if (!isRecord(reading) || !isRecord(reading.readLessons)) throw malformed('reading is missing')
   const readLessons = Object.entries(reading.readLessons)
   for (const [lessonId, readAt] of readLessons) {
@@ -111,8 +125,19 @@ function validateProgress(progress: Record<string, unknown>): Progress {
   const theme = THEMES.find((known) => known === settings.theme)
   if (!theme) throw malformed('the theme is unknown')
 
-  // Object.fromEntries defines keys as own properties, so a Lesson id such as `__proto__` stays data.
-  return { reading: { readLessons: Object.fromEntries(readLessons) as Record<string, string> }, settings: { theme } }
+  if (!isRecord(flashcards) || !isRecord(flashcards.cards)) throw malformed('flashcards is missing')
+  const cards = Object.entries(flashcards.cards).map(([cardId, value]): [string, CardState] => {
+    const state = readCardState(value)
+    if (!state) throw malformed(`the state of card ${cardId} is invalid`)
+    return [cardId, state]
+  })
+
+  // Object.fromEntries defines keys as own properties, so an id such as `__proto__` stays data.
+  return {
+    reading: { readLessons: Object.fromEntries(readLessons) as Record<string, string> },
+    settings: { theme },
+    flashcards: { cards: Object.fromEntries(cards) },
+  }
 }
 
 function malformed(detail: string): InvalidProgressFileError {

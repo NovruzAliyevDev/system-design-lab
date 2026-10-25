@@ -6,7 +6,7 @@ import { catalog } from './catalog'
 import { t } from './i18n'
 import { useProgress } from './progress/store'
 import { ReadMarker } from './ReadMarker'
-import { lessonPath, REFERENCE_PAGES } from './routes'
+import { lessonPath, HEADER_PAGES } from './routes'
 
 const toc = tableOfContents(catalog)
 
@@ -29,7 +29,7 @@ export function TableOfContents({ currentLessonId }: { currentLessonId?: string 
     <nav ref={navRef} aria-label={t('tableOfContents')}>
       {/* Wider screens link these pages from the header. */}
       <ul className="mb-4 md:hidden">
-        {REFERENCE_PAGES.map(({ to, label }) => (
+        {HEADER_PAGES.map(({ to, label }) => (
           <li key={to}>
             <NavLink to={to} className={(state) => `${lessonLinkClass(state)} font-medium`}>
               {t(label)}

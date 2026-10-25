@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { BrowserRouter, Link, Route, Routes, useLocation, useMatch } from 'react-router-dom'
 import { Attribution } from './Attribution'
+import { FlashcardsPage } from './FlashcardsPage'
 import { GlossaryPage } from './GlossaryPage'
 import { LessonList } from './LessonList'
 import { LessonPage } from './LessonPage'
@@ -12,9 +13,10 @@ import { TableOfContents } from './TableOfContents'
 import { UpdatePrompt } from './UpdatePrompt'
 import { t } from './i18n'
 import {
+  FLASHCARDS_ROUTE,
   GLOSSARY_ROUTE,
   LESSON_ROUTE,
-  REFERENCE_PAGES,
+  HEADER_PAGES,
   SETTINGS_ROUTE,
   SOLUTION_ROUTE,
   SOLUTIONS_ROUTE,
@@ -51,7 +53,7 @@ function Layout() {
             <Search />
           </div>
           {/* A narrow header has no room for them; the table of contents drawer links them there. */}
-          {REFERENCE_PAGES.map(({ to, label }) => (
+          {HEADER_PAGES.map(({ to, label }) => (
             <Link key={to} to={to} className="hidden text-sm text-zinc-400 hover:text-zinc-100 md:inline">
               {t(label)}
             </Link>
@@ -79,6 +81,7 @@ function Layout() {
               <Route path={SOLUTIONS_ROUTE} element={<SolutionsPage />} />
               <Route path={SOLUTION_ROUTE} element={<SolutionPage />} />
               <Route path={STUDY_GUIDE_ROUTE} element={<StudyGuidePage />} />
+              <Route path={FLASHCARDS_ROUTE} element={<FlashcardsPage />} />
               <Route path={SETTINGS_ROUTE} element={<SettingsPage />} />
             </Routes>
           </main>

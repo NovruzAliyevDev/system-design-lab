@@ -4,11 +4,14 @@ import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync,
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { glossary } from '../content/glossary'
+import { flashcardLinkFixes } from '../content/flashcard-link-fixes'
 import { imageMirrors } from '../content/image-mirrors'
 import { buildContentCatalog, type Catalog } from '../src/core/content/catalog'
-import { findUnresolvedLinks, referencedAssets } from '../src/core/content/links'
+import { findUnresolvedLinks, isImagePath, referencedAssets } from '../src/core/content/links'
+import type { DeckSource } from '../src/core/flashcards/deck'
 import type { SolutionSource } from '../src/core/content/solutions'
 import { buildSearchIndex, searchDocuments } from '../src/core/search/search'
+import { readAnkiPackage } from './anki'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 export const PRIMER_PATH = 'vendor/system-design-primer'
@@ -16,6 +19,11 @@ export const PRIMER_DIR = join(root, PRIMER_PATH)
 export const PRIMER_REPO_URL = 'https://github.com/donnemartin/system-design-primer'
 /** Each system design question has a folder here with its write-up in `README.md`. */
 const SOLUTIONS_PATH = 'solutions/system_design'
+/** The primer's Anki Decks, `<title>.apkg` each. The other two arrive with the full Flashcards feature. */
+const DECKS_PATH = 'resources/flash_cards'
+const DECK_TITLES = ['System Design']
+/** The folder of the primer's copies of the images it shows. */
+const IMAGES_PATH = 'images'
 const GENERATED_DIR = join(root, 'src', 'generated')
 const CATALOG_OUTPUT = join(GENERATED_DIR, 'catalog.json')
 const SEARCH_OUTPUT = join(GENERATED_DIR, 'search-index.json')
@@ -50,6 +58,19 @@ function readSolutions(): SolutionSource[] {
     })
 }
 
+function readDecks(): DeckSource[] {
+  return DECK_TITLES.map((title) => {
+    const path = `${DECKS_PATH}/${title}.apkg`
+    return readAnkiPackage(join(PRIMER_DIR, path), title, path)
+  })
+}
+
+function primerImages(): string[] {
+  return readdirSync(join(PRIMER_DIR, IMAGES_PATH))
+    .filter(isImagePath)
+    .map((name) => `${IMAGES_PATH}/${name}`)
+}
+
 export function loadPrimerCatalog() {
   const markdown = readFileSync(join(PRIMER_DIR, 'README.md'), 'utf8')
   const commit = pinnedPrimerCommit()
@@ -57,7 +78,9 @@ export function loadPrimerCatalog() {
     markdown,
     source: { repoUrl: PRIMER_REPO_URL, commit, path: 'README.md' },
     solutions: readSolutions(),
-    authored: { glossary, imageMirrors },
+    decks: readDecks(),
+    primerImages: primerImages(),
+    authored: { glossary, imageMirrors, flashcardLinkFixes },
   })
 }
 
@@ -102,6 +125,6 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   writeFileSync(CATALOG_OUTPUT, JSON.stringify(catalog))
   writeFileSync(SEARCH_OUTPUT, JSON.stringify(buildSearchIndex(searchDocuments(catalog))))
   console.log(
-    `Content catalog: ${catalog.lessons.length} Lessons in ${catalog.groups.length} groups, ${catalog.solutions.length} Solutions, ${catalog.glossary.length} Glossary Terms, ${assetCount} images (${catalog.source.commit.slice(0, 7)})`,
+    `Content catalog: ${catalog.lessons.length} Lessons in ${catalog.groups.length} groups, ${catalog.solutions.length} Solutions, ${catalog.glossary.length} Glossary Terms, ${catalog.decks.reduce((count, deck) => count + deck.cards.length, 0)} Flashcards, ${assetCount} images (${catalog.source.commit.slice(0, 7)})`,
   )
 }

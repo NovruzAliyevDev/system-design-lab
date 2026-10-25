@@ -1,4 +1,7 @@
 import { useMemo, type ComponentProps, type ElementType, type ReactNode } from 'react'
+import { Fragment, jsx, jsxs } from 'react/jsx-runtime'
+import { fromHtml } from 'hast-util-from-html'
+import { toJsxRuntime } from 'hast-util-to-jsx-runtime'
 import Markdown, { type Components, type ExtraProps, type Options } from 'react-markdown'
 import rehypeRaw from 'rehype-raw'
 import rehypeSanitize, { defaultSchema } from 'rehype-sanitize'
@@ -181,4 +184,12 @@ export function PrimerMarkdown({
       {text.body}
     </Markdown>
   )
+}
+
+/** Links and images that `PrimerHtml` resolves; its HTML is from GitHub's page of the README. */
+const htmlComponents = { a: primerLink(catalog.source.path), img: primerImage(catalog.source.path), table: PrimerTable }
+
+/** Primer HTML that the Content Pipeline has already sanitised, such as a Flashcard's front or back. */
+export function PrimerHtml({ html }: { html: string }) {
+  return useMemo(() => toJsxRuntime(fromHtml(html, { fragment: true }), { Fragment, jsx, jsxs, components: htmlComponents }), [html])
 }

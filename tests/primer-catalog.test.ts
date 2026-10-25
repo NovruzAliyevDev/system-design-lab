@@ -42,6 +42,32 @@ describe('catalog of the pinned primer commit', () => {
     }
   })
 
+  it('converts the System Design Deck into Flashcards, front to back', () => {
+    const [deck] = catalog.decks
+
+    expect(catalog.decks.map(({ id, title }) => [id, title])).toEqual([['system-design', 'System Design']])
+    expect(deck.cards).toHaveLength(42)
+    expect(deck.cards[0]).toMatchObject({ id: 'system-design/1482325088071', front: '<h2>Performance vs scalability</h2>' })
+    expect(deck.cards[0].back).toContain('if it results in increased')
+    const html = deck.cards.map((card) => card.front + card.back).join('')
+    expect(html).not.toMatch(/ style=|<script|<svg/)
+  })
+
+  it('serves every Flashcard image with the site, except the one the README also shows from GitHub', () => {
+    const external = catalog.decks.flatMap((deck) =>
+      deck.cards.flatMap((card) =>
+        [...card.back.matchAll(/<img src="([^"]*)"/g)]
+          .map((match) => match[1])
+          .filter((src) => resolveLink(catalog, src).kind !== 'asset')
+          .map((src) => `${card.id}: ${src}`),
+      ),
+    )
+    const latencyChart = catalog.lessons.find((lesson) => lesson.id === 'latency-numbers-every-programmer-should-know')
+
+    expect(external).toHaveLength(1)
+    expect(latencyChart?.body).toContain(external[0].split(': ')[1])
+  })
+
   it("has Glossary Terms for the primer's core vocabulary", () => {
     const forms = new Set(catalog.glossary.flatMap((term) => [term.term, ...term.aliases].map((form) => form.toLowerCase())))
     // The topics that head primer sections, and common terms used across them.

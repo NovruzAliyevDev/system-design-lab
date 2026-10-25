@@ -290,3 +290,23 @@ test('follows the study guide of a chosen timeline to its Lessons', async ({ pag
   await panel.getByRole('link', { name: 'Real world architectures' }).click()
   await expect(page.getByRole('heading', { level: 1, name: 'Real world architectures' })).toBeVisible()
 })
+
+test('reviews a Flashcard and keeps its schedule across a reload', async ({ page }) => {
+  await page.goto('/')
+  await page.getByRole('banner').getByRole('link', { name: 'Kartlar' }).click()
+  await expect(page.getByText('Vaxtı çatmış: 0 · Yeni: 42')).toBeVisible()
+
+  const front = page.getByRole('region', { name: 'Sual' })
+  await expect(front).toHaveText('Performance vs scalability')
+  await page.getByRole('button', { name: 'Cavabı göstər' }).click()
+  await expect(page.getByRole('region', { name: 'Cavab' })).toContainText('A service is scalable')
+
+  // Easy graduates a new card for four days, so it leaves today's review.
+  await page.getByRole('button', { name: /^Asan/ }).click()
+  await expect(front).toHaveText('Latency vs throughput')
+  await expect(page.getByText('Vaxtı çatmış: 0 · Yeni: 41')).toBeVisible()
+
+  await page.reload()
+  await expect(front).toHaveText('Latency vs throughput')
+  await expect(page.getByText('Vaxtı çatmış: 0 · Yeni: 41')).toBeVisible()
+})

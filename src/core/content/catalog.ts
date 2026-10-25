@@ -1,3 +1,4 @@
+import { buildDeck, validateLinkFixes, type Deck, type DeckSource } from '../flashcards/deck'
 import { validateGlossary, type GlossaryTerm } from '../glossary/glossary'
 import { extractAppendix, type Appendix } from './appendix'
 import { validateImageMirrors } from './image-mirrors'
@@ -59,6 +60,8 @@ export interface Catalog {
   solutions: Solution[]
   /** Image URLs used by primer text → the same image in the primer repo, served with the site. */
   imageMirrors: Record<string, string>
+  /** The primer's Anki Decks as Flashcards. */
+  decks: Deck[]
 }
 
 /**
@@ -68,6 +71,7 @@ export interface Catalog {
 export interface AuthoredContent {
   glossary?: unknown
   imageMirrors?: unknown
+  flashcardLinkFixes?: unknown
 }
 
 /** A Lesson that an authored item references. */
@@ -106,16 +110,21 @@ export function buildContentCatalog(input: {
   source: ContentSource
   /** The primer's solution write-ups, in any order. */
   solutions?: SolutionSource[]
+  /** The primer's Anki Decks, in the order the app lists them. */
+  decks?: DeckSource[]
+  /** Paths of the image files in the primer, which card images are served from when they have a copy there. */
+  primerImages?: string[]
   authored?: AuthoredContent
 }): Catalog {
-  const { source, solutions = [], authored = {} } = input
+  const { source, solutions = [], decks = [], primerImages = [], authored = {} } = input
   const markdown = quoteUnquotedLinkUrls(input.markdown)
   const { headings, groups, lessons, sectionsWithLesson } = splitIntoLessons(markdown, source)
 
   const lessonIds = new Set(lessons.map((lesson) => lesson.id))
   const glossary = validateGlossary(authored.glossary ?? [], lessonIds)
   const imageMirrors = validateImageMirrors(authored.imageMirrors ?? {})
-  const problems = [...glossary.problems, ...imageMirrors.problems]
+  const linkFixes = validateLinkFixes(authored.flashcardLinkFixes ?? {})
+  const problems = [...glossary.problems, ...imageMirrors.problems, ...linkFixes.problems]
   if (problems.length > 0) throw new ContentValidationError(problems)
 
   const catalog: Catalog = {
@@ -127,6 +136,15 @@ export function buildContentCatalog(input: {
     appendix: extractAppendix(lessons),
     solutions: buildSolutions(solutions, source, markdown),
     imageMirrors: imageMirrors.mirrors,
+    decks: decks.map((deck) =>
+      buildDeck(deck, {
+        repoUrl: source.repoUrl,
+        commit: source.commit,
+        imageMirrors: imageMirrors.mirrors,
+        primerImages: new Set(primerImages),
+        linkFixes: linkFixes.fixes,
+      }),
+    ),
   }
   // The study guide's links resolve against the catalog itself.
   const studyGuide = extractStudyGuide(catalog)
