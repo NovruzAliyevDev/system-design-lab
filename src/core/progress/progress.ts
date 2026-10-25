@@ -12,7 +12,13 @@ export interface ReadingProgress {
 
 export interface Settings {
   theme: Theme
+  /** How many new Flashcards the daily review may start each day. */
+  newCardsPerDay: number
 }
+
+/** Anki's default. */
+export const DEFAULT_NEW_CARDS_PER_DAY = 20
+export const MAX_NEW_CARDS_PER_DAY = 999
 
 export interface FlashcardProgress {
   /** Flashcard id → where the Review Scheduler left it; a card without a state is new. */
@@ -31,10 +37,10 @@ export type ProgressArea = keyof Progress
 export const PROGRESS_AREAS: readonly ProgressArea[] = ['reading', 'settings', 'flashcards']
 
 export function emptyProgress(): Progress {
-  return { reading: { readLessons: {} }, settings: { theme: 'dark' }, flashcards: { cards: {} } }
+  return { reading: { readLessons: {} }, settings: { theme: 'dark', newCardsPerDay: DEFAULT_NEW_CARDS_PER_DAY }, flashcards: { cards: {} } }
 }
 
-export const PROGRESS_SCHEMA_VERSION = 2
+export const PROGRESS_SCHEMA_VERSION = 3
 
 /** The export file: all progress, versioned so that older files can be migrated on import. */
 export interface ProgressExport {
@@ -95,7 +101,7 @@ const UPGRADES: Record<number, (data: Record<string, unknown>) => Record<string,
       exportedAt,
       progress: {
         reading: { readLessons: Object.fromEntries(readLessons.map((id) => [id, exportedAt])) },
-        settings: emptyProgress().settings,
+        settings: { theme: emptyProgress().settings.theme },
       },
     }
   },
@@ -103,6 +109,12 @@ const UPGRADES: Record<number, (data: Record<string, unknown>) => Record<string,
   1: ({ exportedAt, progress }) => {
     if (!isRecord(progress)) throw malformed('progress is missing')
     return { schemaVersion: 2, exportedAt, progress: { ...progress, flashcards: { cards: {} } } }
+  },
+  // v2 had no daily new-card limit.
+  2: ({ exportedAt, progress }) => {
+    if (!isRecord(progress) || !isRecord(progress.settings)) throw malformed('settings is missing')
+    const settings = { ...progress.settings, newCardsPerDay: DEFAULT_NEW_CARDS_PER_DAY }
+    return { schemaVersion: 3, exportedAt, progress: { ...progress, settings } }
   },
 }
 
@@ -124,6 +136,8 @@ function validateProgress(progress: Record<string, unknown>): Progress {
   if (!isRecord(settings)) throw malformed('settings is missing')
   const theme = THEMES.find((known) => known === settings.theme)
   if (!theme) throw malformed('the theme is unknown')
+  const { newCardsPerDay } = settings
+  if (!isNewCardLimit(newCardsPerDay)) throw malformed('the daily new-card limit is not a whole number from 0 to 999')
 
   if (!isRecord(flashcards) || !isRecord(flashcards.cards)) throw malformed('flashcards is missing')
   const cards = Object.entries(flashcards.cards).map(([cardId, value]): [string, CardState] => {
@@ -135,9 +149,14 @@ function validateProgress(progress: Record<string, unknown>): Progress {
   // Object.fromEntries defines keys as own properties, so an id such as `__proto__` stays data.
   return {
     reading: { readLessons: Object.fromEntries(readLessons) as Record<string, string> },
-    settings: { theme },
+    settings: { theme, newCardsPerDay },
     flashcards: { cards: Object.fromEntries(cards) },
   }
+}
+
+/** A daily new-card limit: a whole number from 0 to `MAX_NEW_CARDS_PER_DAY`. */
+export function isNewCardLimit(value: unknown): value is number {
+  return Number.isInteger(value) && (value as number) >= 0 && (value as number) <= MAX_NEW_CARDS_PER_DAY
 }
 
 function malformed(detail: string): InvalidProgressFileError {

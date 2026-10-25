@@ -90,6 +90,12 @@ describe('scheduleReview', () => {
     expect(scheduleReview(state, 'hard', NOW)).toMatchObject({ intervalDays: 2 })
   })
 
+  it('records when a new card was introduced, for the daily new-card limit', () => {
+    const states = review(['good', 'good', 'again', 'good'])
+
+    expect(states.map((state) => state.introduced)).toEqual(Array(4).fill(NOW.toISOString()))
+  })
+
   it('schedules from the time of the review, not from when the card was due', () => {
     const due = review(['good', 'good']).at(-1)!
     const late = new Date(Date.parse(due.due) + 5 * DAY)

@@ -1,6 +1,8 @@
 import { useEffect, useState, type ChangeEvent } from 'react'
 import {
   InvalidProgressFileError,
+  isNewCardLimit,
+  MAX_NEW_CARDS_PER_DAY,
   THEMES,
   type InvalidProgressFileReason,
   type ProgressArea,
@@ -38,7 +40,7 @@ const exportFileName = (kind: 'progress' | 'backup', file: ProgressExport) =>
   `system-design-lab-${kind}-${file.exportedAt.slice(0, 10)}.json`
 
 export function SettingsPage() {
-  const { progress, setTheme, importProgress, reset } = useProgress()
+  const { progress, setTheme, setNewCardsPerDay, importProgress, reset } = useProgress()
   const [message, setMessage] = useState<{ text: string; isError: boolean }>()
   const [backup, setBackup] = useState<ProgressExport>()
   const [confirming, setConfirming] = useState<ResetTarget>()
@@ -93,6 +95,15 @@ export function SettingsPage() {
             </label>
           ))}
         </div>
+      </fieldset>
+
+      <fieldset className={sectionClass} disabled={!progress}>
+        <legend className="float-left text-lg font-medium text-zinc-100">{t('flashcardsSettingsTitle')}</legend>
+        <label className="clear-left block pt-3 text-sm text-zinc-300">
+          {t('newCardsPerDay')}
+          <NewCardLimitInput value={progress?.settings.newCardsPerDay} onChange={setNewCardsPerDay} />
+        </label>
+        <p className="mt-2 text-xs text-zinc-500">{t('newCardsPerDayDescription')}</p>
       </fieldset>
 
       <div className={sectionClass}>
@@ -152,5 +163,38 @@ export function SettingsPage() {
         {message?.text}
       </p>
     </section>
+  )
+}
+
+/** A number typed into a field; NaN when the field is empty. */
+const parseCount = (text: string) => (text.trim() === '' ? NaN : Number(text))
+
+/** The daily new-card limit; what is typed is stored once it is a valid limit. */
+function NewCardLimitInput({ value, onChange }: { value: number | undefined; onChange: (count: number) => Promise<void> }) {
+  const [text, setText] = useState(value === undefined ? '' : String(value))
+  const [shownValue, setShownValue] = useState(value)
+  // A value that changed elsewhere (loading, a reset or an import) replaces what was typed.
+  if (value !== shownValue) {
+    setShownValue(value)
+    if (text === '' || Number(text) !== value) setText(value === undefined ? '' : String(value))
+  }
+  return (
+    <input
+      type="number"
+      inputMode="numeric"
+      min={0}
+      max={MAX_NEW_CARDS_PER_DAY}
+      step={1}
+      aria-invalid={!isNewCardLimit(parseCount(text))}
+      className="mt-1 block w-24 rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-zinc-100 aria-invalid:border-red-500"
+      value={text}
+      onChange={(event) => {
+        setText(event.currentTarget.value)
+        const count = parseCount(event.currentTarget.value)
+        if (isNewCardLimit(count) && count !== value) void onChange(count)
+      }}
+      // What was typed reads back as stored (e.g. "05" as "5"), or as the stored value when it was not a limit.
+      onBlur={() => setText(value === undefined ? '' : String(value))}
+    />
   )
 }

@@ -20,6 +20,11 @@ export interface CardState {
   reps: number
   /** Times the card was forgotten (graded again) after graduating. */
   lapses: number
+  /**
+   * When the card was first reviewed (ISO timestamp), which the daily new-card limit counts by.
+   * Absent on cards first reviewed before the app recorded it.
+   */
+  introduced?: string
 }
 
 /** Delays of the learning steps a new or forgotten card goes through before it graduates. */
@@ -43,7 +48,16 @@ const DAY_MS = 24 * 60 * MINUTE_MS
  * learning. `state` is undefined for a new card.
  */
 export function scheduleReview(state: CardState | undefined, grade: Grade, now: Date): CardState {
-  const card = state ?? { phase: 'learning', step: 0, intervalDays: 0, ease: STARTING_EASE, due: now.toISOString(), reps: 0, lapses: 0 }
+  const card = state ?? {
+    phase: 'learning',
+    step: 0,
+    intervalDays: 0,
+    ease: STARTING_EASE,
+    due: now.toISOString(),
+    reps: 0,
+    lapses: 0,
+    introduced: now.toISOString(),
+  }
   const reps = card.reps + 1
   return card.phase === 'learning' ? learn(card, grade, now, reps) : reviewGraduated(card, grade, now, reps)
 }
@@ -84,14 +98,20 @@ function round2(value: number): number {
 /** A card state read from stored or imported progress, with only the known fields; undefined if it is not one. */
 export function readCardState(value: unknown): CardState | undefined {
   if (typeof value !== 'object' || value === null) return undefined
-  const { phase, step, intervalDays, ease, due, reps, lapses } = value as Record<string, unknown>
+  const { phase, step, intervalDays, ease, due, reps, lapses, introduced } = value as Record<string, unknown>
   const counts = [step, intervalDays, reps, lapses]
   const valid =
     (phase === 'learning' || phase === 'review') &&
     counts.every((count) => Number.isInteger(count) && (count as number) >= 0) &&
     typeof ease === 'number' &&
     ease >= MINIMUM_EASE &&
-    typeof due === 'string' &&
-    !Number.isNaN(Date.parse(due))
-  return valid ? { phase, step, intervalDays, ease, due, reps, lapses } as CardState : undefined
+    isTimestamp(due) &&
+    (introduced === undefined || isTimestamp(introduced))
+  if (!valid) return undefined
+  const state = { phase, step, intervalDays, ease, due, reps, lapses } as CardState
+  return introduced === undefined ? state : { ...state, introduced: introduced as string }
+}
+
+function isTimestamp(value: unknown): value is string {
+  return typeof value === 'string' && !Number.isNaN(Date.parse(value))
 }

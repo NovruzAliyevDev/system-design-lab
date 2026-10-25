@@ -39,7 +39,8 @@ const BACKUP_KEY = 'backup:before-import'
 export function createProgressRepository(store: KeyValueStore): ProgressRepository {
   async function get<A extends ProgressArea>(area: A): Promise<Progress[A]> {
     const stored = (await store.get(areaKey(area))) as Progress[A] | undefined
-    return stored ?? emptyProgress()[area]
+    // An area stored by an older version of the app lacks the fields added since; they start at their defaults.
+    return { ...emptyProgress()[area], ...stored }
   }
 
   async function getAll(): Promise<Progress> {

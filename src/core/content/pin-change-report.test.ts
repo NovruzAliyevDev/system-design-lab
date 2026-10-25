@@ -111,6 +111,19 @@ describe('comparePrimerVersions', () => {
     ])
   })
 
+  it('lists authored Flashcards that reference Lessons the new pin does not have', () => {
+    const before = version('old', ['## Queues', 'b', '## Cache', 'c'])
+    const after = version('new', ['## Cache', 'c'])
+    const flashcards = [
+      { cardId: 'system-design/1', lessonIds: ['cache', 'queues'] },
+      { cardId: 'system-design/2', lessonIds: ['cache'] },
+    ]
+
+    const report = comparePrimerVersions({ before, after, authored: { flashcards } })
+
+    expect(report.brokenReferences).toEqual([{ referrer: 'Flashcard "system-design/1"', lessonId: 'queues' }])
+  })
+
   it('reports no broken references when every authored reference resolves', () => {
     const lines = ['## Cache', 'a']
     const glossary = [{ term: 'Cache', explanation: 'x', lessonIds: ['cache'] }]

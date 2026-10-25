@@ -294,7 +294,7 @@ test('follows the study guide of a chosen timeline to its Lessons', async ({ pag
 test('reviews a Flashcard and keeps its schedule across a reload', async ({ page }) => {
   await page.goto('/')
   await page.getByRole('banner').getByRole('link', { name: 'Kartlar' }).click()
-  await expect(page.getByText('Vaxtı çatmış: 0 · Yeni: 42')).toBeVisible()
+  await expect(page.getByText('Bu gün: 20 kart · yeni 20 · öyrənilir 0 · təkrar 0')).toBeVisible()
 
   const front = page.getByRole('region', { name: 'Sual' })
   await expect(front).toHaveText('Performance vs scalability')
@@ -302,11 +302,47 @@ test('reviews a Flashcard and keeps its schedule across a reload', async ({ page
   await expect(page.getByRole('region', { name: 'Cavab' })).toContainText('A service is scalable')
 
   // Easy graduates a new card for four days, so it leaves today's review.
-  await page.getByRole('button', { name: /^Asan/ }).click()
+  await page.getByRole('button', { name: /Asan/ }).click()
   await expect(front).toHaveText('Latency vs throughput')
-  await expect(page.getByText('Vaxtı çatmış: 0 · Yeni: 41')).toBeVisible()
+  await expect(page.getByText('Bu gün: 19 kart · yeni 19 · öyrənilir 0 · təkrar 0')).toBeVisible()
 
   await page.reload()
   await expect(front).toHaveText('Latency vs throughput')
-  await expect(page.getByText('Vaxtı çatmış: 0 · Yeni: 41')).toBeVisible()
+  await expect(page.getByText('Bu gün: 19 kart · yeni 19 · öyrənilir 0 · təkrar 0')).toBeVisible()
+})
+
+test('completes a daily review of a Deck with the keyboard, within the new-card limit', async ({ page }) => {
+  await page.goto('/settings')
+  await page.getByLabel('Gündə ən çox yeni kart').fill('2')
+
+  await page.getByRole('link', { name: 'Kartlar' }).first().click()
+  await page.getByLabel('Nəyi təkrar edirsiniz').selectOption({ label: 'OO Design (6)' })
+  await expect(page).toHaveURL(/\/flashcards\?deck=oo-design$/)
+  await expect(page.getByText('Bu gün: 2 kart · yeni 2 · öyrənilir 0 · təkrar 0')).toBeVisible()
+
+  const front = page.getByRole('region', { name: 'Sual' })
+  await expect(front).toHaveText('Design a deck of cards')
+  // Away from the Deck picker, whose keys choose an option.
+  await front.click()
+  await page.keyboard.press('Space')
+  await expect(page.getByRole('region', { name: 'Cavab' })).toContainText('Constraints and assumptions')
+  await expect(page.getByRole('region', { name: 'İzah' })).toContainText('Card və Deck')
+  const card = page.getByRole('article', { name: 'Kartlar' })
+  await expect(card.getByRole('link', { name: 'Object-oriented design interview questions with solutions' })).toBeVisible()
+  // Easy: the card graduates and leaves today's review.
+  await page.keyboard.press('4')
+
+  await expect(front).toHaveText('Design a call center')
+  await page.keyboard.press('Enter')
+  // Good: the card moves to its next learning step, 10 minutes away, which today's review still shows.
+  await page.keyboard.press('3')
+  await expect(page.getByText('Bu gün: 1 kart · yeni 0 · öyrənilir 1 · təkrar 0')).toBeVisible()
+  await expect(front).toHaveText('Design a call center')
+  await page.keyboard.press('Space')
+  await page.keyboard.press('3')
+
+  await expect(page.getByRole('status')).toContainText('Bugünkü təkrar bitdi.')
+  await expect(page.getByRole('status')).toContainText('Bugünkü yeni kart limiti (2) doldu')
+  const stats = page.getByRole('listitem', { name: 'OO Design' })
+  await expect(stats.getByRole('definition')).toHaveText(['4', '0', '2', '0', '0'])
 })

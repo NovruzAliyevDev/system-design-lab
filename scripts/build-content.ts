@@ -4,7 +4,8 @@ import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync,
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { glossary } from '../content/glossary'
-import { flashcardLinkFixes } from '../content/flashcard-link-fixes'
+import { flashcardFormerRepoUrls, flashcardLinkFixes, flashcardPlaceholderLinks } from '../content/flashcard-link-fixes'
+import { flashcards } from '../content/flashcards'
 import { imageMirrors } from '../content/image-mirrors'
 import { buildContentCatalog, type Catalog } from '../src/core/content/catalog'
 import { findUnresolvedLinks, isImagePath, referencedAssets } from '../src/core/content/links'
@@ -19,9 +20,9 @@ export const PRIMER_DIR = join(root, PRIMER_PATH)
 export const PRIMER_REPO_URL = 'https://github.com/donnemartin/system-design-primer'
 /** Each system design question has a folder here with its write-up in `README.md`. */
 const SOLUTIONS_PATH = 'solutions/system_design'
-/** The primer's Anki Decks, `<title>.apkg` each. The other two arrive with the full Flashcards feature. */
+/** The primer's Anki Decks, `<title>.apkg` each, in the order the app lists them. */
 const DECKS_PATH = 'resources/flash_cards'
-const DECK_TITLES = ['System Design']
+const DECK_TITLES = ['System Design', 'System Design Exercises', 'OO Design']
 /** The folder of the primer's copies of the images it shows. */
 const IMAGES_PATH = 'images'
 const GENERATED_DIR = join(root, 'src', 'generated')
@@ -80,7 +81,7 @@ export function loadPrimerCatalog() {
     solutions: readSolutions(),
     decks: readDecks(),
     primerImages: primerImages(),
-    authored: { glossary, imageMirrors, flashcardLinkFixes },
+    authored: { glossary, imageMirrors, flashcardLinkFixes, flashcardPlaceholderLinks, flashcardFormerRepoUrls, flashcards },
   })
 }
 

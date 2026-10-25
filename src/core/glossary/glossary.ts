@@ -1,5 +1,6 @@
 import { slug } from 'github-slugger'
 import type { LessonReference } from '../content/catalog'
+import { isRecord, isText, isTextList } from '../content/validation'
 
 /** A Glossary Term as it is authored. */
 export interface GlossaryTermInput {
@@ -83,17 +84,4 @@ export function glossaryLessonReferences(input: unknown): LessonReference[] {
 /** How problems and references name an authored term: by its name, or by its position when it has none. */
 function termName(item: unknown, index: number): string {
   return isRecord(item) && isText(item.term) ? `Glossary Term "${item.term}"` : `Glossary Term #${index + 1}`
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
-}
-
-/** A non-empty string without surrounding whitespace. */
-function isText(value: unknown): value is string {
-  return typeof value === 'string' && value.trim() !== '' && value.trim() === value
-}
-
-function isTextList(value: unknown): value is string[] {
-  return Array.isArray(value) && value.every(isText)
 }

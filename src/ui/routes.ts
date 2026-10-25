@@ -1,3 +1,4 @@
+import type { CardSelection } from '../core/flashcards/deck'
 import type { StringKey } from './i18n'
 
 /** App route of a Lesson, optionally scrolled to a heading inside it. */
@@ -28,6 +29,28 @@ export function solutionPath(solutionId: string, anchor?: string): string {
 export const STUDY_GUIDE_ROUTE = '/study-guide'
 
 export const FLASHCARDS_ROUTE = '/flashcards'
+
+/** The query of the Flashcard review's URL for a selection of cards: `?deck=<id>`, `?lesson=<id>`, or none for all. */
+export function flashcardsQuery(selection: CardSelection): Record<string, string> {
+  if (selection.kind === 'deck') return { deck: selection.deckId }
+  if (selection.kind === 'lesson') return { lesson: selection.lessonId }
+  return {}
+}
+
+/** The selection a Flashcard review URL's query names; `all` when it names none. Ids are not checked here. */
+export function selectionFromQuery(params: URLSearchParams): CardSelection {
+  const deckId = params.get('deck')
+  const lessonId = params.get('lesson')
+  if (deckId) return { kind: 'deck', deckId }
+  if (lessonId) return { kind: 'lesson', lessonId }
+  return { kind: 'all' }
+}
+
+/** App route of the Flashcard review of a selection of cards. */
+export function flashcardsPath(selection: CardSelection): string {
+  const query = new URLSearchParams(flashcardsQuery(selection)).toString()
+  return query ? `${FLASHCARDS_ROUTE}?${query}` : FLASHCARDS_ROUTE
+}
 
 /** Pages besides the Lessons, linked from the header (from `md` up) and the table of contents drawer. */
 export const HEADER_PAGES: { to: string; label: StringKey }[] = [

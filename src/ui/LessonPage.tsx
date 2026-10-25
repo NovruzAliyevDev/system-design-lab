@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, type RefObject } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { findLesson } from '../core/content/catalog'
 import { adjacentLessons } from '../core/content/navigation'
+import { selectCards } from '../core/flashcards/deck'
 import { isLessonRead } from '../core/progress/reading'
 import { appendixTablesOf } from './AppendixTables'
 import { Attribution } from './Attribution'
@@ -10,7 +11,7 @@ import { t } from './i18n'
 import { PRIMER_PROSE_CLASS, PrimerMarkdown } from './PrimerMarkdown'
 import { useProgress } from './progress/store'
 import { ReadMarker } from './ReadMarker'
-import { lessonPath } from './routes'
+import { flashcardsPath, lessonPath } from './routes'
 import { useScrollToHash } from './useScrollToHash'
 
 export function LessonPage() {
@@ -22,6 +23,7 @@ export function LessonPage() {
   const endRef = useRef<HTMLDivElement>(null)
   const autoMark = useMarkReadAtEnd(lesson ? lessonId : undefined, isRead === false, endRef, markRead)
   const appendixTables = useMemo(() => lesson && appendixTablesOf(lesson), [lesson])
+  const cardCount = useMemo(() => selectCards(catalog.decks, { kind: 'lesson', lessonId }).length, [lessonId])
 
   useScrollToHash()
 
@@ -54,6 +56,14 @@ export function LessonPage() {
           >
             {isRead ? t('markAsUnread') : t('markAsRead')}
           </button>
+        </p>
+      )}
+
+      {cardCount > 0 && (
+        <p className="mt-2 text-sm">
+          <Link to={flashcardsPath({ kind: 'lesson', lessonId })} className="text-sky-400 hover:underline">
+            {t('studyLessonCards', { count: cardCount })}
+          </Link>
         </p>
       )}
 

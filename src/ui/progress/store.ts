@@ -10,6 +10,7 @@ interface ProgressState {
   markRead(lessonId: string): Promise<void>
   markUnread(lessonId: string): Promise<void>
   setTheme(theme: Theme): Promise<void>
+  setNewCardsPerDay(count: number): Promise<void>
   /** Records a review of a Flashcard and schedules its next one. */
   gradeCard(cardId: string, grade: Grade): Promise<void>
   /** Imports an export file; throws `InvalidProgressFileError` and changes nothing when it is invalid. */
@@ -22,6 +23,7 @@ export const useProgress = create<ProgressState>()(() => ({
   markRead: (lessonId) => update('reading', (reading) => markLessonRead(reading, lessonId, new Date())),
   markUnread: (lessonId) => update('reading', (reading) => markLessonUnread(reading, lessonId)),
   setTheme: (theme) => update('settings', (settings) => ({ ...settings, theme })),
+  setNewCardsPerDay: (newCardsPerDay) => update('settings', (settings) => ({ ...settings, newCardsPerDay })),
   gradeCard: (cardId, grade) =>
     update('flashcards', ({ cards }) => ({ cards: { ...cards, [cardId]: scheduleReview(cards[cardId], grade, new Date()) } })),
   async importProgress(fileText) {

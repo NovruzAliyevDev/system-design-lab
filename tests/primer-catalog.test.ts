@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { loadPrimerCatalog } from '../scripts/build-content'
 import { findUnresolvedLinks, resolveLink } from '../src/core/content/links'
 import { linkUrls } from '../src/core/content/markdown'
+import { htmlLinkUrls } from '../src/core/flashcards/deck'
 
 describe('catalog of the pinned primer commit', () => {
   const catalog = loadPrimerCatalog()
@@ -42,15 +43,27 @@ describe('catalog of the pinned primer commit', () => {
     }
   })
 
-  it('converts the System Design Deck into Flashcards, front to back', () => {
+  it("converts the primer's three Decks into Flashcards, front to back", () => {
     const [deck] = catalog.decks
 
-    expect(catalog.decks.map(({ id, title }) => [id, title])).toEqual([['system-design', 'System Design']])
-    expect(deck.cards).toHaveLength(42)
+    expect(catalog.decks.map(({ id, title, cards }) => [id, title, cards.length])).toEqual([
+      ['system-design', 'System Design', 42],
+      ['system-design-exercises', 'System Design Exercises', 8],
+      ['oo-design', 'OO Design', 6],
+    ])
     expect(deck.cards[0]).toMatchObject({ id: 'system-design/1482325088071', front: '<h2>Performance vs scalability</h2>' })
     expect(deck.cards[0].back).toContain('if it results in increased')
     const html = deck.cards.map((card) => card.front + card.back).join('')
     expect(html).not.toMatch(/ style=|<script|<svg/)
+  })
+
+  it('links the Exercises to their Lessons, and the links in their write-ups into the README', () => {
+    const exercises = catalog.decks[1].cards
+    const primerLinks = exercises.flatMap((card) => htmlLinkUrls(card.back)).filter((href) => href.startsWith(`${catalog.source.repoUrl}#`))
+
+    expect(exercises[1]).toMatchObject({ lessonIds: ['design-pastebincom-or-bitly'] })
+    expect(primerLinks.length).toBeGreaterThan(100)
+    expect(primerLinks.filter((href) => resolveLink(catalog, href).kind !== 'lesson')).toEqual([])
   })
 
   it('serves every Flashcard image with the site, except the one the README also shows from GitHub', () => {

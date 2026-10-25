@@ -1,12 +1,15 @@
-import { useEffect, useRef, useState } from 'react'
-import type { Deck } from '../core/flashcards/deck'
-import { nextDueAt, reviewCounts, reviewQueue, type CardStates } from '../core/flashcards/queue'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { Link, useSearchParams } from 'react-router-dom'
+import { findLesson } from '../core/content/catalog'
+import { selectCards, type CardSelection, type Flashcard } from '../core/flashcards/deck'
+import { buildDailyQueue, deckStats, nextDueAt, type CardStates, type DailyReviewSettings, type DeckStats } from '../core/flashcards/queue'
 import { GRADES, scheduleReview, type Grade } from '../core/flashcards/scheduler'
 import { Attribution } from './Attribution'
 import { catalog } from './catalog'
-import { t, type StringKey } from './i18n'
+import { t, tRich, type StringKey } from './i18n'
 import { PRIMER_PROSE_CLASS, PrimerHtml } from './PrimerMarkdown'
 import { useProgress } from './progress/store'
+import { flashcardsPath, flashcardsQuery, lessonPath, selectionFromQuery, SETTINGS_ROUTE } from './routes'
 
 const GRADE_LABELS: Record<Grade, StringKey> = { again: 'gradeAgain', hard: 'gradeHard', good: 'gradeGood', easy: 'gradeEasy' }
 
@@ -16,6 +19,17 @@ const GRADE_CLASSES: Record<Grade, string> = {
   good: 'border-emerald-500/60 hover:bg-emerald-500/10',
   easy: 'border-sky-500/60 hover:bg-sky-500/10',
 }
+
+/** The key that gives each grade, as in Anki: 1 again … 4 easy. */
+const GRADE_KEYS: Record<string, Grade> = Object.fromEntries(GRADES.map((grade, i) => [String(i + 1), grade]))
+
+const STATS: { key: Exclude<keyof DeckStats, 'total'>; label: StringKey }[] = [
+  { key: 'new', label: 'statNew' },
+  { key: 'learning', label: 'statLearning' },
+  { key: 'young', label: 'statYoung' },
+  { key: 'mature', label: 'statMature' },
+  { key: 'due', label: 'statDue' },
+]
 
 const MINUTE_MS = 60 * 1000
 const HOUR_MS = 60 * MINUTE_MS
@@ -39,38 +53,111 @@ function formatWait(ms: number): string {
   return t('intervalDays', { count: Math.round(ms / DAY_MS) })
 }
 
-/** Reviews the primer's System Design Deck: due cards first, then new ones. */
+/** The learner's day starts at their local midnight (by the offset in force now). */
+function dailySettings(newCardsPerDay: number, now: Date): DailyReviewSettings {
+  return { newCardsPerDay, utcOffsetMinutes: -now.getTimezoneOffset() }
+}
+
+/** Lessons that cards link to, in primer order, with how many cards each has. */
+const topics = catalog.lessons
+  .map((lesson) => ({ lesson, count: selectCards(catalog.decks, { kind: 'lesson', lessonId: lesson.id }).length }))
+  .filter(({ count }) => count > 0)
+
+/** What the URL asks to study; every card when it names no Deck, or no Lesson that cards link to. */
+function useSelection(): CardSelection {
+  const [params] = useSearchParams()
+  const selection = selectionFromQuery(params)
+  const known =
+    selection.kind === 'all' ||
+    (selection.kind === 'deck' && catalog.decks.some((deck) => deck.id === selection.deckId)) ||
+    (selection.kind === 'lesson' && topics.some(({ lesson }) => lesson.id === selection.lessonId))
+  return known ? selection : { kind: 'all' }
+}
+
+/** The daily review of the primer's Decks: all of them, one Deck, or the cards of one Lesson. */
 export function FlashcardsPage() {
-  const deck = catalog.decks[0]
+  const selection = useSelection()
+  const progress = useProgress((state) => state.progress)
   return (
     <section>
       <h1 className="text-2xl font-semibold text-zinc-50">{t('flashcardsTitle')}</h1>
       <p className="mt-1 text-sm text-zinc-400">{t('flashcardsDescription')}</p>
-      {deck && <DeckReview deck={deck} />}
+      <SelectionPicker selection={selection} />
+      {progress ? (
+        <>
+          <Review
+            // A new selection starts with its first card's front.
+            key={JSON.stringify(selection)}
+            cards={selectCards(catalog.decks, selection)}
+            states={progress.flashcards.cards}
+            newCardsPerDay={progress.settings.newCardsPerDay}
+          />
+          <DeckStatsList states={progress.flashcards.cards} newCardsPerDay={progress.settings.newCardsPerDay} />
+        </>
+      ) : (
+        <p className="mt-6 text-sm text-zinc-400">{t('flashcardsLoading')}</p>
+      )}
+      <p className="mt-8 text-xs text-zinc-500">
+        <Attribution textKey="lessonAttribution" />
+      </p>
     </section>
   )
 }
 
-function DeckReview({ deck }: { deck: Deck }) {
-  const states = useProgress((state) => state.progress?.flashcards.cards)
+function SelectionPicker({ selection }: { selection: CardSelection }) {
+  const [, setParams] = useSearchParams()
+  const options: { selection: CardSelection; label: string }[] = [
+    { selection: { kind: 'all' }, label: t('studyAll') },
+    ...catalog.decks.map((deck) => ({
+      selection: { kind: 'deck', deckId: deck.id } as const,
+      label: t('studyOption', { title: deck.title, count: deck.cards.length }),
+    })),
+    ...topics.map(({ lesson, count }) => ({
+      selection: { kind: 'lesson', lessonId: lesson.id } as const,
+      label: t('studyOption', { title: lesson.title, count }),
+    })),
+  ]
+  // An option's value is the selection's URL path, which is unique per selection.
+  const option = (index: number) => (
+    <option key={index} value={flashcardsPath(options[index].selection)}>
+      {options[index].label}
+    </option>
+  )
+  const deckOptions = catalog.decks.map((_, i) => option(1 + i))
+  const topicOptions = topics.map((_, i) => option(1 + catalog.decks.length + i))
   return (
-    <div className="mt-6">
-      <h2 lang="en" className="text-lg font-medium text-zinc-100">
-        {deck.title}
-      </h2>
-      <p className="mt-1 text-xs text-zinc-500">
-        <a href={deck.sourceUrl} target="_blank" rel="noopener noreferrer" className="text-sky-400 hover:underline">
-          {t('viewSource')}
-        </a>
-        {' · '}
-        <Attribution textKey="lessonAttribution" />
-      </p>
-      {states ? <Review deck={deck} states={states} /> : <p className="mt-6 text-sm text-zinc-400">{t('flashcardsLoading')}</p>}
-    </div>
+    <label className="mt-4 block text-sm text-zinc-300">
+      {t('studySelection')}
+      <select
+        className="mt-1 block w-full rounded border border-zinc-700 bg-zinc-900 px-2 py-2 text-zinc-100 sm:w-auto"
+        value={flashcardsPath(selection)}
+        onChange={(event) => {
+          const chosen = options.find((candidate) => flashcardsPath(candidate.selection) === event.currentTarget.value)
+          if (chosen) setParams(flashcardsQuery(chosen.selection))
+        }}
+      >
+        {option(0)}
+        <optgroup label={t('studyDecks')}>{deckOptions}</optgroup>
+        <optgroup label={t('studyTopics')}>{topicOptions}</optgroup>
+      </select>
+    </label>
   )
 }
 
-function Review({ deck, states }: { deck: Deck; states: CardStates }) {
+/** Whether a key press belongs to a form control, an open input method or another shortcut, not to the review. */
+function isKeyForSomethingElse(event: KeyboardEvent): boolean {
+  const target = event.target as HTMLElement | null
+  return (
+    event.defaultPrevented ||
+    event.isComposing ||
+    event.ctrlKey ||
+    event.metaKey ||
+    event.altKey ||
+    !!target?.closest('input, textarea, select, [contenteditable], dialog')
+  )
+}
+
+function Review({ cards, states, newCardsPerDay }: { cards: Flashcard[]; states: CardStates; newCardsPerDay: number }) {
   const gradeCard = useProgress((state) => state.gradeCard)
   const [revealed, setRevealed] = useState(false)
   const showAnswerRef = useRef<HTMLButtonElement>(null)
@@ -78,14 +165,15 @@ function Review({ deck, states }: { deck: Deck; states: CardStates }) {
   const interacted = useRef(false)
   useClockTick()
   const now = new Date()
-  const card = reviewQueue(deck.cards, states, now)[0]
-  const counts = reviewCounts(deck.cards, states, now)
+  const settings = dailySettings(newCardsPerDay, now)
+  const queue = buildDailyQueue(cards, states, settings, now)
+  const card = queue.cards[0]
+  const { counts } = queue
 
-  // Keyboard users stay on the next step: grading after a reveal, the next reveal after a grade.
-  useEffect(() => {
-    if (!interacted.current) return
-    ;(revealed ? goodRef : showAnswerRef).current?.focus()
-  }, [revealed, card?.id])
+  function reveal() {
+    interacted.current = true
+    setRevealed(true)
+  }
 
   function grade(value: Grade) {
     if (!card) return
@@ -94,9 +182,43 @@ function Review({ deck, states }: { deck: Deck; states: CardStates }) {
     void gradeCard(card.id, value)
   }
 
+  // Keyboard users stay on the next step: grading after a reveal, the next reveal after a grade.
+  useEffect(() => {
+    if (!interacted.current) return
+    ;(revealed ? goodRef : showAnswerRef).current?.focus()
+  }, [revealed, card?.id])
+
+  // Space or Enter reveals the answer and 1–4 grade it. On a focused button Space and Enter press it instead.
+  const onKey = useRef<(event: KeyboardEvent) => void>(undefined)
+  useLayoutEffect(() => {
+    onKey.current = (event) => {
+      if (!card || isKeyForSomethingElse(event)) return
+      // A held key would otherwise go on revealing and grading card after card.
+      if (event.repeat) return event.preventDefault()
+      handleKey(event)
+    }
+  })
+  function handleKey(event: KeyboardEvent) {
+    const onControl = !!(event.target as HTMLElement | null)?.closest('button, a, summary')
+    if (!revealed && (event.key === ' ' || event.key === 'Enter') && !onControl) {
+      event.preventDefault()
+      reveal()
+    } else if (revealed && Object.hasOwn(GRADE_KEYS, event.key)) {
+      event.preventDefault()
+      grade(GRADE_KEYS[event.key])
+    }
+  }
+  useEffect(() => {
+    const listener = (event: KeyboardEvent) => onKey.current?.(event)
+    window.addEventListener('keydown', listener)
+    return () => window.removeEventListener('keydown', listener)
+  }, [])
+
   return (
-    <div className="mt-4">
-      <p className="text-sm text-zinc-400">{t('flashcardsCounts', { due: counts.due, new: counts.new })}</p>
+    <div className="mt-6">
+      <p className="text-sm text-zinc-300">
+        {t('dailyCounts', { total: counts.new + counts.learning + counts.review, ...counts })}
+      </p>
       {card ? (
         <article aria-label={t('flashcardsTitle')} className="mt-4 rounded-lg border border-zinc-800 p-4 sm:p-6">
           <div role="region" lang="en" aria-label={t('flashcardFront')} className={PRIMER_PROSE_CLASS}>
@@ -107,17 +229,32 @@ function Review({ deck, states }: { deck: Deck; states: CardStates }) {
               <div role="region" lang="en" aria-label={t('flashcardBack')} className={`${PRIMER_PROSE_CLASS} mt-4 border-t border-zinc-800 pt-4`}>
                 <PrimerHtml html={card.back} />
               </div>
-              <div role="group" aria-label={t('gradeQuestion')} className="sticky bottom-0 mt-6 border-t border-zinc-800 bg-zinc-950 py-3">
+              {card.explanation && (
+                <section aria-label={t('flashcardExplanation')} className="mt-4 rounded border border-zinc-800 bg-zinc-900/60 p-3 text-sm text-zinc-200">
+                  <h3 className="mb-1 text-xs font-medium tracking-wide text-zinc-400 uppercase">{t('flashcardExplanation')}</h3>
+                  <p>{card.explanation}</p>
+                </section>
+              )}
+              <CardLessons card={card} />
+              <div
+                role="group"
+                aria-label={t('gradeQuestion')}
+                className="sticky bottom-0 mt-6 border-t border-zinc-800 bg-zinc-950 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]"
+              >
                 <p className="mb-2 text-sm text-zinc-400">{t('gradeQuestion')}</p>
                 <div className="grid grid-cols-4 gap-2">
-                  {GRADES.map((value) => (
+                  {GRADES.map((value, i) => (
                     <button
                       key={value}
                       ref={value === 'good' ? goodRef : undefined}
                       type="button"
-                      className={`rounded border px-2 py-2 text-sm text-zinc-100 ${GRADE_CLASSES[value]}`}
+                      aria-keyshortcuts={String(i + 1)}
+                      className={`min-h-12 rounded border px-1 py-2 text-sm text-zinc-100 ${GRADE_CLASSES[value]}`}
                       onClick={() => grade(value)}
                     >
+                      <span className="mr-1 hidden text-xs text-zinc-500 sm:inline" aria-hidden>
+                        {i + 1}
+                      </span>
                       {t(GRADE_LABELS[value])}
                       <span className="block text-xs text-zinc-400">
                         {formatWait(Date.parse(scheduleReview(states[card.id], value, now).due) - now.getTime())}
@@ -128,32 +265,107 @@ function Review({ deck, states }: { deck: Deck; states: CardStates }) {
               </div>
             </>
           ) : (
-            <button
-              ref={showAnswerRef}
-              type="button"
-              className="mt-6 w-full rounded border border-zinc-700 px-3 py-2 text-sm text-zinc-100 hover:border-zinc-500 sm:w-auto"
-              onClick={() => {
-                interacted.current = true
-                setRevealed(true)
-              }}
-            >
-              {t('showAnswer')}
-            </button>
+            <div className="sticky bottom-0 mt-6 bg-zinc-950 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:static sm:p-0">
+              <button
+                ref={showAnswerRef}
+                type="button"
+                aria-keyshortcuts="Space Enter"
+                className="min-h-12 w-full rounded border border-zinc-700 px-3 py-2 text-sm text-zinc-100 hover:border-zinc-500 sm:w-auto"
+                onClick={reveal}
+              >
+                {t('showAnswer')}
+              </button>
+            </div>
           )}
+          <p className="mt-3 hidden text-xs text-zinc-500 sm:block">{t('flashcardsShortcuts')}</p>
         </article>
       ) : (
-        <NothingDue deck={deck} states={states} now={now} />
+        <ReviewDone cards={cards} states={states} settings={settings} now={now} />
       )}
     </div>
   )
 }
 
-function NothingDue({ deck, states, now }: { deck: Deck; states: CardStates; now: Date }) {
-  const nextDue = nextDueAt(deck.cards, states)
+function CardLessons({ card }: { card: Flashcard }) {
+  return (
+    <p className="mt-4 text-sm text-zinc-400">
+      {t('flashcardLessons')}{' '}
+      {card.lessonIds.map((lessonId, i) => (
+        <span key={lessonId}>
+          {i > 0 && ', '}
+          <Link to={lessonPath(lessonId)} lang="en" className="text-sky-400 hover:underline">
+            {findLesson(catalog, lessonId)?.title ?? lessonId}
+          </Link>
+        </span>
+      ))}
+    </p>
+  )
+}
+
+function ReviewDone({ cards, states, settings, now }: { cards: Flashcard[]; states: CardStates; settings: DailyReviewSettings; now: Date }) {
+  const nextDue = nextDueAt(cards, states)
+  // New cards are left only when today's allowance of them is used up.
+  const newLeft = deckStats(cards, states, settings, now).new > 0
   return (
     <div role="status" className="mt-4 rounded-lg border border-zinc-800 p-4 text-sm text-zinc-300">
       <p>{t('flashcardsDone')}</p>
-      {nextDue && <p className="mt-1 text-zinc-400">{t('flashcardsNextDue', { time: formatWait(nextDue.getTime() - now.getTime()) })}</p>}
+      {nextDue && nextDue > now && <p className="mt-1 text-zinc-400">{t('flashcardsNextDue', { time: formatWait(nextDue.getTime() - now.getTime()) })}</p>}
+      {newLeft && (
+        <p className="mt-1 text-zinc-400">
+          {tRich('flashcardsNewLimitReached', {
+            limit: settings.newCardsPerDay,
+            settings: (
+              <Link to={SETTINGS_ROUTE} className="text-sky-400 hover:underline">
+                {t('flashcardsNewLimitSettings')}
+              </Link>
+            ),
+          })}
+        </p>
+      )}
     </div>
+  )
+}
+
+function DeckStatsList({ states, newCardsPerDay }: { states: CardStates; newCardsPerDay: number }) {
+  const now = new Date()
+  const settings = dailySettings(newCardsPerDay, now)
+  return (
+    <section aria-labelledby="deck-stats" className="mt-10 border-t border-zinc-800 pt-6">
+      <h2 id="deck-stats" className="text-lg font-medium text-zinc-100">
+        {t('deckStatsTitle')}
+      </h2>
+      <ul className="mt-4 space-y-4">
+        {catalog.decks.map((deck) => {
+          const stats = deckStats(deck.cards, states, settings, now)
+          return (
+            <li key={deck.id} aria-label={deck.title} className="rounded-lg border border-zinc-800 p-4">
+              <div className="flex flex-wrap items-baseline justify-between gap-2">
+                <h3 lang="en" className="font-medium text-zinc-100">
+                  {deck.title} <span className="text-sm font-normal text-zinc-500">{t('deckCardCount', { count: stats.total })}</span>
+                </h3>
+                <span className="text-xs">
+                  <Link to={flashcardsPath({ kind: 'deck', deckId: deck.id })} className="text-sky-400 hover:underline">
+                    {t('studyDeck')}
+                  </Link>
+                  {' · '}
+                  <a href={deck.sourceUrl} target="_blank" rel="noopener noreferrer" className="text-sky-400 hover:underline">
+                    {t('viewSource')}
+                  </a>
+                </span>
+              </div>
+              <dl className="mt-3 grid grid-cols-5 gap-2 text-center">
+                {STATS.map(({ key, label }) => (
+                  <div key={key}>
+                    <dt className="text-xs text-zinc-500">{t(label)}</dt>
+                    <dd className="text-lg text-zinc-100 tabular-nums">{stats[key]}</dd>
+                  </div>
+                ))}
+              </dl>
+            </li>
+          )
+        })}
+      </ul>
+      <p className="mt-3 text-xs text-zinc-500">{t('deckStatsNote')}</p>
+    </section>
   )
 }

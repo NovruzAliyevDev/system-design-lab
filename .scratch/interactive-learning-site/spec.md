@@ -264,7 +264,7 @@ All Core functions are deterministic. Time (`now`) and randomness (seed) are pas
   - Realistic mode (M/M/c queueing, seeded randomness, p99) comes later, behind the same signature.
   - **Chaos Scenario** is data: nodes down, zone down, cache cold, partition between node sets. It is applied before routing.
 - **Estimation**: `estimate(inputs) → EstimationResult`, with unit-aware outputs. Separately, `gradeEstimate(userValue, referenceValue) → pass/fail`, which accepts values within a factor of 2 of the reference.
-- **Review Scheduler**: `scheduleReview(cardState, grade, now) → cardState`. Uses an SM-2-style algorithm with grades again/hard/good/easy. `buildDailyQueue(cardStates, settings, now)` returns due cards plus capped new cards.
+- **Review Scheduler**: `scheduleReview(cardState, grade, now) → cardState`. Uses an SM-2-style algorithm with grades again/hard/good/easy. `buildDailyQueue(cards, cardStates, settings, now)` returns the selected cards' due cards plus capped new cards.
 - **Mastery and streak**:
   - `computeMastery(progress, catalog) → per-topic mastery`, a weighted mix of read state, quiz results, flashcard maturity and Challenge scores.
   - `computeStreak(activityLog, now, timezone)`.
