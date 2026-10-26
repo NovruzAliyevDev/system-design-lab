@@ -1,10 +1,11 @@
 import { Handle, Position, type Node, type NodeProps } from '@xyflow/react'
 import { componentDefinition, type AnyConfig } from '../../core/design/components'
-import type { DesignNode } from '../../core/design/design'
+import { NODE_SIZE, type DesignNode } from '../../core/design/design'
 import { t } from '../i18n'
 import { COMPONENT_TAGS, componentName, fieldLabel, optionLabel } from './componentText'
+import { SKETCH_FONT, SketchBox } from './sketch'
 
-export type ComponentFlowNode = Node<{ node: DesignNode }, 'component'>
+export type ComponentFlowNode = Node<{ node: DesignNode; sketch: boolean }, 'component'>
 
 /** The choices made in a Node's config, e.g. "Layer 7 · Round robin · ×2". */
 function configSummary(node: DesignNode): string {
@@ -22,13 +23,22 @@ function configSummary(node: DesignNode): string {
   return parts.join(' · ')
 }
 
-export function ComponentNode({ data: { node }, selected, isConnectable }: NodeProps<ComponentFlowNode>) {
+export function ComponentNode({ data: { node, sketch }, selected, isConnectable }: NodeProps<ComponentFlowNode>) {
   const summary = configSummary(node)
+  // Sketched, the border is a Rough.js box drawn over the background instead.
+  const frame = sketch ? 'border-transparent' : selected ? 'border-sky-400 ring-1 ring-sky-400' : 'border-zinc-700'
   return (
     <div
-      className={`w-44 rounded-md border bg-zinc-900 px-3 py-2 text-left shadow ${selected ? 'border-sky-400 ring-1 ring-sky-400' : 'border-zinc-700'}`}
+      className={`relative rounded-md border bg-zinc-900 px-3 py-2 text-left shadow ${frame}`}
+      style={{ width: NODE_SIZE.width, minHeight: NODE_SIZE.height, fontFamily: sketch ? SKETCH_FONT : undefined }}
       data-testid={`node-${node.id}`}
     >
+      {sketch && (
+        <SketchBox
+          id={node.id}
+          strokeStyle={{ stroke: selected ? 'var(--color-sky-400)' : 'var(--color-zinc-400)', strokeWidth: selected ? 2.5 : 1.5 }}
+        />
+      )}
       <Handle type="target" position={Position.Left} isConnectable={isConnectable} className="!h-3 !w-3 !border-zinc-950 !bg-zinc-400" />
       <div className="flex items-baseline gap-2">
         <span className="shrink-0 rounded bg-zinc-800 px-1 font-mono text-[10px] text-zinc-400">{COMPONENT_TAGS[node.componentType]}</span>

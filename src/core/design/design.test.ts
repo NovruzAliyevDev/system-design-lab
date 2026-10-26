@@ -1,20 +1,30 @@
 import { describe, expect, it } from 'vitest'
-import { componentDefinition, configProblem, defaultConfig, isFieldApplicable, PALETTE } from './components'
+import { componentDefinition, configProblem, defaultConfig, isFieldApplicable, PALETTE, paletteGlossaryProblems } from './components'
 import {
   addNode,
+  addZone,
   connect,
   deserializeDesign,
   emptyDesign,
   InvalidDesignError,
+  moveElements,
   moveNodes,
+  moveZone,
+  NODE_SIZE,
+  nodeCentre,
   readDesign,
   removeElements,
   renameNode,
+  renameZone,
   serializeDesign,
   setNodeConfig,
   setNodeNotes,
+  setZoneBounds,
   updateEdge,
+  zoneAt,
+  ZONE_MIN_SIZE,
   type Design,
+  type Position,
 } from './design'
 
 /** Client → load balancer → two web servers → cache-aside cache → SQL primary, with a queue and worker. */
@@ -59,6 +69,7 @@ function sampleDesign(): Design {
       { id: 'web-server-1->message-queue-1', source: 'web-server-1', target: 'message-queue-1', mode: 'async', traffic: 'write' },
       { id: 'message-queue-1->task-queue-1', source: 'message-queue-1', target: 'task-queue-1', mode: 'async', traffic: 'write' },
     ],
+    zones: [{ id: 'us-east-1a', label: 'us-east-1a', position: { x: 160, y: -40 }, size: { width: 260, height: 160 } }],
   }
 }
 
@@ -75,6 +86,11 @@ const withNode = (change: Record<string, unknown>) => {
 const withLoadBalancerConfig = (config: Record<string, unknown>) =>
   withNode({ config: { layer: 'l7', algorithm: 'least-connections', instances: 2, ...config } })
 
+const withZone = (change: Record<string, unknown>) => {
+  const design = sampleDesign()
+  return { ...design, zones: design.zones.map((zone) => ({ ...zone, ...change })) }
+}
+
 const withEdge = (change: Record<string, unknown>) => {
   const design = sampleDesign()
   return { ...design, edges: design.edges.map((edge, i) => (i === 0 ? { ...edge, ...change } : edge)) }
@@ -88,7 +104,14 @@ describe('Design serialisation', () => {
   })
 
   it('round-trips the empty Design', () => {
-    expect(deserializeDesign(serializeDesign(emptyDesign()))).toEqual({ nodes: [], edges: [] })
+    expect(deserializeDesign(serializeDesign(emptyDesign()))).toEqual({ nodes: [], edges: [], zones: [] })
+  })
+
+  it('reads a Design stored before zones existed as one without zones', () => {
+    const { zones: _, ...stored } = sampleDesign()
+    const nodes = stored.nodes.map(({ zoneId: __, ...node }) => node)
+
+    expect(readDesign({ ...stored, nodes }).design?.zones).toEqual([])
   })
 
   it('fills in config fields a Design was stored without, from their defaults', () => {
@@ -118,6 +141,13 @@ describe('Design serialisation', () => {
     ['notes over 2000 characters', withNode({ notes: 'x'.repeat(2001) })],
     ['a position that is not a point', withNode({ position: { x: 'left', y: 0 } })],
     ['a zone id that is empty', withNode({ zoneId: '' })],
+    ['a zone id that names no zone', withNode({ zoneId: 'eu-west-1a' })],
+    ['zones that are not a list', { ...sampleDesign(), zones: {} }],
+    ['a zone without an id', withZone({ id: '' })],
+    ['two zones with one id', { ...sampleDesign(), zones: [...sampleDesign().zones, sampleDesign().zones[0]] }],
+    ['a zone label over 80 characters', withZone({ label: 'x'.repeat(81) })],
+    ['a zone without a size', withZone({ size: undefined })],
+    ['a zone of no width', withZone({ size: { width: 0, height: 100 } })],
     ['an unknown option', withLoadBalancerConfig({ algorithm: 'random-ish' })],
     ['an instance count of 0', withLoadBalancerConfig({ instances: 0 })],
     ['a fractional instance count', withLoadBalancerConfig({ instances: 1.5 })],
@@ -195,6 +225,17 @@ describe('config schemas', () => {
       expect(simulation?.baseLatencyMs).toBeGreaterThan(0)
       expect(simulation?.monthlyCostUsd).toBeGreaterThan(0)
     }
+  })
+
+  it('name a Glossary Term explaining every palette component, and report the ones a Glossary lacks', () => {
+    const termIds = PALETTE.map((componentType) => componentDefinition(componentType).glossaryTermId)
+
+    expect(componentDefinition('load-balancer').glossaryTermId).toBe('load-balancer')
+    expect(new Set(termIds).size).toBe(PALETTE.length)
+    expect(paletteGlossaryProblems(termIds.map((id) => ({ id })))).toEqual([])
+    expect(paletteGlossaryProblems(termIds.filter((id) => id !== 'cache').map((id) => ({ id })))).toEqual([
+      'Component type "cache": no Glossary Term "cache" explains it',
+    ])
   })
 
   it("derive base latency from the primer's latency numbers", () => {
@@ -306,5 +347,140 @@ describe('editing a Design', () => {
     removeElements(design, { nodeIds: ['cache-1'] })
 
     expect(design).toEqual(before)
+  })
+})
+
+
+/** A Node's top-left corner that puts its centre on `point`. */
+const nodeAt = (point: Position): Position => ({ x: point.x - NODE_SIZE.width / 2, y: point.y - NODE_SIZE.height / 2 })
+
+const zoneOf = (design: Design, nodeId: string) => design.nodes.find((node) => node.id === nodeId)?.zoneId
+
+/** Two web servers, centred on (100, 100) and (500, 100). */
+function twoServers(): Design {
+  let design = addNode(emptyDesign(), 'web-server', nodeAt({ x: 100, y: 100 }), 'Web').design
+  design = addNode(design, 'web-server', nodeAt({ x: 500, y: 100 }), 'Web').design
+  return design
+}
+
+describe('zones', () => {
+  it('adds a zone box with a numbered id and label, and puts the Nodes whose centre it covers in it', () => {
+    const first = addZone(twoServers(), { x: 0, y: 0 }, { width: 300, height: 200 }, 'Zone')
+    const second = addZone(first.design, { x: 400, y: 0 }, { width: 300, height: 200 }, 'Zone')
+
+    expect(first.zoneId).toBe('zone-1')
+    expect(second.zoneId).toBe('zone-2')
+    expect(second.design.zones).toEqual([
+      { id: 'zone-1', label: 'Zone', position: { x: 0, y: 0 }, size: { width: 300, height: 200 } },
+      { id: 'zone-2', label: 'Zone 2', position: { x: 400, y: 0 }, size: { width: 300, height: 200 } },
+    ])
+    expect(zoneOf(second.design, 'web-server-1')).toBe('zone-1')
+    expect(zoneOf(second.design, 'web-server-2')).toBe('zone-2')
+  })
+
+  it('keeps a zone at least the minimum size', () => {
+    const { design } = addZone(emptyDesign(), { x: 0, y: 0 }, { width: 10, height: 10 }, 'Zone')
+
+    expect(design.zones[0].size).toEqual(ZONE_MIN_SIZE)
+  })
+
+  it('puts a Node in the innermost zone around its centre, e.g. an availability zone inside a region', () => {
+    let design = addZone(twoServers(), { x: -100, y: -100 }, { width: 800, height: 400 }, 'Region').design
+    design = addZone(design, { x: 0, y: 0 }, { width: 300, height: 200 }, 'AZ').design
+
+    expect(zoneOf(design, 'web-server-1')).toBe('zone-2')
+    expect(zoneOf(design, 'web-server-2')).toBe('zone-1')
+    expect(zoneAt(design, { x: 100, y: 100 })).toBe('zone-2')
+    expect(zoneAt(design, { x: 1000, y: 100 })).toBeUndefined()
+  })
+
+  it('assigns a Node to the zone it is added in or moved into, and takes it out when moved out', () => {
+    const zoned = addZone(emptyDesign(), { x: 0, y: 0 }, { width: 300, height: 200 }, 'Zone').design
+    const added = addNode(zoned, 'cache', nodeAt({ x: 150, y: 100 }), 'Cache')
+
+    expect(zoneOf(added.design, 'cache-1')).toBe('zone-1')
+
+    const movedOut = moveNodes(added.design, { 'cache-1': nodeAt({ x: 600, y: 100 }) })
+    expect(zoneOf(movedOut, 'cache-1')).toBeUndefined()
+    expect(movedOut.nodes[0]).not.toHaveProperty('zoneId')
+
+    expect(zoneOf(moveNodes(movedOut, { 'cache-1': nodeAt({ x: 50, y: 50 }) }), 'cache-1')).toBe('zone-1')
+  })
+
+  it('resizes a zone and reassigns the Nodes it now covers or no longer covers', () => {
+    const { design } = addZone(twoServers(), { x: 0, y: 0 }, { width: 300, height: 200 }, 'Zone')
+
+    const grown = setZoneBounds(design, 'zone-1', { x: 0, y: 0 }, { width: 700, height: 200 })
+    expect(grown.zones[0].size).toEqual({ width: 700, height: 200 })
+    expect(zoneOf(grown, 'web-server-2')).toBe('zone-1')
+
+    const moved = setZoneBounds(grown, 'zone-1', { x: 300, y: 0 }, { width: 400, height: 200 })
+    expect(zoneOf(moved, 'web-server-1')).toBeUndefined()
+    expect(zoneOf(moved, 'web-server-2')).toBe('zone-1')
+  })
+
+  it('moves a zone together with its Nodes and the zones inside it', () => {
+    let design = addZone(twoServers(), { x: -100, y: -100 }, { width: 400, height: 400 }, 'Region').design
+    design = addZone(design, { x: -50, y: -50 }, { width: 300, height: 200 }, 'AZ').design
+
+    const moved = moveZone(design, 'zone-1', { x: 900, y: -100 })
+
+    expect(moved.zones.map((zone) => zone.position)).toEqual([
+      { x: 900, y: -100 },
+      { x: 950, y: -50 },
+    ])
+    expect(nodeCentre(moved.nodes[0].position)).toEqual({ x: 1100, y: 100 })
+    expect(zoneOf(moved, 'web-server-1')).toBe('zone-2')
+    // The server outside the region stays where it was.
+    expect(nodeCentre(moved.nodes[1].position)).toEqual({ x: 500, y: 100 })
+  })
+
+  it('moves a selection of zones and Nodes together, each to where it was dragged', () => {
+    let design = addZone(twoServers(), { x: 0, y: 0 }, { width: 300, height: 200 }, 'AZ').design
+    design = addNode(design, 'cache', nodeAt({ x: 900, y: 100 }), 'Cache').design
+
+    // The zone, the server in it and the lone cache were all selected and dragged 100 down.
+    const moved = moveElements(design, {
+      'zone-1': { x: 0, y: 100 },
+      'web-server-1': nodeAt({ x: 100, y: 200 }),
+      'cache-1': nodeAt({ x: 900, y: 200 }),
+    })
+
+    expect(moved.zones[0].position).toEqual({ x: 0, y: 100 })
+    expect(moved.nodes.map((node) => nodeCentre(node.position))).toEqual([
+      { x: 100, y: 200 },
+      { x: 500, y: 100 },
+      { x: 900, y: 200 },
+    ])
+    expect(zoneOf(moved, 'web-server-1')).toBe('zone-1')
+    // Dragged alone, the zone still takes its Nodes along.
+    expect(nodeCentre(moveElements(design, { 'zone-1': { x: 0, y: 100 } }).nodes[0].position)).toEqual({ x: 100, y: 200 })
+  })
+
+  it('renames a zone, and refuses a label over 80 characters', () => {
+    const { design } = addZone(emptyDesign(), { x: 0, y: 0 }, { width: 300, height: 200 }, 'Zone')
+
+    expect(renameZone(design, 'zone-1', 'eu-west-1a').zones[0].label).toBe('eu-west-1a')
+    expect(() => renameZone(design, 'zone-1', 'x'.repeat(81))).toThrow(RangeError)
+    expect(() => renameZone(design, 'zone-9', 'AZ')).toThrow(RangeError)
+  })
+
+  it('removes a zone box but keeps its Nodes, which fall to the zone around it', () => {
+    let design = addZone(twoServers(), { x: -100, y: -100 }, { width: 800, height: 400 }, 'Region').design
+    design = addZone(design, { x: 0, y: 0 }, { width: 300, height: 200 }, 'AZ').design
+
+    const removed = removeElements(design, { zoneIds: ['zone-2'] })
+
+    expect(removed.zones.map((zone) => zone.id)).toEqual(['zone-1'])
+    expect(removed.nodes).toHaveLength(2)
+    expect(zoneOf(removed, 'web-server-1')).toBe('zone-1')
+  })
+
+  it('numbers a new zone after the highest in use', () => {
+    let design = addZone(emptyDesign(), { x: 0, y: 0 }, ZONE_MIN_SIZE, 'Zone').design
+    design = addZone(design, { x: 0, y: 0 }, ZONE_MIN_SIZE, 'Zone').design
+    design = removeElements(design, { zoneIds: ['zone-1'] })
+
+    expect(addZone(design, { x: 0, y: 0 }, ZONE_MIN_SIZE, 'Zone').zoneId).toBe('zone-3')
   })
 })

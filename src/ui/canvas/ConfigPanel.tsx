@@ -14,12 +14,14 @@ import {
   LABEL_MAX_LENGTH,
   NOTES_MAX_LENGTH,
   renameNode,
+  renameZone,
   setNodeConfig,
   setNodeNotes,
   updateEdge,
   type Design,
   type DesignEdge,
   type DesignNode,
+  type DesignZone,
   type EdgeMode,
   type EdgeTraffic,
 } from '../../core/design/design'
@@ -43,16 +45,22 @@ const labelClass = 'mt-3 block text-xs font-medium text-zinc-400'
 export function ConfigPanel({
   nodeId,
   edgeId,
+  zoneId,
+  selectedCount,
   readOnly,
   ...edit
 }: EditProps & {
   nodeId?: string
   edgeId?: string
+  zoneId?: string
+  /** How many elements are selected; the panel configures one at a time. */
+  selectedCount: number
   readOnly: boolean
 }) {
   const { design } = edit
   const node = design.nodes.find((candidate) => candidate.id === nodeId)
   const edge = design.edges.find((candidate) => candidate.id === edgeId)
+  const zone = design.zones.find((candidate) => candidate.id === zoneId)
   return (
     <section aria-label={t('configTitle')} className="text-sm">
       <h2 className="font-semibold text-zinc-100">{t('configTitle')}</h2>
@@ -66,10 +74,37 @@ export function ConfigPanel({
         <fieldset key={edge.id} disabled={readOnly}>
           <EdgeConfig edge={edge} {...edit} />
         </fieldset>
+      ) : zone ? (
+        <fieldset key={zone.id} disabled={readOnly}>
+          <ZoneConfig zone={zone} {...edit} />
+        </fieldset>
       ) : (
-        <p className="mt-2 text-zinc-500">{t('configNothingSelected')}</p>
+        <p className="mt-2 text-zinc-500">{selectedCount > 1 ? t('configManySelected', { count: selectedCount }) : t('configNothingSelected')}</p>
       )}
     </section>
+  )
+}
+
+function ZoneConfig({ design, zone, onCommit, onEndEdit }: EditProps & { zone: DesignZone }) {
+  const id = useId()
+  const members = design.nodes.filter((node) => node.zoneId === zone.id).length
+  return (
+    <>
+      <p className="mt-1 text-xs text-zinc-500">{t('zoneTitle')}</p>
+      <label className={labelClass} htmlFor={`${id}-label`}>
+        {t('nodeName')}
+      </label>
+      <input
+        id={`${id}-label`}
+        className={inputClass}
+        value={zone.label}
+        maxLength={LABEL_MAX_LENGTH}
+        onBlur={onEndEdit}
+        onChange={(event) => onCommit(renameZone(design, zone.id, event.target.value), `zone-label:${zone.id}`)}
+      />
+      <p className="mt-3 text-xs text-zinc-400">{t('zoneMembers', { count: members })}</p>
+      <p className="mt-2 text-xs text-zinc-500">{t('zoneHelp')}</p>
+    </>
   )
 }
 

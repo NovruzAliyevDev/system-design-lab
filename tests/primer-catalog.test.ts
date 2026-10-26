@@ -4,7 +4,7 @@ import { findChallenge } from '../src/core/challenges/challenge'
 import { evaluateDesign } from '../src/core/challenges/rules'
 import { findUnresolvedLinks, resolveLink } from '../src/core/content/links'
 import { linkUrls } from '../src/core/content/markdown'
-import { defaultConfig, PRIMER_LATENCY_NS } from '../src/core/design/components'
+import { defaultConfig, paletteGlossaryProblems, PRIMER_LATENCY_NS } from '../src/core/design/components'
 import { connect, removeElements, setNodeConfig, updateEdge, type Design, type DesignNode } from '../src/core/design/design'
 import { htmlLinkUrls } from '../src/core/flashcards/deck'
 import { findLessonQuiz } from '../src/core/quizzes/quiz'
@@ -102,6 +102,10 @@ describe('catalog of the pinned primer commit', () => {
     expect(vocabulary.filter((term) => !forms.has(term))).toEqual([])
   })
 
+  it('has a Glossary Term explaining each palette component, for its tooltip', () => {
+    expect(paletteGlossaryProblems(catalog.glossary)).toEqual([])
+  })
+
   it('extracts the powers of two table from the appendix', () => {
     const rows = catalog.appendix.powersOfTwo?.rows ?? []
 
@@ -185,6 +189,7 @@ describe('catalog of the pinned primer commit', () => {
     function replaceNode(design: Design, id: string, replacement: DesignNode): Design {
       const rename = (nodeId: string) => (nodeId === id ? replacement.id : nodeId)
       return {
+        ...design,
         nodes: design.nodes.map((node) => (node.id === id ? { ...replacement, position: node.position } : node)),
         edges: design.edges.map((edge) => {
           const [source, target] = [rename(edge.source), rename(edge.target)]

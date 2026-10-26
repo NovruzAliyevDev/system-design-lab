@@ -1,9 +1,11 @@
 import { useEffect, useState, type ChangeEvent } from 'react'
 import {
+  CANVAS_STYLES,
   InvalidProgressFileError,
   isNewCardLimit,
   MAX_NEW_CARDS_PER_DAY,
   THEMES,
+  type CanvasStyle,
   type InvalidProgressFileReason,
   type ProgressArea,
   type ProgressExport,
@@ -15,6 +17,8 @@ import { progressRepository } from './progress/repository'
 import { useProgress } from './progress/store'
 
 const THEME_LABELS: Record<Theme, StringKey> = { dark: 'themeDark', light: 'themeLight' }
+
+const CANVAS_STYLE_LABELS: Record<CanvasStyle, StringKey> = { clean: 'canvasStyleClean', sketch: 'canvasStyleSketch' }
 
 const IMPORT_ERRORS: Record<InvalidProgressFileReason, StringKey> = {
   'not-json': 'importNotJson',
@@ -43,7 +47,7 @@ const exportFileName = (kind: 'progress' | 'backup', file: ProgressExport) =>
   `system-design-lab-${kind}-${file.exportedAt.slice(0, 10)}.json`
 
 export function SettingsPage() {
-  const { progress, setTheme, setNewCardsPerDay, importProgress, reset } = useProgress()
+  const { progress, setTheme, setNewCardsPerDay, setCanvasStyle, importProgress, reset } = useProgress()
   const [message, setMessage] = useState<{ text: string; isError: boolean }>()
   const [backup, setBackup] = useState<ProgressExport>()
   const [confirming, setConfirming] = useState<ResetTarget>()
@@ -95,6 +99,20 @@ export function SettingsPage() {
                 onChange={() => void setTheme(theme)}
               />
               {t(THEME_LABELS[theme])}
+            </label>
+          ))}
+        </div>
+        <p className="mt-4 text-sm text-zinc-300">{t('canvasStyleTitle')}</p>
+        <div className="mt-2 flex gap-4">
+          {CANVAS_STYLES.map((canvasStyle) => (
+            <label key={canvasStyle} className="flex items-center gap-2 text-sm text-zinc-300">
+              <input
+                type="radio"
+                name="canvas-style"
+                checked={progress?.settings.canvasStyle === canvasStyle}
+                onChange={() => void setCanvasStyle(canvasStyle)}
+              />
+              {t(CANVAS_STYLE_LABELS[canvasStyle])}
             </label>
           ))}
         </div>

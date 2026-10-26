@@ -17,6 +17,17 @@ export interface Position {
   y: number
 }
 
+export interface Size {
+  width: number
+  height: number
+}
+
+/**
+ * The box the canvas draws a Node in, from its position as the top-left corner. Zones take a Node in
+ * by the centre of this box.
+ */
+export const NODE_SIZE: Size = { width: 176, height: 64 }
+
 interface NodeBase<T extends ComponentType> {
   /** Unique within the Design; Edges refer to it. */
   id: string
@@ -24,7 +35,7 @@ interface NodeBase<T extends ComponentType> {
   config: ComponentConfig<T>
   label: string
   notes: string
-  /** The zone or region box the Node is in, if any. */
+  /** The innermost zone or region box around the Node's centre, if any. */
   zoneId?: string
   /** Where the canvas draws it. Rules and the simulation ignore it. */
   position: Position
@@ -49,16 +60,27 @@ export interface DesignEdge {
   traffic: EdgeTraffic
 }
 
+/** A box grouping Nodes, e.g. an availability zone, or a region with zones inside it. */
+export interface DesignZone {
+  id: string
+  label: string
+  /** The top-left corner. */
+  position: Position
+  size: Size
+}
+
 export interface Design {
   nodes: DesignNode[]
   edges: DesignEdge[]
+  zones: DesignZone[]
 }
 
 export const LABEL_MAX_LENGTH = 80
 export const NOTES_MAX_LENGTH = 2000
+export const ZONE_MIN_SIZE: Size = { width: 160, height: 100 }
 
 export function emptyDesign(): Design {
-  return { nodes: [], edges: [] }
+  return { nodes: [], edges: [], zones: [] }
 }
 
 /**
@@ -71,10 +93,8 @@ export function addNode(
   position: Position,
   baseLabel: string,
 ): { design: Design; nodeId: string } {
-  const prefix = `${componentType}-`
-  const numbers = design.nodes.map((node) => (node.id.startsWith(prefix) ? Number(node.id.slice(prefix.length)) : 0))
-  const number = Math.max(0, ...numbers.filter(Number.isInteger)) + 1
-  const nodeId = `${prefix}${number}`
+  const number = nextNumber(design.nodes, componentType)
+  const nodeId = `${componentType}-${number}`
   const node = {
     id: nodeId,
     componentType,
@@ -83,11 +103,18 @@ export function addNode(
     config: defaultConfig(componentType),
     position,
   } as DesignNode
-  return { design: { ...design, nodes: [...design.nodes, node] }, nodeId }
+  return { design: placeInZones({ ...design, nodes: [...design.nodes, node] }), nodeId }
 }
 
+/** Moves Nodes, which then belong to the zone they were moved into, if any. */
 export function moveNodes(design: Design, positions: Record<string, Position>): Design {
-  return mapNodes(design, (node) => (Object.hasOwn(positions, node.id) ? { ...node, position: positions[node.id] } : node))
+  return placeInZones(mapNodes(design, (node) => (Object.hasOwn(positions, node.id) ? { ...node, position: positions[node.id] } : node)))
+}
+
+/** The number after the highest id `<prefix>-N` in use, e.g. 3 when `cache-2` is the highest cache. */
+export function nextNumber(items: readonly { id: string }[], prefix: string): number {
+  const numbers = items.map((item) => (item.id.startsWith(`${prefix}-`) ? Number(item.id.slice(prefix.length + 1)) : 0))
+  return Math.max(0, ...numbers.filter(Number.isInteger)) + 1
 }
 
 export function renameNode(design: Design, nodeId: string, label: string): Design {
@@ -130,8 +157,13 @@ export function canConnect(design: Design, source: string, target: string): bool
 /** Adds a synchronous Edge carrying reads and writes; throws a `RangeError` when `canConnect` refuses it. */
 export function connect(design: Design, source: string, target: string): Design {
   if (!canConnect(design, source, target)) throw new RangeError(`Cannot connect ${source} to ${target}.`)
-  const edge: DesignEdge = { id: `${source}->${target}`, source, target, mode: 'sync', traffic: 'both' }
+  const edge: DesignEdge = { id: edgeId(source, target), source, target, mode: 'sync', traffic: 'both' }
   return { ...design, edges: [...design.edges, edge] }
+}
+
+/** The id of the Edge from `source` to `target`; there is at most one. */
+export function edgeId(source: string, target: string): string {
+  return `${source}->${target}`
 }
 
 export function updateEdge(design: Design, edgeId: string, change: Partial<Pick<DesignEdge, 'mode' | 'traffic'>>): Design {
@@ -139,16 +171,119 @@ export function updateEdge(design: Design, edgeId: string, change: Partial<Pick<
   return { ...design, edges: design.edges.map((edge) => (edge.id === edgeId ? { ...edge, ...change } : edge)) }
 }
 
-/** Removes Nodes with every Edge touching them, and Edges on their own. */
-export function removeElements(design: Design, { nodeIds = [], edgeIds = [] }: { nodeIds?: string[]; edgeIds?: string[] }): Design {
+export interface ElementIds {
+  nodeIds?: string[]
+  edgeIds?: string[]
+  zoneIds?: string[]
+}
+
+/** Removes Nodes with every Edge touching them, Edges on their own, and zone boxes (but not the Nodes in them). */
+export function removeElements(design: Design, { nodeIds = [], edgeIds = [], zoneIds = [] }: ElementIds): Design {
   const removedNodes = new Set(nodeIds)
   const removedEdges = new Set(edgeIds)
-  return {
+  const removedZones = new Set(zoneIds)
+  return placeInZones({
     nodes: design.nodes.filter((node) => !removedNodes.has(node.id)),
     edges: design.edges.filter(
       (edge) => !removedEdges.has(edge.id) && !removedNodes.has(edge.source) && !removedNodes.has(edge.target),
     ),
+    zones: design.zones.filter((zone) => !removedZones.has(zone.id)),
+  })
+}
+
+/**
+ * Adds a zone box of at least `ZONE_MIN_SIZE`. Its id numbers it after the highest in use (e.g. `zone-3`),
+ * and its label is `baseLabel`, numbered the same way when it is not the first. The Nodes it covers move into it.
+ */
+export function addZone(design: Design, position: Position, size: Size, baseLabel: string): { design: Design; zoneId: string } {
+  const number = nextNumber(design.zones, 'zone')
+  const zone: DesignZone = {
+    id: `zone-${number}`,
+    label: number === 1 ? baseLabel : `${baseLabel} ${number}`,
+    position,
+    size: atLeastMinimum(size),
   }
+  return { design: placeInZones({ ...design, zones: [...design.zones, zone] }), zoneId: zone.id }
+}
+
+export function renameZone(design: Design, zoneId: string, label: string): Design {
+  if (label.length > LABEL_MAX_LENGTH) throw new RangeError(`A label has at most ${LABEL_MAX_LENGTH} characters.`)
+  return updateZone(design, zoneId, (zone) => ({ ...zone, label }))
+}
+
+/** Moves or resizes a zone box alone, e.g. by a corner; Nodes join or leave it as it now covers them. */
+export function setZoneBounds(design: Design, zoneId: string, position: Position, size: Size): Design {
+  return placeInZones(updateZone(design, zoneId, (zone) => ({ ...zone, position, size: atLeastMinimum(size) })))
+}
+
+/** Moves a zone box with what is in it: its Nodes, and the zones wholly inside it with theirs. */
+export function moveZone(design: Design, zoneId: string, position: Position): Design {
+  const moving = design.zones.find((zone) => zone.id === zoneId)
+  if (!moving) throw new RangeError(`No zone ${zoneId}.`)
+  const zoneIds = new Set(design.zones.filter((zone) => zone === moving || contains(moving, zone)).map((zone) => zone.id))
+  const shift = ({ x, y }: Position): Position => ({ x: x + position.x - moving.position.x, y: y + position.y - moving.position.y })
+  return placeInZones({
+    ...design,
+    nodes: design.nodes.map((node) => (node.zoneId !== undefined && zoneIds.has(node.zoneId) ? { ...node, position: shift(node.position) } : node)),
+    zones: design.zones.map((zone) => (zoneIds.has(zone.id) ? { ...zone, position: shift(zone.position) } : zone)),
+  })
+}
+
+/**
+ * Moves Nodes and zones, by id, to where they were dragged together. A zone takes what is in it along,
+ * so a Node or zone inside it that was dragged with it ends up where it was dragged too.
+ */
+export function moveElements(design: Design, positions: Record<string, Position>): Design {
+  let next = design
+  for (const zone of design.zones) if (Object.hasOwn(positions, zone.id)) next = moveZone(next, zone.id, positions[zone.id])
+  const nodeIds = new Set(design.nodes.map((node) => node.id))
+  return moveNodes(next, Object.fromEntries(Object.entries(positions).filter(([id]) => nodeIds.has(id))))
+}
+
+/** The innermost (smallest) zone covering `point`; of equal ones the last added, which the canvas draws on top. */
+export function zoneAt(design: Design, point: Position): string | undefined {
+  let found: DesignZone | undefined
+  for (const zone of design.zones) {
+    if (covers(zone, point) && (!found || zoneArea(zone) <= zoneArea(found))) found = zone
+  }
+  return found?.id
+}
+
+export function nodeCentre(position: Position): Position {
+  return { x: position.x + NODE_SIZE.width / 2, y: position.y + NODE_SIZE.height / 2 }
+}
+
+/** Puts every Node, or only the ones given, in the innermost zone around its centre, or in none. */
+export function placeInZones(design: Design, nodeIds?: ReadonlySet<string>): Design {
+  return mapNodes(design, (node) => {
+    if (nodeIds && !nodeIds.has(node.id)) return node
+    const zoneId = zoneAt(design, nodeCentre(node.position))
+    if (zoneId === node.zoneId) return node
+    const { zoneId: _, ...outside } = node
+    return (zoneId === undefined ? outside : { ...outside, zoneId }) as DesignNode
+  })
+}
+
+function covers({ position, size }: DesignZone, point: Position): boolean {
+  return point.x >= position.x && point.x <= position.x + size.width && point.y >= position.y && point.y <= position.y + size.height
+}
+
+/** Whether `inner` lies wholly inside `outer`. */
+export function contains(outer: DesignZone, inner: DesignZone): boolean {
+  return covers(outer, inner.position) && covers(outer, { x: inner.position.x + inner.size.width, y: inner.position.y + inner.size.height })
+}
+
+export function zoneArea(zone: DesignZone): number {
+  return zone.size.width * zone.size.height
+}
+
+function atLeastMinimum(size: Size): Size {
+  return { width: Math.max(ZONE_MIN_SIZE.width, size.width), height: Math.max(ZONE_MIN_SIZE.height, size.height) }
+}
+
+function updateZone(design: Design, zoneId: string, change: (zone: DesignZone) => DesignZone): Design {
+  if (!design.zones.some((zone) => zone.id === zoneId)) throw new RangeError(`No zone ${zoneId}.`)
+  return { ...design, zones: design.zones.map((zone) => (zone.id === zoneId ? change(zone) : zone)) }
 }
 
 function updateNode(design: Design, nodeId: string, change: (node: DesignNode) => DesignNode): Design {
@@ -193,12 +328,26 @@ export function readDesign(value: unknown): { design?: Design; problems: string[
   if (!isRecord(value) || !Array.isArray(value.nodes) || !Array.isArray(value.edges)) {
     return { problems: ['a Design must have lists of nodes and edges'] }
   }
+  // Designs stored before zones existed have none.
+  const storedZones = value.zones ?? []
+  if (!Array.isArray(storedZones)) return { problems: ['the zones of a Design must be a list'] }
   const problems: string[] = []
+
+  const zoneIds = new Set<string>()
+  const zones = storedZones.flatMap((item: unknown, i): DesignZone[] => {
+    const zone = readZone(item, (message) => problems.push(`zone ${i + 1}: ${message}`))
+    if (!zone) return []
+    if (zoneIds.has(zone.id)) problems.push(`zone ${i + 1}: its id "${zone.id}" is already used`)
+    zoneIds.add(zone.id)
+    return [zone]
+  })
+
   const nodeIds = new Set<string>()
   const nodes = value.nodes.flatMap((item: unknown, i): DesignNode[] => {
     const node = readNode(item, (message) => problems.push(`node ${i + 1}: ${message}`))
     if (!node) return []
     if (nodeIds.has(node.id)) problems.push(`node ${i + 1}: its id "${node.id}" is already used`)
+    if (node.zoneId !== undefined && !zoneIds.has(node.zoneId)) problems.push(`node ${i + 1}: its zone "${node.zoneId}" is not in the Design`)
     nodeIds.add(node.id)
     return [node]
   })
@@ -224,7 +373,33 @@ export function readDesign(value: unknown): { design?: Design; problems: string[
     return [{ id, source, target, mode, traffic } as DesignEdge]
   })
 
-  return problems.length > 0 ? { problems } : { design: { nodes, edges }, problems }
+  return problems.length > 0 ? { problems } : { design: { nodes, edges, zones }, problems }
+}
+
+function readZone(item: unknown, problem: (message: string) => void): DesignZone | undefined {
+  if (!isRecord(item)) return void problem('must be an object')
+  const { id, label, position, size } = item
+  let valid = true
+  const fail = (message: string) => {
+    valid = false
+    problem(message)
+  }
+  if (!isId(id)) fail('"id" must be a non-empty string')
+  if (typeof label !== 'string' || label.length > LABEL_MAX_LENGTH) fail(`"label" must be text of at most ${LABEL_MAX_LENGTH} characters`)
+  if (!isPoint(position)) fail('"position" must be a point')
+  if (!isRecord(size) || !isPositive(size.width) || !isPositive(size.height)) fail('"size" must have a positive width and height')
+  if (!valid) return undefined
+  const point = position as Record<string, number>
+  const extent = size as Record<string, number>
+  return { id, label, position: { x: point.x, y: point.y }, size: { width: extent.width, height: extent.height } } as DesignZone
+}
+
+function isPoint(value: unknown): boolean {
+  return isRecord(value) && Number.isFinite(value.x) && Number.isFinite(value.y)
+}
+
+function isPositive(value: unknown): boolean {
+  return Number.isFinite(value) && (value as number) > 0
 }
 
 function readNode(item: unknown, problem: (message: string) => void): DesignNode | undefined {
@@ -240,7 +415,7 @@ function readNode(item: unknown, problem: (message: string) => void): DesignNode
   if (typeof label !== 'string' || label.length > LABEL_MAX_LENGTH) fail(`"label" must be text of at most ${LABEL_MAX_LENGTH} characters`)
   if (typeof notes !== 'string' || notes.length > NOTES_MAX_LENGTH) fail(`"notes" must be text of at most ${NOTES_MAX_LENGTH} characters`)
   if (zoneId !== undefined && !isId(zoneId)) fail('"zoneId" must be a non-empty string when set')
-  if (!isRecord(position) || !Number.isFinite(position.x) || !Number.isFinite(position.y)) fail('"position" must be a point')
+  if (!isPoint(position)) fail('"position" must be a point')
   if (!isComponentType(componentType)) return void fail(`unknown component type "${String(componentType)}"`)
 
   if (!isRecord(item.config)) fail('"config" must be an object')

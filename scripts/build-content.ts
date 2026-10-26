@@ -11,6 +11,7 @@ import { imageMirrors } from '../content/image-mirrors'
 import { quizzes } from '../content/quizzes'
 import { buildContentCatalog, type Catalog } from '../src/core/content/catalog'
 import { findUnresolvedLinks, isImagePath, referencedAssets } from '../src/core/content/links'
+import { paletteGlossaryProblems } from '../src/core/design/components'
 import type { DeckSource } from '../src/core/flashcards/deck'
 import type { SolutionSource } from '../src/core/content/solutions'
 import { buildSearchIndex, searchDocuments } from '../src/core/search/search'
@@ -97,6 +98,12 @@ function assertReferenceMaterial(catalog: Catalog) {
   if (missing.length > 0) throw new Error(`The primer has no ${missing.join(', ')} (Lesson renamed or removed?)`)
 }
 
+/** Each palette component's tooltip is a Glossary Term, so the Glossary must have one for every component. */
+function assertPaletteGlossary(catalog: Catalog) {
+  const problems = paletteGlossaryProblems(catalog.glossary)
+  if (problems.length > 0) throw new Error(`Palette components without a Glossary Term:\n  ${problems.join('\n  ')}`)
+}
+
 function assertLinksResolve(catalog: Catalog) {
   const unresolved = findUnresolvedLinks(catalog)
   if (unresolved.length > 0) {
@@ -123,6 +130,7 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   const catalog = loadPrimerCatalog()
   assertLinksResolve(catalog)
   assertReferenceMaterial(catalog)
+  assertPaletteGlossary(catalog)
   const assetCount = copyAssets(catalog)
   mkdirSync(GENERATED_DIR, { recursive: true })
   writeFileSync(CATALOG_OUTPUT, JSON.stringify(catalog))

@@ -1,4 +1,5 @@
-import { expect, test } from '@playwright/test'
+import { readFileSync } from 'node:fs'
+import { expect, test, type Locator, type Page } from '@playwright/test'
 
 test('opens the app and reads a Lesson', async ({ page }) => {
   await page.goto('/')
@@ -465,6 +466,138 @@ test('deletes, undoes and redoes on the canvas with the keyboard', async ({ page
   await page.reload()
   await expect(webServer).toBeVisible()
   await expect(loadBalancer).toBeHidden()
+})
+
+/** Drags with the mouse from the middle of `from` by an offset, for elements Playwright's `dragTo` cannot target. */
+async function dragBy(page: Page, from: Locator, dx: number, dy: number) {
+  const box = (await from.boundingBox())!
+  const start = { x: box.x + box.width / 2, y: box.y + box.height / 2 }
+  await page.mouse.move(start.x, start.y)
+  await page.mouse.down()
+  await page.mouse.move(start.x + dx / 2, start.y + dy / 2, { steps: 5 })
+  await page.mouse.move(start.x + dx, start.y + dy, { steps: 5 })
+  await page.mouse.up()
+}
+
+test('groups Nodes in a zone box that carries them along, and exports the canvas as a PNG', async ({ page }) => {
+  await page.setViewportSize({ width: 1366, height: 900 })
+  await page.goto('/sandbox')
+  const palette = page.getByRole('navigation', { name: 'Komponentlər' })
+  const canvas = page.getByTestId('rf__wrapper')
+  const panel = page.getByRole('region', { name: 'Tənzimləmə' })
+  await palette.getByRole('button', { name: 'Cache: kətana əlavə et' }).dragTo(canvas, { targetPosition: { x: 650, y: 150 } })
+  await palette.getByRole('button', { name: 'Web server: kətana əlavə et' }).dragTo(canvas, { targetPosition: { x: 200, y: 150 } })
+  const webServer = page.getByTestId('node-web-server-1')
+  const cache = page.getByTestId('node-cache-1')
+
+  // The web server is selected as it is added, so the new zone goes around it.
+  await page.getByRole('button', { name: 'Zona əlavə et' }).click()
+  const zone = page.getByTestId('zone-zone-1')
+  await expect(zone).toBeVisible()
+  await expect(panel.getByText('İçindəki komponentlər: 1')).toBeVisible()
+  await panel.getByLabel('Ad').fill('us-east-1a')
+  await expect(zone).toContainText('us-east-1a')
+
+  // Widened by its corner, the zone reaches the cache's column; dragged into it, the cache joins.
+  await dragBy(page, zone.locator('.react-flow__resize-control.handle.bottom.right'), 500, 150)
+  await dragBy(page, cache, -100, 100)
+  await zone.getByText('us-east-1a').click()
+  await expect(panel.getByText('İçindəki komponentlər: 2')).toBeVisible()
+
+  // Dragged by its header, the zone takes both along.
+  const boxes = () => Promise.all([zone, webServer, cache].map(async (element) => (await element.boundingBox())!))
+  const before = await boxes()
+  await dragBy(page, zone.getByText('us-east-1a'), 0, 120)
+  const [zoneMove, ...nodeMoves] = (await boxes()).map((box, i) => box.y - before[i].y)
+  expect(zoneMove).toBeGreaterThan(60)
+  for (const move of nodeMoves) expect(move).toBeCloseTo(zoneMove, 0)
+
+  await page.reload()
+  await page.getByTestId('zone-zone-1').getByText('us-east-1a').click()
+  await expect(panel.getByText('İçindəki komponentlər: 2')).toBeVisible()
+
+  const download = page.waitForEvent('download')
+  await page.getByRole('button', { name: 'PNG kimi yüklə' }).click()
+  const file = await download
+  expect(file.suggestedFilename()).toBe('dizayn.png')
+  const bytes = readFileSync((await file.path())!)
+  expect(bytes.subarray(1, 4).toString()).toBe('PNG')
+})
+
+test('selects several elements with Shift, copies and pastes them, and lays the Design out', async ({ page }) => {
+  await page.setViewportSize({ width: 1366, height: 900 })
+  await page.goto('/sandbox')
+  const palette = page.getByRole('navigation', { name: 'Komponentlər' })
+  const panel = page.getByRole('region', { name: 'Tənzimləmə' })
+  for (const component of ['Load balancer', 'Web server', 'Web server']) {
+    await palette.getByRole('button', { name: `${component}: kətana əlavə et` }).click()
+  }
+  const node = (id: string) => page.getByTestId(`node-${id}`)
+  await node('load-balancer-1').locator('.react-flow__handle.source').dragTo(node('web-server-1').locator('.react-flow__handle.target'))
+  await node('load-balancer-1').locator('.react-flow__handle.source').dragTo(node('web-server-2').locator('.react-flow__handle.target'))
+  await expect(page.locator('.react-flow__edge')).toHaveCount(2)
+
+  await node('load-balancer-1').click()
+  await node('web-server-1').click({ modifiers: ['Shift'] })
+  await expect(panel).toContainText('2 element seçilib')
+
+  // The copy takes the Edge between the two along, but not the one to the Node left behind.
+  await page.keyboard.press('Control+c')
+  await page.keyboard.press('Control+v')
+  await expect(node('load-balancer-2')).toBeVisible()
+  await expect(node('web-server-3')).toBeVisible()
+  await expect(page.locator('.react-flow__edge')).toHaveCount(3)
+
+  // A Shift-drag over the empty canvas selects everything in the box.
+  const canvasBox = (await page.getByTestId('rf__wrapper').boundingBox())!
+  await page.keyboard.down('Shift')
+  await page.mouse.move(canvasBox.x + 5, canvasBox.y + 5)
+  await page.mouse.down()
+  await page.mouse.move(canvasBox.x + canvasBox.width - 5, canvasBox.y + canvasBox.height - 60, { steps: 10 })
+  await page.mouse.up()
+  await page.keyboard.up('Shift')
+  await expect(panel).toContainText(/\d+ element seçilib/)
+
+  await page.getByRole('button', { name: 'Avtomatik düzən' }).click()
+  // Requests flow left to right: each load balancer stands in a column before its web servers.
+  await expect(async () => {
+    const [balancer, first, second] = await Promise.all(['load-balancer-1', 'web-server-1', 'web-server-2'].map(async (id) => (await node(id).boundingBox())!))
+    expect(balancer.x).toBeLessThan(first.x)
+    expect(first.x).toBeCloseTo(second.x, 0)
+    expect(Math.abs(first.y - second.y)).toBeGreaterThan(first.height)
+  }).toPass()
+})
+
+test('explains each palette component with its Glossary Term, and draws the canvas sketched once chosen', async ({ page }) => {
+  await page.setViewportSize({ width: 1366, height: 900 })
+  await page.goto('/sandbox')
+  const palette = page.getByRole('navigation', { name: 'Komponentlər' })
+  await palette.getByRole('button', { name: 'Load balancer: kətana əlavə et' }).hover()
+  await expect(page.getByRole('tooltip')).toContainText('Load balancer')
+  await expect(page.getByRole('tooltip')).toContainText('Gələn sorğuları bir neçə server arasında bölən komponent')
+  await palette.getByRole('button', { name: 'Analytics / MapReduce: kətana əlavə et' }).hover()
+  await expect(page.getByRole('tooltip')).toContainText('MapReduce')
+
+  await palette.getByRole('button', { name: 'Load balancer: kətana əlavə et' }).click()
+  await palette.getByRole('button', { name: 'Web server: kətana əlavə et' }).click()
+  const balancer = page.getByTestId('node-load-balancer-1')
+  await balancer.locator('.react-flow__handle.source').dragTo(page.getByTestId('node-web-server-1').locator('.react-flow__handle.target'))
+
+  const sketchStyle = page.getByLabel('Əl ilə çəkilmiş üslub')
+  await sketchStyle.check()
+  const outline = balancer.locator('svg path')
+  await expect(outline).toHaveCount(1)
+  await expect(page.locator('.react-flow__edge path:not(.react-flow__edge-path):not(.react-flow__edge-interaction)')).not.toHaveCount(0)
+  const darkStroke = await outline.evaluate((path) => getComputedStyle(path).stroke)
+
+  // The choice is a setting: it stays after a reload, and the light theme keeps the sketch readable.
+  await page.goto('/settings')
+  await expect(page.getByLabel('Əl ilə çəkilmiş', { exact: true })).toBeChecked()
+  await page.getByLabel('Açıq').check()
+  await page.goto('/sandbox')
+  await expect(page.getByLabel('Əl ilə çəkilmiş üslub')).toBeChecked()
+  const lightStroke = await page.getByTestId('node-load-balancer-1').locator('svg path').evaluate((path) => getComputedStyle(path).stroke)
+  expect(lightStroke).not.toBe(darkStroke)
 })
 
 test('shows the sandbox read-only with a notice on a phone', async ({ page }) => {

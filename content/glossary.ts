@@ -208,6 +208,11 @@ export const glossary: GlossaryTermInput[] = [
     explanation: 'HTTP sorğularını qəbul edib cavab qaytaran server (məsələn, NGINX, Apache).',
     lessonIds: ['reverse-proxy-web-server'],
   },
+  {
+    term: 'Client',
+    explanation: 'Sistemə sorğu göndərən tərəf: brauzer, mobil tətbiq və ya başqa servis. Dizaynda trafik klientdən başlayır.',
+    lessonIds: ['load-balancer', 'hypertext-transfer-protocol-http'],
+  },
 
   // Application layer
   {
@@ -304,6 +309,17 @@ export const glossary: GlossaryTermInput[] = [
     term: 'Graph database',
     explanation: 'Məlumatı node və əlaqələr (edge) kimi saxlayan baza; sosial şəbəkə kimi çox-çoxa əlaqələr üçün əlverişlidir.',
     lessonIds: ['nosql'],
+  },
+  {
+    term: 'Object store',
+    aliases: ['object storage'],
+    explanation: 'Faylları (şəkil, video, mətn) açarla obyekt kimi saxlayan və çox böyük həcmə ucuz miqyaslanan anbar (məsələn, Amazon S3).',
+    lessonIds: ['design-pastebincom-or-bitly', 'design-a-system-that-scales-to-millions-of-users-on-aws'],
+  },
+  {
+    term: 'Search index',
+    explanation: 'Mətni sözlərə görə indeksləyib tam mətn axtarışını sürətli edən anbar (məsələn, Elasticsearch, Lucene).',
+    lessonIds: ['design-the-twitter-timeline-and-search-or-facebook-feed-and-search', 'design-a-key-value-store-for-a-search-engine'],
   },
 
   // Caching
@@ -411,6 +427,18 @@ export const glossary: GlossaryTermInput[] = [
     aliases: ['Representational state transfer'],
     explanation: 'API-ni resurslar və standart HTTP metodları (GET, POST, PUT, DELETE) üzərində quran memarlıq üslubu. Sorğular stateless olur.',
     lessonIds: ['representational-state-transfer-rest', 'rpc-and-rest-calls-comparison'],
+  },
+
+  // Data processing
+  {
+    term: 'MapReduce',
+    explanation: 'Böyük həcmli məlumatı çox maşında paralel emal etmə modeli: map addımı hissələri ayrıca emal edir, reduce addımı nəticələri birləşdirir (məsələn, Hadoop).',
+    lessonIds: ['real-world-architectures', 'under-development'],
+  },
+  {
+    term: 'Data warehouse',
+    explanation: 'Analitika və hesabatlar üçün bir çox mənbədən toplanan məlumatı saxlayan, böyük sorğulara görə optimallaşdırılmış baza (məsələn, Amazon Redshift).',
+    lessonIds: ['design-amazons-sales-ranking-by-category-feature', 'design-mintcom'],
   },
 
   // Interview method

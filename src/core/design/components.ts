@@ -71,6 +71,8 @@ export interface SimulationDefaults {
 }
 
 export interface ComponentDefinition {
+  /** The id of the Glossary Term that explains the component, shown as its tooltip in the palette. */
+  glossaryTermId: string
   /** Fields in the order the config panel shows them. */
   config: Record<string, ConfigField>
   /** Absent for the client, which sends traffic rather than serving it. */
@@ -103,17 +105,20 @@ function simulation(capacityQps: number, terms: [PrimerOperation, number][], mon
 const ROUND_TRIP = 'Round trip within same datacenter'
 
 const COMPONENTS = {
-  client: { config: {} },
+  client: { glossaryTermId: 'client', config: {} },
   dns: {
+    glossaryTermId: 'domain-name-system',
     config: { routing: choice(['simple', 'weighted-round-robin', 'latency-based', 'geolocation'], 'simple'), instances },
     // Answers are cached close to the client, so a lookup costs about one nearby round trip.
     simulation: simulation(100_000, [[ROUND_TRIP, 1]], 1),
   },
   cdn: {
+    glossaryTermId: 'content-delivery-network',
     config: { kind: choice(['pull', 'push'], 'pull'), instances },
     simulation: simulation(50_000, [[ROUND_TRIP, 1], ['Read 1 MB sequentially from SSD*', 1]], 50),
   },
   'load-balancer': {
+    glossaryTermId: 'load-balancer',
     config: {
       layer: choice(['l4', 'l7'], 'l7'),
       algorithm: choice(['round-robin', 'least-connections', 'hashing'], 'round-robin'),
@@ -122,18 +127,22 @@ const COMPONENTS = {
     simulation: simulation(20_000, [[ROUND_TRIP, 1]], 25),
   },
   'reverse-proxy': {
+    glossaryTermId: 'reverse-proxy',
     config: { instances },
     simulation: simulation(10_000, [[ROUND_TRIP, 1], ['Send 1 KB bytes over 1 Gbps network', 1]], 70),
   },
   'web-server': {
+    glossaryTermId: 'web-server',
     config: { instances },
     simulation: simulation(1_000, [[ROUND_TRIP, 1], ['Send 1 KB bytes over 1 Gbps network', 2]], 70),
   },
   'app-service': {
+    glossaryTermId: 'application-layer',
     config: { instances },
     simulation: simulation(500, [[ROUND_TRIP, 1], ['Read 1 MB sequentially from memory', 4]], 140),
   },
   cache: {
+    glossaryTermId: 'cache',
     config: {
       strategy: choice(['cache-aside', 'write-through', 'write-behind', 'refresh-ahead'], 'cache-aside'),
       eviction: choice(['lru', 'lfu', 'fifo'], 'lru'),
@@ -142,34 +151,42 @@ const COMPONENTS = {
     simulation: simulation(50_000, [[ROUND_TRIP, 1], ['Main memory reference', 10]], 100),
   },
   'sql-database': {
+    glossaryTermId: 'relational-database-management-system',
     config: { role, replicas, shardKey, instances },
     simulation: simulation(1_000, [[ROUND_TRIP, 1], ['Read 4 KB randomly from SSD*', 4]], 250),
   },
   'nosql-store': {
+    glossaryTermId: 'nosql',
     config: { kind: choice(['key-value', 'document', 'wide-column', 'graph'], 'key-value'), role, replicas, shardKey, instances },
     simulation: simulation(5_000, [[ROUND_TRIP, 1], ['Read 4 KB randomly from SSD*', 2]], 200),
   },
   'object-store': {
+    glossaryTermId: 'object-store',
     config: { instances },
     simulation: simulation(2_000, [[ROUND_TRIP, 1], ['HDD seek', 1], ['Read 1 MB sequentially from HDD', 1]], 25),
   },
   'message-queue': {
+    glossaryTermId: 'message-queue',
     config: { instances },
     simulation: simulation(10_000, [[ROUND_TRIP, 1], ['Read 4 KB randomly from SSD*', 1]], 40),
   },
   'task-queue': {
+    glossaryTermId: 'task-queue',
     config: { instances },
     simulation: simulation(200, [[ROUND_TRIP, 1], ['Read 1 MB sequentially from memory', 4]], 70),
   },
   'search-index': {
+    glossaryTermId: 'search-index',
     config: { shardKey, instances },
     simulation: simulation(1_000, [[ROUND_TRIP, 1], ['Read 4 KB randomly from SSD*', 4], ['Read 1 MB sequentially from memory', 1]], 200),
   },
   analytics: {
+    glossaryTermId: 'mapreduce',
     config: { instances },
     simulation: simulation(50, [[ROUND_TRIP, 1], ['Read 1 MB sequentially from SSD*', 100]], 500),
   },
   'data-warehouse': {
+    glossaryTermId: 'data-warehouse',
     config: { instances },
     simulation: simulation(100, [[ROUND_TRIP, 1], ['Read 1 MB sequentially from SSD*', 50]], 1000),
   },
@@ -203,6 +220,15 @@ export function isComponentType(value: unknown): value is ComponentType {
 
 export function componentDefinition(componentType: ComponentType): ComponentDefinition {
   return COMPONENTS[componentType]
+}
+
+/** The palette components whose Glossary Term is not among `terms`; the Content Pipeline fails on any. */
+export function paletteGlossaryProblems(terms: readonly { id: string }[]): string[] {
+  const ids = new Set(terms.map((term) => term.id))
+  return PALETTE.flatMap((componentType) => {
+    const { glossaryTermId } = componentDefinition(componentType)
+    return ids.has(glossaryTermId) ? [] : [`Component type "${componentType}": no Glossary Term "${glossaryTermId}" explains it`]
+  })
 }
 
 export function defaultConfig<T extends ComponentType>(componentType: T): ComponentConfig<T> {

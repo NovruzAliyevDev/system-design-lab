@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import type { Design } from '../../core/design/design'
 import { scheduleReview, type Grade } from '../../core/flashcards/scheduler'
-import type { Progress, ProgressArea, StageWork, Theme } from '../../core/progress/progress'
+import type { CanvasStyle, Progress, ProgressArea, StageWork, Theme } from '../../core/progress/progress'
 import { markLessonRead, markLessonUnread } from '../../core/progress/reading'
 import { recordQuizResult } from '../../core/quizzes/results'
 import { progressRepository } from './repository'
@@ -13,6 +13,7 @@ interface ProgressState {
   markUnread(lessonId: string): Promise<void>
   setTheme(theme: Theme): Promise<void>
   setNewCardsPerDay(count: number): Promise<void>
+  setCanvasStyle(canvasStyle: CanvasStyle): Promise<void>
   /** Records a review of a Flashcard and schedules its next one. */
   gradeCard(cardId: string, grade: Grade): Promise<void>
   /** Records a completed attempt of a quiz, scored from 0 to 1. */
@@ -32,6 +33,7 @@ export const useProgress = create<ProgressState>()(() => ({
   markUnread: (lessonId) => update('reading', (reading) => markLessonUnread(reading, lessonId)),
   setTheme: (theme) => update('settings', (settings) => ({ ...settings, theme })),
   setNewCardsPerDay: (newCardsPerDay) => update('settings', (settings) => ({ ...settings, newCardsPerDay })),
+  setCanvasStyle: (canvasStyle) => update('settings', (settings) => ({ ...settings, canvasStyle })),
   gradeCard: (cardId, grade) =>
     update('flashcards', ({ cards }) => ({ cards: { ...cards, [cardId]: scheduleReview(cards[cardId], grade, new Date()) } })),
   recordQuiz: (quizId, score) => update('quizzes', (quizzes) => recordQuizResult(quizzes, quizId, score, new Date())),

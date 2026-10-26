@@ -25,6 +25,7 @@ function build(nodeIds: string[], edges: string[] = []): Design {
       return { id, componentType, config: defaultConfig(componentType), label: id, notes: '', position: { x: 0, y: 0 } } as DesignNode
     }),
     edges: [],
+    zones: [],
   }
   for (const spec of edges) {
     const [pair, mode = 'sync', traffic = 'both'] = spec.split(':')

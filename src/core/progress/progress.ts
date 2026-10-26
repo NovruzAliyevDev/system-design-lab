@@ -7,6 +7,11 @@ export const THEMES = ['dark', 'light'] as const
 
 export type Theme = (typeof THEMES)[number]
 
+/** How the Design Canvas draws Nodes and Edges: clean lines, or hand-drawn like a whiteboard sketch. */
+export const CANVAS_STYLES = ['clean', 'sketch'] as const
+
+export type CanvasStyle = (typeof CANVAS_STYLES)[number]
+
 export interface ReadingProgress {
   /** Id of each Lesson marked read → when it was marked (ISO timestamp). */
   readLessons: Record<string, string>
@@ -16,6 +21,7 @@ export interface Settings {
   theme: Theme
   /** How many new Flashcards the daily review may start each day. */
   newCardsPerDay: number
+  canvasStyle: CanvasStyle
 }
 
 /** Anki's default. */
@@ -83,7 +89,7 @@ export const PROGRESS_AREAS: readonly ProgressArea[] = ['reading', 'settings', '
 export function emptyProgress(): Progress {
   return {
     reading: { readLessons: {} },
-    settings: { theme: 'dark', newCardsPerDay: DEFAULT_NEW_CARDS_PER_DAY },
+    settings: { theme: 'dark', newCardsPerDay: DEFAULT_NEW_CARDS_PER_DAY, canvasStyle: 'clean' },
     flashcards: { cards: {} },
     quizzes: { results: {} },
     designs: { drafts: {} },
@@ -91,7 +97,7 @@ export function emptyProgress(): Progress {
   }
 }
 
-export const PROGRESS_SCHEMA_VERSION = 6
+export const PROGRESS_SCHEMA_VERSION = 7
 
 /** The export file: all progress, versioned so that older files can be migrated on import. */
 export interface ProgressExport {
@@ -182,6 +188,12 @@ const UPGRADES: Record<number, (data: Record<string, unknown>) => Record<string,
     if (!isRecord(progress)) throw malformed('progress is missing')
     return { schemaVersion: 6, exportedAt, progress: { ...progress, challenges: { stages: {} } } }
   },
+  // v6 had no canvas style.
+  6: ({ exportedAt, progress }) => {
+    if (!isRecord(progress) || !isRecord(progress.settings)) throw malformed('settings is missing')
+    const settings = { ...progress.settings, canvasStyle: emptyProgress().settings.canvasStyle }
+    return { schemaVersion: 7, exportedAt, progress: { ...progress, settings } }
+  },
 }
 
 function validateCurrent(data: Record<string, unknown>): ProgressExport {
@@ -204,6 +216,8 @@ function validateProgress(progress: Record<string, unknown>): Progress {
   if (!theme) throw malformed('the theme is unknown')
   const { newCardsPerDay } = settings
   if (!isNewCardLimit(newCardsPerDay)) throw malformed('the daily new-card limit is not a whole number from 0 to 999')
+  const canvasStyle = CANVAS_STYLES.find((known) => known === settings.canvasStyle)
+  if (!canvasStyle) throw malformed('the canvas style is unknown')
 
   if (!isRecord(flashcards) || !isRecord(flashcards.cards)) throw malformed('flashcards is missing')
   const cards = Object.entries(flashcards.cards).map(([cardId, value]): [string, CardState] => {
@@ -237,7 +251,7 @@ function validateProgress(progress: Record<string, unknown>): Progress {
   // Object.fromEntries defines keys as own properties, so an id such as `__proto__` stays data.
   return {
     reading: { readLessons: Object.fromEntries(readLessons) as Record<string, string> },
-    settings: { theme, newCardsPerDay },
+    settings: { theme, newCardsPerDay, canvasStyle },
     flashcards: { cards: Object.fromEntries(cards) },
     quizzes: { results: Object.fromEntries(results) },
     designs: { drafts: Object.fromEntries(drafts) },
