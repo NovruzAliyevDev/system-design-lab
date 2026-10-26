@@ -19,6 +19,13 @@ describe('search over the pinned primer commit', () => {
     expect(topLesson('round robin')).toMatchObject({ id: 'load-balancer', context: 'Load balancer' })
   })
 
+  it('finds every Challenge by its own title', () => {
+    for (const challenge of catalog.challenges) {
+      expect(search(index, challenge.title).map((result) => `${result.kind}:${result.id}`), challenge.title).toContain(`challenge:${challenge.id}`)
+    }
+    expect(search(index, 'pastebin').map((result) => `${result.kind}:${result.id}`)).toContain('challenge:pastebin')
+  })
+
   it('leads with the Glossary Term for a term that has no Lesson of its own', () => {
     expect(topResult('round robin')).toMatchObject({ kind: 'glossary', id: 'round-robin' })
     expect(topResult('sharding')).toMatchObject({ kind: 'glossary', id: 'sharding' })

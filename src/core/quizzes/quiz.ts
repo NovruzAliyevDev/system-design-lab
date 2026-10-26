@@ -122,7 +122,7 @@ export function validateQuizzes(input: unknown, lessonIds: ReadonlySet<string>):
 }
 
 /** The question with its defaults filled in, or undefined after reporting why it is invalid. */
-function validateQuestion(item: unknown, problem: (message: string) => void): Question | undefined {
+export function validateQuestion(item: unknown, problem: (message: string) => void): Question | undefined {
   if (!isRecord(item)) return void problem('must be an object')
   const type = QUESTION_TYPES.find((known) => known === item.type)
   if (!type) return void problem(`"type" must be one of ${QUESTION_TYPES.map((known) => `"${known}"`).join(', ')}`)
@@ -165,7 +165,7 @@ function validateQuestion(item: unknown, problem: (message: string) => void): Qu
 }
 
 /** Options or ordering items: at least two, each with a distinct text and an explanation. */
-function validateList(
+export function validateList(
   value: unknown,
   field: 'options' | 'items',
   fields: ReadonlySet<string>,

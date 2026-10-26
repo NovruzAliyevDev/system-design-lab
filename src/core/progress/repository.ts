@@ -4,6 +4,7 @@ import {
   parseProgressFile,
   PROGRESS_AREAS,
   PROGRESS_SCHEMA_VERSION,
+  upgradeStoredArea,
   type Progress,
   type ProgressArea,
   type ProgressExport,
@@ -36,9 +37,10 @@ const areaKey = (area: ProgressArea) => `area:${area}`
 /** The progress as it was just before the last import replaced it. */
 const BACKUP_KEY = 'backup:before-import'
 
-export function createProgressRepository(store: KeyValueStore): ProgressRepository {
+/** `now` dates what upgrading an area stored by an older version of the app creates. */
+export function createProgressRepository(store: KeyValueStore, now: () => Date = () => new Date()): ProgressRepository {
   async function get<A extends ProgressArea>(area: A): Promise<Progress[A]> {
-    const stored = (await store.get(areaKey(area))) as Progress[A] | undefined
+    const stored = upgradeStoredArea(area, await store.get(areaKey(area)), now()) as Progress[A] | undefined
     // An area stored by an older version of the app lacks the fields added since; they start at their defaults.
     return { ...emptyProgress()[area], ...stored }
   }

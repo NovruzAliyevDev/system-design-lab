@@ -135,6 +135,36 @@ describe('search', () => {
     expect(marked(byAlias.snippet.text, byAlias.snippet.highlights)).toContain('[write]-[back]')
   })
 
+  it('finds a Challenge by its title or the task of a Stage, with the task as the snippet', () => {
+    const challenge = {
+      id: 'url-shortener',
+      title: 'Qısa link servisi dizayn edin',
+      kind: 'architecture',
+      source: 'authored',
+      lessonIds: ['cache'],
+      stages: [
+        {
+          id: 'requirements',
+          type: 'requirements',
+          weight: 1,
+          prompt: 'Servisin istifadə hallarını seçin.',
+          items: [
+            { section: 'use-case', text: 'Link yaradılır', correct: true, explanation: 'Əsas ssenari.' },
+            { section: 'use-case', text: 'Hesab yaradılır', explanation: 'Kənarda qalır.' },
+          ],
+        },
+      ],
+    }
+    const index = roundTrippedIndex(searchDocuments(buildContentCatalog({ markdown: primer, source, authored: { challenges: [challenge] } })))
+
+    const [byTitle] = search(index, 'qısa link')
+    const [byPrompt] = search(index, 'istifadə hallarını')
+
+    expect(byTitle).toMatchObject({ kind: 'challenge', id: 'url-shortener', title: 'Qısa link servisi dizayn edin', context: '' })
+    expect(byPrompt).toMatchObject({ kind: 'challenge', id: 'url-shortener' })
+    expect(marked(byPrompt.snippet.text, byPrompt.snippet.highlights)).toBe('Servisin [istifadə] [hallarını] seçin.')
+  })
+
   it('returns nothing for an empty query and at most `limit` results', () => {
     const index = indexOfMarkdown(primer)
 

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { BrowserRouter, Link, Route, Routes, useLocation, useMatch } from 'react-router-dom'
 import { Attribution } from './Attribution'
 import { ChallengePage } from './ChallengePage'
+import { ChallengesPage } from './ChallengesPage'
 import { FlashcardsPage } from './FlashcardsPage'
 import { GlossaryPage } from './GlossaryPage'
 import { LessonList } from './LessonList'
@@ -16,6 +17,7 @@ import { UpdatePrompt } from './UpdatePrompt'
 import { t } from './i18n'
 import {
   CHALLENGE_ROUTE,
+  CHALLENGES_ROUTE,
   FLASHCARDS_ROUTE,
   GLOSSARY_ROUTE,
   LESSON_ROUTE,
@@ -91,6 +93,7 @@ function Layout() {
               <Route path={STUDY_GUIDE_ROUTE} element={<StudyGuidePage />} />
               <Route path={FLASHCARDS_ROUTE} element={<FlashcardsPage />} />
               <Route path={SANDBOX_ROUTE} element={<SandboxPage />} />
+              <Route path={CHALLENGES_ROUTE} element={<ChallengesPage />} />
               <Route path={CHALLENGE_ROUTE} element={<ChallengePage />} />
               <Route path={SETTINGS_ROUTE} element={<SettingsPage />} />
             </Routes>

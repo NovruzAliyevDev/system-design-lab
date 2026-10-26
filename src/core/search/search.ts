@@ -2,8 +2,8 @@ import MiniSearch, { type AsPlainObject, type Options } from 'minisearch'
 import type { Catalog } from '../content/catalog'
 import { markdownToPlainText } from '../content/markdown'
 
-/** What a search result opens. Challenges join here as their ticket adds them to the catalog. */
-export type SearchKind = 'lesson' | 'glossary'
+/** What a search result opens. */
+export type SearchKind = 'lesson' | 'glossary' | 'challenge'
 
 /** One searchable item; `searchDocuments` collects them from the catalog. */
 export interface SearchDocument {
@@ -11,7 +11,7 @@ export interface SearchDocument {
   /** Id of the item within its kind, e.g. a Lesson id. */
   id: string
   title: string
-  /** Where the item sits, shown next to its title: the Lesson group for a Lesson; empty for a Glossary Term. */
+  /** Where the item sits, shown next to its title: the Lesson group for a Lesson; empty for a Glossary Term or a Challenge. */
   context: string
   /** Plain text that is searched and that snippets are cut from. */
   text: string
@@ -69,7 +69,7 @@ const OPTIONS: Options<IndexedDocument> = {
 
 /** Everything in the catalog that search finds. A new kind of content adds its documents here. */
 export function searchDocuments(catalog: Catalog): SearchDocument[] {
-  return [...lessonDocuments(catalog), ...glossaryDocuments(catalog)]
+  return [...lessonDocuments(catalog), ...glossaryDocuments(catalog), ...challengeDocuments(catalog)]
 }
 
 function lessonDocuments(catalog: Catalog): SearchDocument[] {
@@ -91,6 +91,17 @@ function glossaryDocuments(catalog: Catalog): SearchDocument[] {
     context: '',
     // Aliases are searchable too, and the snippet shows them before the explanation.
     text: term.aliases.length > 0 ? `${term.aliases.join(', ')} — ${term.explanation}` : term.explanation,
+  }))
+}
+
+function challengeDocuments(catalog: Catalog): SearchDocument[] {
+  return catalog.challenges.map((challenge) => ({
+    kind: 'challenge',
+    id: challenge.id,
+    title: challenge.title,
+    context: '',
+    // The tasks of its Stages, which give nothing of the solution away.
+    text: challenge.stages.map((stage) => stage.prompt).join('\n'),
   }))
 }
 

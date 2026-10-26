@@ -615,11 +615,30 @@ test('shows the sandbox read-only with a notice on a phone', async ({ page }) =>
   await expect(page.getByRole('region', { name: 'Tənzimləmə' }).getByLabel('Rol')).toBeDisabled()
 })
 
+/** Gives up the open Challenge Stage, then moves on to the next one. */
+async function giveUpStage(page: Page, next: string) {
+  await page.getByRole('button', { name: 'Təslim ol' }).click()
+  await page.getByRole('button', { name: 'Bəli, cavabı göstər' }).click()
+  await expect(page.getByText('Bu mərhələdə təslim oldunuz: 0 bal.')).toBeVisible()
+  await page.getByRole('button', { name: `Növbəti mərhələ: ${next} →` }).click()
+}
+
+/** Finishes the open Challenge Stage after confirming. */
+async function finishStage(page: Page) {
+  await page.getByRole('button', { name: 'Mərhələni bitir' }).click()
+  await page.getByRole('button', { name: 'Bəli, bitir' }).click()
+}
+
 test('solves the Pastebin high-level design Stage by drag and drop and receives a passing score', async ({ page }) => {
   await page.setViewportSize({ width: 1366, height: 1000 })
   await page.goto('/solutions/pastebin')
   await page.getByRole('link', { name: 'Çağırış kimi həll et' }).click()
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Pastebin.com (və ya Bit.ly) dizayn edin')
+
+  // The high-level design opens once the Stages before it are over.
+  await expect(page.getByRole('navigation', { name: 'Mərhələlər' }).getByRole('button', { name: '3. Yüksək səviyyəli dizayn' })).toBeDisabled()
+  await giveUpStage(page, 'Hesablama')
+  await giveUpStage(page, 'Yüksək səviyyəli dizayn')
 
   // First feedback names no Rule: only the score and how many problems remain.
   await page.getByRole('button', { name: 'Yoxla' }).click()
@@ -661,14 +680,93 @@ test('solves the Pastebin high-level design Stage by drag and drop and receives 
   await expect(page.getByRole('status')).toContainText('Bütün qaydalar ödənilir.')
 
   // Finishing shows every Rule's result and the Reference Solution beside the learner's Design.
-  await page.getByRole('button', { name: 'Mərhələni bitir' }).click()
-  await page.getByRole('button', { name: 'Bəli, bitir' }).click()
+  await finishStage(page)
+  await expect(page.getByText('Mərhələ balı: 100%')).toBeVisible()
   await expect(page.getByText('✓ Ödənilir:')).toHaveCount(8)
   await expect(page.getByRole('application', { name: 'Referans həll' })).toBeVisible()
-  await expect(page.getByRole('link', { name: /Primer-in həllini oxuyun/ })).toHaveAttribute('href', '/solutions/pastebin#step-2-create-a-high-level-design')
+  // The Solution page gives the later Stages away, so it waits for the end of the Attempt.
+  await expect(page.getByRole('link', { name: /Primer-in həllini oxuyun/ })).toHaveCount(0)
 
   await page.reload()
   await expect(page.getByText('Mərhələ bitib.')).toBeVisible()
   await expect(page.getByText('Bal: 14 / 14 (100%)')).toBeVisible()
   await expect(page.getByRole('application', { name: 'Sizin dizaynınız' }).locator('.react-flow__node')).toHaveCount(place.length)
+
+  // The Scaling Stage continues from this Design.
+  await page.getByRole('button', { name: 'Növbəti mərhələ: Dərin təhlil →' }).click()
+  await giveUpStage(page, 'Miqyaslama')
+  await expect(page.getByText('Bu mərhələ yüksək səviyyəli dizaynınızla başlayır.')).toBeVisible()
+  await expect(page.getByTestId('rf__wrapper').locator('.react-flow__node')).toHaveCount(place.length)
+  await page.getByRole('button', { name: 'Yoxla' }).click()
+  await expect(page.getByRole('status')).toContainText('Qalan problem: 7')
+})
+
+test('runs the Pastebin Challenge Stage by Stage, scores the Attempt and retries from it', async ({ page }) => {
+  await page.setViewportSize({ width: 1366, height: 1000 })
+  await page.goto('/')
+  await page.getByRole('banner').getByRole('link', { name: 'Çağırışlar' }).click()
+  await page.getByRole('link', { name: /Pastebin\.com \(və ya Bit\.ly\) dizayn edin/ }).click()
+
+  // Requirements: two use cases in scope and one out of it make (2 − 1) / 12 of the Stage.
+  await page.getByLabel('İstifadəçi mətn blokunu daxil edir və təsadüfi yaradılmış link alır').check()
+  await page.getByLabel('İstifadəçi anonimdir').check()
+  await page.getByLabel('İstifadəçi hesab yaradır və e-poçtunu təsdiqləyir').check()
+  await page.getByRole('textbox', { name: 'Qeydlər' }).fill('Hesab yoxdur.')
+  await finishStage(page)
+  await expect(page.getByText('Mərhələ balı: 8%')).toBeVisible()
+  await expect(page.getByText('seçilməməli idi')).toHaveCount(1)
+  await page.getByRole('button', { name: 'Növbəti mərhələ: Hesablama →' }).click()
+
+  // Estimation: answers within a factor of 2 of the reference pass, whatever unit they are given in.
+  await page.getByRole('textbox', { name: 'Orta hesabla saniyədə neçə paste yazılır?' }).fill('4')
+  await page.getByRole('textbox', { name: 'Orta hesabla saniyədə neçə oxuma sorğusu gəlir?' }).fill('30')
+  await page.getByRole('textbox', { name: 'Bir ildə nə qədər yeni paste məlumatı yığılır?' }).fill('150')
+  await page.getByRole('combobox', { name: 'Vahid: Bir ildə nə qədər yeni paste məlumatı yığılır?' }).selectOption('GB')
+  await page.getByRole('textbox', { name: '3 ildə nə qədər paste məlumatı yığılır?' }).fill('1,2')
+  await page.getByRole('combobox', { name: 'Vahid: 3 ildə nə qədər paste məlumatı yığılır?' }).selectOption('TB')
+  await finishStage(page)
+  await expect(page.getByText('Mərhələ balı: 60%')).toBeVisible()
+  await expect(page.getByText('Referans: 457,6 GB')).toBeVisible()
+  await expect(page.getByText('Saniyədə yazma = ayda yazma ÷ ayda saniyə = 10 000 000 ÷ 2 500 000 = 4 sorğu/san')).toBeVisible()
+  await page.getByRole('button', { name: 'Növbəti mərhələ: Yüksək səviyyəli dizayn →' }).click()
+
+  await giveUpStage(page, 'Dərin təhlil')
+  await page.getByLabel('Amazon S3 kimi idarə olunan Object Store-da, bazada isə yalnız paste_path').check()
+  await finishStage(page)
+  await expect(page.getByText('Mərhələ balı: 14%')).toBeVisible()
+  await expect(page.getByText('Base 64-ün + və / simvolları url-də escape tələb edir')).toBeVisible()
+  await page.getByRole('button', { name: 'Növbəti mərhələ: Miqyaslama →' }).click()
+  await page.getByRole('button', { name: 'Təslim ol' }).click()
+  await page.getByRole('button', { name: 'Bəli, cavabı göstər' }).click()
+
+  // (1 × 1/12 + 1 × 3/5 + 3 × 0 + 2 × 1/7 + 3 × 0) / 10
+  await expect(page.getByRole('region', { name: 'Cəhdin nəticəsi' })).toContainText('Çağırış balı: 10%')
+  await expect(page.getByRole('link', { name: /Primer-in həllini oxuyun/ })).toHaveAttribute('href', '/solutions/pastebin#step-4-scale-the-design')
+  await page.reload()
+  const history = page.getByRole('region', { name: 'Cəhdlər' })
+  await expect(history).toContainText('Cəhd 1')
+  await expect(history).toContainText('Çağırış balı: 10%')
+
+  // A retry from the last Attempt starts from its answers, with every Stage open again.
+  await history.getByRole('button', { name: 'Son cəhddən davam et' }).click()
+  await expect(page.getByRole('heading', { level: 2, name: '1. Tələblər' })).toBeVisible()
+  await expect(page.getByLabel('İstifadəçi anonimdir')).toBeChecked()
+  await expect(page.getByRole('textbox', { name: 'Qeydlər' })).toHaveValue('Hesab yoxdur.')
+  await expect(page.getByRole('navigation', { name: 'Mərhələlər' }).getByRole('button', { name: '2. Hesablama' })).toBeDisabled()
+  await expect(history.getByRole('listitem')).toHaveCount(2)
+  await expect(history.getByRole('listitem').first()).toContainText('Cəhd 2')
+  await expect(history.getByRole('listitem').first()).toContainText('davam edir')
+
+  // An earlier Attempt shows read-only.
+  await history.getByRole('button', { name: 'Bax' }).click()
+  await expect(page.getByText('Cəhd 1 göstərilir.')).toBeVisible()
+  await page.getByRole('navigation', { name: 'Mərhələlər' }).getByRole('button', { name: /^1\. Tələblər/ }).click()
+  await expect(page.getByLabel('İstifadəçi anonimdir')).toBeDisabled()
+  await expect(page.getByRole('button', { name: 'Mərhələni bitir' })).toHaveCount(0)
+
+  // Challenges are found by search too.
+  await page.getByRole('button', { name: 'Axtar' }).click()
+  const search = page.getByRole('dialog', { name: 'Axtar' })
+  await search.getByRole('combobox', { name: 'Axtar' }).fill('pastebin')
+  await expect(search.getByRole('option').filter({ hasText: 'Çağırış' })).toHaveCount(1)
 })

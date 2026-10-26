@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import type { Attempt } from '../challenges/attempt'
 import type { Design } from '../design/design'
 import { createInMemoryProgressRepository, createProgressRepository } from './repository'
 
@@ -32,8 +33,55 @@ const sandboxDesign = {
   zones: [],
 } as const satisfies Design
 
-/** A finished high-level design Stage, after two Hint tiers of one Rule. */
-const stageWork = { design: sandboxDesign, hintUsage: { 'separate-apis': 2 }, finishedAt: '2026-10-25T11:00:00.000Z' }
+/** A v7 finished high-level design Stage, after two Hint tiers of one Rule. */
+const legacyStageWork = { design: sandboxDesign, hintUsage: { 'separate-apis': 2 }, finishedAt: '2026-10-25T11:00:00.000Z' }
+
+/** An Attempt in progress: the requirements over, the estimation entered but not finished. */
+const attempt = {
+  mode: 'practice',
+  startedAt: '2026-10-25T10:00:00.000Z',
+  stages: {
+    requirements: {
+      type: 'requirements',
+      chosen: [0, 2],
+      notes: 'Anonim istifadəçilər.',
+      outcome: { finishedAt: '2026-10-25T10:10:00.000Z', gaveUp: false, score: 0.5 },
+    },
+    estimation: { type: 'estimation', answers: { 'write-qps': 4 } },
+  },
+} as const satisfies Attempt
+
+/** A finished Attempt with a design Stage and its recorded Evaluation. */
+const finishedAttempt = {
+  mode: 'practice',
+  startedAt: '2026-10-24T10:00:00.000Z',
+  finishedAt: '2026-10-24T11:00:00.000Z',
+  score: 0.25,
+  stages: {
+    'high-level-design': {
+      type: 'high-level-design',
+      design: sandboxDesign,
+      hintUsage: { 'separate-apis': 2 },
+      outcome: {
+        finishedAt: '2026-10-24T11:00:00.000Z',
+        gaveUp: false,
+        score: 0.25,
+        evaluation: {
+          score: 1,
+          maxScore: 3,
+          totalWeight: 4,
+          failingCount: 1,
+          rules: [
+            { ruleId: 'client', passed: true, weight: 1, hintsOpened: 0, hintsAvailable: 3, maxPoints: 1, points: 1 },
+            { ruleId: 'separate-apis', passed: false, weight: 3, hintsOpened: 2, hintsAvailable: 1, maxPoints: 1.5, points: 0 },
+          ],
+        },
+      },
+    },
+  },
+} as const satisfies Attempt
+
+const challengeWork = { attempts: { pastebin: [finishedAttempt, attempt] } }
 
 describe('ProgressRepository', () => {
   it('round-trips all progress through export and import without loss', async () => {
@@ -43,7 +91,7 @@ describe('ProgressRepository', () => {
     await source.put('flashcards', { cards: { 'system-design/1482325088071': cardState } })
     await source.put('quizzes', { results: { 'cache-basics': quizResult } })
     await source.put('designs', { drafts: { sandbox: sandboxDesign } })
-    await source.put('challenges', { stages: { 'pastebin/high-level-design': stageWork } })
+    await source.put('challenges', challengeWork)
     const exported = await source.exportAll(NOW)
 
     const target = createInMemoryProgressRepository()
@@ -57,7 +105,7 @@ describe('ProgressRepository', () => {
     expect(await target.get('flashcards')).toEqual({ cards: { 'system-design/1482325088071': cardState } })
     expect(await target.get('quizzes')).toEqual({ results: { 'cache-basics': quizResult } })
     expect(await target.get('designs')).toEqual({ drafts: { sandbox: sandboxDesign } })
-    expect(await target.get('challenges')).toEqual({ stages: { 'pastebin/high-level-design': stageWork } })
+    expect(await target.get('challenges')).toEqual(challengeWork)
   })
 
   it('starts empty, with the dark theme and 20 new cards a day', async () => {
@@ -68,14 +116,14 @@ describe('ProgressRepository', () => {
     expect(await repository.get('flashcards')).toEqual({ cards: {} })
     expect(await repository.get('quizzes')).toEqual({ results: {} })
     expect(await repository.get('designs')).toEqual({ drafts: {} })
-    expect(await repository.get('challenges')).toEqual({ stages: {} })
+    expect(await repository.get('challenges')).toEqual({ attempts: {} })
     expect(await repository.getAll()).toEqual({
       reading: { readLessons: {} },
       settings: { theme: 'dark', newCardsPerDay: 20, canvasStyle: 'clean' },
       flashcards: { cards: {} },
       quizzes: { results: {} },
       designs: { drafts: {} },
-      challenges: { stages: {} },
+      challenges: { attempts: {} },
     })
   })
 
@@ -106,7 +154,7 @@ describe('ProgressRepository', () => {
     await repository.put('flashcards', { cards: { 'system-design/1': cardState } })
     await repository.put('quizzes', { results: { 'cache-basics': quizResult } })
     await repository.put('designs', { drafts: { sandbox: sandboxDesign } })
-    await repository.put('challenges', { stages: { 'pastebin/high-level-design': stageWork } })
+    await repository.put('challenges', challengeWork)
 
     await repository.reset()
 
@@ -115,7 +163,7 @@ describe('ProgressRepository', () => {
     expect(await repository.get('flashcards')).toEqual({ cards: {} })
     expect(await repository.get('quizzes')).toEqual({ results: {} })
     expect(await repository.get('designs')).toEqual({ drafts: {} })
-    expect(await repository.get('challenges')).toEqual({ stages: {} })
+    expect(await repository.get('challenges')).toEqual({ attempts: {} })
   })
 
   it('backs up the current progress before a valid import replaces it', async () => {
@@ -138,7 +186,7 @@ describe('ProgressRepository', () => {
     await repository.importAll(JSON.stringify(v0Export), NOW)
 
     expect(await repository.exportAll(NOW)).toEqual({
-      schemaVersion: 7,
+      schemaVersion: 8,
       exportedAt: NOW.toISOString(),
       progress: {
         // v0 did not record when a Lesson was read; the export time is the latest it can have been.
@@ -147,7 +195,7 @@ describe('ProgressRepository', () => {
         flashcards: { cards: {} },
         quizzes: { results: {} },
         designs: { drafts: {} },
-        challenges: { stages: {} },
+        challenges: { attempts: {} },
       },
     })
   })
@@ -168,7 +216,7 @@ describe('ProgressRepository', () => {
       flashcards: { cards: {} },
       quizzes: { results: {} },
       designs: { drafts: {} },
-      challenges: { stages: {} },
+      challenges: { attempts: {} },
     })
   })
 
@@ -187,7 +235,7 @@ describe('ProgressRepository', () => {
       settings: { theme: 'light', newCardsPerDay: 20, canvasStyle: 'clean' },
       quizzes: { results: {} },
       designs: { drafts: {} },
-      challenges: { stages: {} },
+      challenges: { attempts: {} },
     })
   })
 
@@ -210,7 +258,7 @@ describe('ProgressRepository', () => {
       settings: { ...v3Export.progress.settings, canvasStyle: 'clean' },
       quizzes: { results: {} },
       designs: { drafts: {} },
-      challenges: { stages: {} },
+      challenges: { attempts: {} },
     })
   })
 
@@ -233,7 +281,7 @@ describe('ProgressRepository', () => {
       ...v4Export.progress,
       settings: { ...v4Export.progress.settings, canvasStyle: 'clean' },
       designs: { drafts: {} },
-      challenges: { stages: {} },
+      challenges: { attempts: {} },
     })
   })
 
@@ -244,14 +292,14 @@ describe('ProgressRepository', () => {
 
     await repository.importAll(JSON.stringify(v5Export), NOW)
 
-    expect(await repository.getAll()).toEqual({ ...v5Export.progress, challenges: { stages: {} } })
+    expect(await repository.getAll()).toEqual({ ...v5Export.progress, challenges: { attempts: {} } })
   })
 
   it('migrates a v6 export, which had no canvas style, to the clean one', async () => {
     const v6Export = {
       schemaVersion: 6,
       exportedAt: '2026-10-26T21:00:00.000Z',
-      progress: { ...validProgress, settings: { theme: 'light', newCardsPerDay: 7 } },
+      progress: { ...v7Progress, settings: { theme: 'light', newCardsPerDay: 7 } },
     }
     const repository = createInMemoryProgressRepository()
 
@@ -260,10 +308,52 @@ describe('ProgressRepository', () => {
     expect(await repository.get('settings')).toEqual({ theme: 'light', newCardsPerDay: 7, canvasStyle: 'clean' })
   })
 
+  it('migrates a v7 export, whose high-level design work becomes an Attempt in progress started at the export', async () => {
+    const v7Export = { schemaVersion: 7, exportedAt: '2026-10-26T08:00:00.000Z', progress: v7Progress }
+    const repository = createInMemoryProgressRepository()
+
+    await repository.importAll(JSON.stringify(v7Export), NOW)
+
+    // Stages now come before the high-level design, so the work is open again until they are over.
+    expect(await repository.get('challenges')).toEqual({
+      attempts: {
+        pastebin: [
+          {
+            mode: 'practice',
+            startedAt: '2026-10-26T08:00:00.000Z',
+            stages: { 'high-level-design': { type: 'high-level-design', design: sandboxDesign, hintUsage: { 'separate-apis': 2 } } },
+          },
+        ],
+      },
+    })
+  })
+
+  it('reads Challenge work stored before Attempts as an Attempt in progress started when it is read', async () => {
+    const repository = createProgressRepository(
+      {
+        get: async (key) => (key === 'area:challenges' ? { stages: { 'pastebin/high-level-design': legacyStageWork } } : undefined),
+        putAll: async () => {},
+      },
+      () => NOW,
+    )
+
+    expect(await repository.get('challenges')).toEqual({
+      attempts: {
+        pastebin: [
+          {
+            mode: 'practice',
+            startedAt: NOW.toISOString(),
+            stages: { 'high-level-design': { type: 'high-level-design', design: sandboxDesign, hintUsage: { 'separate-apis': 2 } } },
+          },
+        ],
+      },
+    })
+  })
+
   it('reads a stored Design draft with the config fields it lacks filled in', async () => {
     const [client, cache] = sandboxDesign.nodes
     const stored = { ...sandboxDesign, nodes: [client, { ...cache, config: { strategy: 'write-through' } }] }
-    const file = { schemaVersion: 7, exportedAt: NOW.toISOString(), progress: { ...validProgress, designs: { drafts: { sandbox: stored } } } }
+    const file = { schemaVersion: 8, exportedAt: NOW.toISOString(), progress: { ...validProgress, designs: { drafts: { sandbox: stored } } } }
     const repository = createInMemoryProgressRepository()
 
     await repository.importAll(JSON.stringify(file), NOW)
@@ -296,17 +386,20 @@ describe('ProgressRepository', () => {
     flashcards: { cards: { 'system-design/1': cardState } },
     quizzes: { results: { 'cache-basics': quizResult } },
     designs: { drafts: { sandbox: sandboxDesign } },
-    challenges: { stages: { 'pastebin/high-level-design': stageWork } },
+    challenges: challengeWork,
   }
+  const v7Progress = { ...validProgress, challenges: { stages: { 'pastebin/high-level-design': legacyStageWork } } }
   const withStageWork = (work: unknown) =>
-    JSON.stringify({ schemaVersion: 7, exportedAt: NOW.toISOString(), progress: { ...validProgress, challenges: { stages: { 'pastebin/high-level-design': work } } } })
+    JSON.stringify({ schemaVersion: 7, exportedAt: NOW.toISOString(), progress: { ...v7Progress, challenges: { stages: { 'pastebin/high-level-design': work } } } })
+  const withAttempt = (value: unknown) =>
+    JSON.stringify({ schemaVersion: 8, exportedAt: NOW.toISOString(), progress: { ...validProgress, challenges: { attempts: { pastebin: [value] } } } })
   const withDraft = (draft: unknown) =>
-    JSON.stringify({ schemaVersion: 7, exportedAt: NOW.toISOString(), progress: { ...validProgress, designs: { drafts: { sandbox: draft } } } })
-  const withSettings = (settings: unknown) => JSON.stringify({ schemaVersion: 7, exportedAt: NOW.toISOString(), progress: { ...validProgress, settings } })
+    JSON.stringify({ schemaVersion: 8, exportedAt: NOW.toISOString(), progress: { ...validProgress, designs: { drafts: { sandbox: draft } } } })
+  const withSettings = (settings: unknown) => JSON.stringify({ schemaVersion: 8, exportedAt: NOW.toISOString(), progress: { ...validProgress, settings } })
   const withCard = (card: unknown) =>
-    JSON.stringify({ schemaVersion: 7, exportedAt: NOW.toISOString(), progress: { ...validProgress, flashcards: { cards: { 'system-design/1': card } } } })
+    JSON.stringify({ schemaVersion: 8, exportedAt: NOW.toISOString(), progress: { ...validProgress, flashcards: { cards: { 'system-design/1': card } } } })
   const withQuizResult = (result: unknown) =>
-    JSON.stringify({ schemaVersion: 7, exportedAt: NOW.toISOString(), progress: { ...validProgress, quizzes: { results: { 'cache-basics': result } } } })
+    JSON.stringify({ schemaVersion: 8, exportedAt: NOW.toISOString(), progress: { ...validProgress, quizzes: { results: { 'cache-basics': result } } } })
 
   it.each([
     ['not JSON', '{"schemaVersion": 1,', 'not-json'],
@@ -315,14 +408,17 @@ describe('ProgressRepository', () => {
     ['a newer schemaVersion', JSON.stringify({ schemaVersion: 99, exportedAt: NOW.toISOString(), progress: validProgress }), 'unsupported-version'],
     ['a missing area', JSON.stringify({ schemaVersion: 1, exportedAt: NOW.toISOString(), progress: { reading: validProgress.reading } }), 'malformed'],
     ['no flashcards area', JSON.stringify({ schemaVersion: 3, exportedAt: NOW.toISOString(), progress: { ...validProgress, flashcards: undefined } }), 'malformed'],
-    ['no quizzes area', JSON.stringify({ schemaVersion: 7, exportedAt: NOW.toISOString(), progress: { ...validProgress, quizzes: undefined } }), 'malformed'],
-    ['no designs area', JSON.stringify({ schemaVersion: 7, exportedAt: NOW.toISOString(), progress: { ...validProgress, designs: undefined } }), 'malformed'],
-    ['no challenges area', JSON.stringify({ schemaVersion: 7, exportedAt: NOW.toISOString(), progress: { ...validProgress, challenges: undefined } }), 'malformed'],
-    ['Stage work whose Design is not a Design', withStageWork({ ...stageWork, design: { nodes: [] } }), 'malformed'],
-    ['Stage work with more than three Hint tiers open', withStageWork({ ...stageWork, hintUsage: { 'separate-apis': 4 } }), 'malformed'],
-    ['Stage work with a fractional Hint count', withStageWork({ ...stageWork, hintUsage: { 'separate-apis': 1.5 } }), 'malformed'],
-    ['Stage work finished at a time that is not a timestamp', withStageWork({ ...stageWork, finishedAt: 'later' }), 'malformed'],
-    ['Stage work that is not an object', withStageWork('done'), 'malformed'],
+    ['no quizzes area', JSON.stringify({ schemaVersion: 8, exportedAt: NOW.toISOString(), progress: { ...validProgress, quizzes: undefined } }), 'malformed'],
+    ['no designs area', JSON.stringify({ schemaVersion: 8, exportedAt: NOW.toISOString(), progress: { ...validProgress, designs: undefined } }), 'malformed'],
+    ['no challenges area', JSON.stringify({ schemaVersion: 8, exportedAt: NOW.toISOString(), progress: { ...validProgress, challenges: undefined } }), 'malformed'],
+    ['v7 Stage work whose Design is not a Design', withStageWork({ ...legacyStageWork, design: { nodes: [] } }), 'malformed'],
+    ['v7 Stage work with more than three Hint tiers open', withStageWork({ ...legacyStageWork, hintUsage: { 'separate-apis': 4 } }), 'malformed'],
+    ['v7 Stage work with a fractional Hint count', withStageWork({ ...legacyStageWork, hintUsage: { 'separate-apis': 1.5 } }), 'malformed'],
+    ['v7 Stage work that is not an object', withStageWork('done'), 'malformed'],
+    ['v7 Challenge work keyed by something other than a Challenge and Stage', JSON.stringify({ schemaVersion: 7, exportedAt: NOW.toISOString(), progress: { ...v7Progress, challenges: { stages: { pastebin: legacyStageWork } } } }), 'malformed'],
+    ['no list of Attempts', JSON.stringify({ schemaVersion: 8, exportedAt: NOW.toISOString(), progress: { ...validProgress, challenges: { attempts: { pastebin: attempt } } } }), 'malformed'],
+    ['an Attempt that is not one', withAttempt({ ...attempt, mode: 'exam' }), 'malformed'],
+    ['an Attempt whose score is above 1', withAttempt({ ...finishedAttempt, score: 1.2 }), 'malformed'],
     ['a Design draft that is not a Design', withDraft({ nodes: 'none' }), 'malformed'],
     ['a Design draft with an edge to a missing node', withDraft({ ...sandboxDesign, nodes: [sandboxDesign.nodes[0]] }), 'malformed'],
     [

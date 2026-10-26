@@ -30,10 +30,13 @@ export const STUDY_GUIDE_ROUTE = '/study-guide'
 
 export const FLASHCARDS_ROUTE = '/flashcards'
 
+export const CHALLENGES_ROUTE = '/challenges'
+
 export const CHALLENGE_ROUTE = '/challenges/:challengeId'
 
-export function challengePath(challengeId: string): string {
-  return `/challenges/${challengeId}`
+/** App route of a Challenge, optionally at one of its Stages. */
+export function challengePath(challengeId: string, stageId?: string): string {
+  return `${CHALLENGES_ROUTE}/${challengeId}${stageId ? `?stage=${encodeURIComponent(stageId)}` : ''}`
 }
 
 /** The free Design Canvas, outside any Challenge. */
@@ -63,6 +66,7 @@ export function flashcardsPath(selection: CardSelection): string {
 
 /** Pages besides the Lessons, linked from the header (from `md` up) and the table of contents drawer. */
 export const HEADER_PAGES: { to: string; label: StringKey }[] = [
+  { to: CHALLENGES_ROUTE, label: 'challengesTitle' },
   { to: FLASHCARDS_ROUTE, label: 'flashcardsTitle' },
   { to: SANDBOX_ROUTE, label: 'sandboxTitle' },
   { to: STUDY_GUIDE_ROUTE, label: 'studyGuideTitle' },

@@ -1,4 +1,4 @@
-import { HINT_TIERS, type HintUsage } from '../challenges/rules'
+import { readAttempt, type Attempt } from '../challenges/attempt'
 import { readDesign, type Design } from '../design/design'
 import type { CardStates } from '../flashcards/queue'
 import { readCardState, type CardState } from '../flashcards/scheduler'
@@ -53,23 +53,9 @@ export interface DesignProgress {
   drafts: Record<string, Design>
 }
 
-/** The learner's work on a Stage solved on the Design Canvas. */
-export interface StageWork {
-  /** Auto-saved as it changes; frozen once the Stage is finished. */
-  design: Design
-  /** The Hint tiers opened, which cap the Stage's score. */
-  hintUsage: HintUsage
-  /** When the learner finished the Stage (ISO timestamp); its per-Rule results and Reference Solution show from then on. */
-  finishedAt?: string
-}
-
 export interface ChallengeProgress {
-  /** `stageWorkKey(challengeId, stageId)` → the work on that Stage. */
-  stages: Record<string, StageWork>
-}
-
-export function stageWorkKey(challengeId: string, stageId: string): string {
-  return `${challengeId}/${stageId}`
+  /** Challenge id → its Attempts, oldest first. The last one is the current Attempt, finished or not. */
+  attempts: Record<string, Attempt[]>
 }
 
 /** Everything the learner has done, split into areas that are stored and reset separately. */
@@ -93,11 +79,11 @@ export function emptyProgress(): Progress {
     flashcards: { cards: {} },
     quizzes: { results: {} },
     designs: { drafts: {} },
-    challenges: { stages: {} },
+    challenges: { attempts: {} },
   }
 }
 
-export const PROGRESS_SCHEMA_VERSION = 7
+export const PROGRESS_SCHEMA_VERSION = 8
 
 /** The export file: all progress, versioned so that older files can be migrated on import. */
 export interface ProgressExport {
@@ -194,6 +180,43 @@ const UPGRADES: Record<number, (data: Record<string, unknown>) => Record<string,
     const settings = { ...progress.settings, canvasStyle: emptyProgress().settings.canvasStyle }
     return { schemaVersion: 7, exportedAt, progress: { ...progress, settings } }
   },
+  // v7 kept the work on each high-level design Stage, not Attempts.
+  7: ({ exportedAt, progress }) => {
+    if (!isRecord(progress) || !isRecord(progress.challenges) || !isRecord(progress.challenges.stages)) throw malformed('challenges is missing')
+    if (!isTimestamp(exportedAt)) throw malformed('exportedAt is not a timestamp')
+    const attempts = attemptsFromStageWork(progress.challenges.stages, exportedAt)
+    if (!attempts) throw malformed('the Challenge work is not keyed by Challenge and Stage')
+    return { schemaVersion: 8, exportedAt, progress: { ...progress, challenges: { attempts } } }
+  },
+}
+
+/**
+ * Turns v7 work on high-level design Stages (keyed `challengeId/stageId`) into one Attempt in progress
+ * per Challenge, started at `startedAt`. The Stages before the high-level design came later, so a
+ * finished Stage is open again until they are over. Undefined when a key names no Stage.
+ */
+function attemptsFromStageWork(stages: Record<string, unknown>, startedAt: string): Record<string, unknown[]> | undefined {
+  const attempts = new Map<string, Record<string, unknown>>()
+  for (const [key, work] of Object.entries(stages)) {
+    const slash = key.indexOf('/')
+    if (slash <= 0 || slash === key.length - 1) return undefined
+    const [challengeId, stageId] = [key.slice(0, slash), key.slice(slash + 1)]
+    // Invalid work is reported when the Attempt is read.
+    const { design, hintUsage } = isRecord(work) ? work : {}
+    attempts.set(challengeId, { ...attempts.get(challengeId), [stageId]: { type: 'high-level-design', design, hintUsage } })
+  }
+  return Object.fromEntries([...attempts].map(([challengeId, work]) => [challengeId, [{ mode: 'practice', startedAt, stages: work }]]))
+}
+
+/**
+ * An area as the browser stored it, in the current format. Areas are stored as they are, so one
+ * written by an older version of the app is upgraded when it is read; `now` dates what that creates.
+ */
+export function upgradeStoredArea(area: ProgressArea, stored: unknown, now: Date): unknown {
+  if (area === 'challenges' && isRecord(stored) && stored.attempts === undefined && isRecord(stored.stages)) {
+    return { attempts: attemptsFromStageWork(stored.stages, now.toISOString()) ?? {} }
+  }
+  return stored
 }
 
 function validateCurrent(data: Record<string, unknown>): ProgressExport {
@@ -241,11 +264,17 @@ function validateProgress(progress: Record<string, unknown>): Progress {
     return [draftId, design]
   })
 
-  if (!isRecord(challenges) || !isRecord(challenges.stages)) throw malformed('challenges is missing')
-  const stages = Object.entries(challenges.stages).map(([key, value]): [string, StageWork] => {
-    const work = readStageWork(value)
-    if (!work) throw malformed(`the work on Stage ${key} is invalid`)
-    return [key, work]
+  if (!isRecord(challenges) || !isRecord(challenges.attempts)) throw malformed('challenges is missing')
+  const attempts = Object.entries(challenges.attempts).map(([challengeId, value]): [string, Attempt[]] => {
+    if (!Array.isArray(value)) throw malformed(`the Attempts of Challenge ${challengeId} are not a list`)
+    return [
+      challengeId,
+      value.map((stored, i) => {
+        const attempt = readAttempt(stored)
+        if (!attempt) throw malformed(`Attempt ${i + 1} of Challenge ${challengeId} is invalid`)
+        return attempt
+      }),
+    ]
   })
 
   // Object.fromEntries defines keys as own properties, so an id such as `__proto__` stays data.
@@ -255,20 +284,7 @@ function validateProgress(progress: Record<string, unknown>): Progress {
     flashcards: { cards: Object.fromEntries(cards) },
     quizzes: { results: Object.fromEntries(results) },
     designs: { drafts: Object.fromEntries(drafts) },
-    challenges: { stages: Object.fromEntries(stages) },
-  }
-}
-
-function readStageWork(value: unknown): StageWork | undefined {
-  if (!isRecord(value) || !isRecord(value.hintUsage)) return undefined
-  const { design } = readDesign(value.design)
-  const hints = Object.entries(value.hintUsage)
-  if (!design || !hints.every(([, tiers]) => Number.isInteger(tiers) && (tiers as number) >= 0 && (tiers as number) <= HINT_TIERS)) return undefined
-  if (value.finishedAt !== undefined && !isTimestamp(value.finishedAt)) return undefined
-  return {
-    design,
-    hintUsage: Object.fromEntries(hints) as HintUsage,
-    ...(value.finishedAt !== undefined && { finishedAt: value.finishedAt }),
+    challenges: { attempts: Object.fromEntries(attempts) },
   }
 }
 

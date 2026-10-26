@@ -4,7 +4,7 @@ import { COMPONENT_BLANK, type ComponentFitQuestion, type OrderingQuestion, type
 import { formatDate, formatDecimal, t, type StringKey } from './i18n'
 import { useProgress } from './progress/store'
 
-const HINTS: Record<Question['type'], StringKey> = {
+export const QUESTION_HINTS: Record<Question['type'], StringKey> = {
   'multiple-choice': 'quizMultipleChoiceHint',
   'multi-select': 'quizMultiSelectHint',
   ordering: 'quizOrderingHint',
@@ -111,7 +111,7 @@ function QuestionCard({ number, question, answer, grade, onAnswer, onCheck }: Qu
         <p id={promptId} className="mt-1 text-zinc-100">
           {question.prompt}
         </p>
-        <p className="mt-1 text-xs text-zinc-500">{t(HINTS[question.type])}</p>
+        <p className="mt-1 text-xs text-zinc-500">{t(QUESTION_HINTS[question.type])}</p>
         {question.type === 'component-fit' && <ComponentFlow question={question} answer={answer} />}
         {question.type === 'ordering' ? (
           <OrderingItems question={question} answer={answer} grade={grade} onAnswer={onAnswer} />
@@ -149,7 +149,7 @@ function QuestionVerdict({ grade }: { grade: QuestionGrade }) {
   )
 }
 
-function ChoiceOptions(props: {
+export function ChoiceOptions(props: {
   options: QuizOption[]
   multiple: boolean
   answer: QuestionAnswer

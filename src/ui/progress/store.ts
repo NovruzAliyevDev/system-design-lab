@@ -1,7 +1,8 @@
 import { create } from 'zustand'
+import type { Attempt } from '../../core/challenges/attempt'
 import type { Design } from '../../core/design/design'
 import { scheduleReview, type Grade } from '../../core/flashcards/scheduler'
-import type { CanvasStyle, Progress, ProgressArea, StageWork, Theme } from '../../core/progress/progress'
+import type { CanvasStyle, Progress, ProgressArea, Theme } from '../../core/progress/progress'
 import { markLessonRead, markLessonUnread } from '../../core/progress/reading'
 import { recordQuizResult } from '../../core/quizzes/results'
 import { progressRepository } from './repository'
@@ -20,8 +21,10 @@ interface ProgressState {
   recordQuiz(quizId: string, score: number): Promise<void>
   /** Stores the Design being edited in a draft, e.g. the sandbox. */
   saveDesign(draftId: string, design: Design): Promise<void>
-  /** Stores the work on a Challenge Stage, by `stageWorkKey`. */
-  saveStageWork(key: string, work: StageWork): Promise<void>
+  /** Stores a Challenge's current Attempt: it replaces the last Attempt, or becomes the first. */
+  saveCurrentAttempt(challengeId: string, attempt: Attempt): Promise<void>
+  /** Adds a new Attempt of a Challenge, which becomes its current one. */
+  startAttempt(challengeId: string, attempt: Attempt): Promise<void>
   /** Imports an export file; throws `InvalidProgressFileError` and changes nothing when it is invalid. */
   importProgress(fileText: string): Promise<void>
   /** Resets one area, or everything when no area is given. */
@@ -38,7 +41,13 @@ export const useProgress = create<ProgressState>()(() => ({
     update('flashcards', ({ cards }) => ({ cards: { ...cards, [cardId]: scheduleReview(cards[cardId], grade, new Date()) } })),
   recordQuiz: (quizId, score) => update('quizzes', (quizzes) => recordQuizResult(quizzes, quizId, score, new Date())),
   saveDesign: (draftId, design) => update('designs', ({ drafts }) => ({ drafts: { ...drafts, [draftId]: design } })),
-  saveStageWork: (key, work) => update('challenges', ({ stages }) => ({ stages: { ...stages, [key]: work } })),
+  saveCurrentAttempt: (challengeId, attempt) =>
+    update('challenges', ({ attempts }) => {
+      const previous = attempts[challengeId] ?? []
+      return { attempts: { ...attempts, [challengeId]: [...previous.slice(0, -1), attempt] } }
+    }),
+  startAttempt: (challengeId, attempt) =>
+    update('challenges', ({ attempts }) => ({ attempts: { ...attempts, [challengeId]: [...(attempts[challengeId] ?? []), attempt] } })),
   async importProgress(fileText) {
     await progressRepository.importAll(fileText, new Date())
     await load()

@@ -91,8 +91,10 @@ const instances: IntegerField = { kind: 'integer', min: 1, max: MAX_INSTANCES, d
 
 /** How a stored copy relates to the others: written to (primary) or a read-only copy (replica). */
 const role = choice(['primary', 'replica'], 'primary')
+export const MAX_REPLICAS = 15
+
 /** Read replicas of a primary's data; a replica has none of its own. */
-const replicas: IntegerField = { kind: 'integer', min: 0, max: 15, default: 0, onlyWhen: { role: 'primary' } }
+const replicas: IntegerField = { kind: 'integer', min: 0, max: MAX_REPLICAS, default: 0, onlyWhen: { role: 'primary' } }
 const shardKey: TextField = { kind: 'text', maxLength: 60, default: '' }
 
 function simulation(capacityQps: number, terms: [PrimerOperation, number][], monthlyCostUsd: number): SimulationDefaults {
