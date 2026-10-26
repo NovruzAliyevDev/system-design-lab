@@ -58,6 +58,10 @@ interface DesignEditorProps {
   history: History<Design>
   onChange: (history: History<Design>) => void
   readOnly: boolean
+  /** Stacks the config panel under a shorter canvas, e.g. for two canvases side by side. */
+  compact?: boolean
+  /** Names the canvas when a page shows more than one. */
+  label?: string
 }
 
 export function DesignEditor(props: DesignEditorProps) {
@@ -68,7 +72,7 @@ export function DesignEditor(props: DesignEditorProps) {
   )
 }
 
-function Editor({ history, onChange, readOnly }: DesignEditorProps) {
+function Editor({ history, onChange, readOnly, compact = false, label = t('canvasLabel') }: DesignEditorProps) {
   const design = history.present
   const theme = useProgress((state) => state.progress?.settings.theme)
   const { screenToFlowPosition } = useReactFlow()
@@ -230,7 +234,7 @@ function Editor({ history, onChange, readOnly }: DesignEditorProps) {
   const buttonClass = 'rounded border border-zinc-700 px-2 py-1 text-xs text-zinc-200 hover:border-zinc-500 disabled:opacity-40'
 
   return (
-    <div className="flex flex-col gap-3 md:h-[calc(100vh-11rem)] md:min-h-[32rem] md:flex-row">
+    <div className={compact ? 'flex flex-col gap-3' : 'flex flex-col gap-3 md:h-[calc(100vh-11rem)] md:min-h-[32rem] md:flex-row'}>
       {!readOnly && (
         <nav aria-label={t('paletteTitle')} className="shrink-0 overflow-y-auto md:w-48">
           <h2 className="text-sm font-semibold text-zinc-100">{t('paletteTitle')}</h2>
@@ -280,12 +284,16 @@ function Editor({ history, onChange, readOnly }: DesignEditorProps) {
         <div
           ref={canvasRef}
           // React Flow fills its parent's height, so the parent needs one: fixed when stacked, the free space beside the panels from `md`.
-          className="h-[26rem] overflow-hidden rounded border border-zinc-800 md:h-auto md:min-h-0 md:flex-1"
+          className={
+            compact
+              ? 'h-[26rem] overflow-hidden rounded border border-zinc-800'
+              : 'h-[26rem] overflow-hidden rounded border border-zinc-800 md:h-auto md:min-h-0 md:flex-1'
+          }
           onDragOver={onDragOver}
           onDrop={onDrop}
         >
           <ReactFlow
-            aria-label={t('canvasLabel')}
+            aria-label={label}
             nodes={nodes}
             edges={edges}
             nodeTypes={NODE_TYPES}
@@ -316,7 +324,7 @@ function Editor({ history, onChange, readOnly }: DesignEditorProps) {
         <p className="mt-2 text-xs text-zinc-500">{t('canvasLegend')}</p>
       </div>
 
-      <aside className="shrink-0 overflow-y-auto md:w-72">
+      <aside className={compact ? 'shrink-0' : 'shrink-0 overflow-y-auto md:w-72'}>
         <ConfigPanel
           design={design}
           nodeId={selectedCount === 1 ? selected.nodeIds[0] : undefined}

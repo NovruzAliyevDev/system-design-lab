@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { loadPrimerCatalog } from '../scripts/build-content'
+import { findChallenge } from '../src/core/challenges/challenge'
+import { evaluateDesign } from '../src/core/challenges/rules'
 import { findUnresolvedLinks, resolveLink } from '../src/core/content/links'
 import { linkUrls } from '../src/core/content/markdown'
-import { PRIMER_LATENCY_NS } from '../src/core/design/components'
+import { defaultConfig, PRIMER_LATENCY_NS } from '../src/core/design/components'
+import { connect, removeElements, setNodeConfig, updateEdge, type Design, type DesignNode } from '../src/core/design/design'
 import { htmlLinkUrls } from '../src/core/flashcards/deck'
 import { findLessonQuiz } from '../src/core/quizzes/quiz'
 
@@ -158,6 +161,55 @@ describe('catalog of the pinned primer commit', () => {
 
     expect(cacheLessons).toHaveLength(10)
     expect(cacheLessons.filter((lessonId) => !findLessonQuiz(catalog.quizzes, lessonId))).toEqual([])
+  })
+
+  it('has Challenges whose Reference Solutions score 100% on their own Rules, every Rule with three Hint tiers', () => {
+    expect(catalog.challenges.map((challenge) => challenge.id)).toContain('pastebin')
+    for (const challenge of catalog.challenges) {
+      for (const stage of challenge.stages) {
+        const evaluation = evaluateDesign(stage, stage.referenceSolution, {})
+
+        expect(evaluation.score, `${challenge.id}/${stage.id}`).toBe(evaluation.totalWeight)
+        expect(evaluation.failingCount).toBe(0)
+        for (const rule of stage.rules) {
+          expect(rule.hints.filter((hint) => hint.trim() !== ''), `${challenge.id}/${stage.id}/${rule.id}`).toHaveLength(3)
+        }
+      }
+    }
+  })
+
+  describe('the Pastebin high-level design Stage', () => {
+    const [stage] = findChallenge(catalog.challenges, 'pastebin')!.stages
+
+    /** A Design with one node replaced by another (in its place, with its edges). */
+    function replaceNode(design: Design, id: string, replacement: DesignNode): Design {
+      const rename = (nodeId: string) => (nodeId === id ? replacement.id : nodeId)
+      return {
+        nodes: design.nodes.map((node) => (node.id === id ? { ...replacement, position: node.position } : node)),
+        edges: design.edges.map((edge) => {
+          const [source, target] = [rename(edge.source), rename(edge.target)]
+          return { ...edge, id: `${source}->${target}`, source, target }
+        }),
+      }
+    }
+
+    it('accepts the stores the primer names as alternatives: a key-value store and a document store', () => {
+      const nosql = (id: string): DesignNode => ({ ...stage.referenceSolution.nodes[0], id, componentType: 'nosql-store', config: defaultConfig('nosql-store') })
+      let design = replaceNode(stage.referenceSolution, 'sql-database-1', nosql('nosql-store-1'))
+      design = replaceNode(design, 'object-store-1', nosql('nosql-store-2'))
+      design = setNodeConfig(design, 'nosql-store-2', 'kind', 'document')
+
+      expect(evaluateDesign(stage, design, {}).failingCount).toBe(0)
+    })
+
+    it('accepts analytics fed by Web Server logs, as the primer describes, when they are shipped asynchronously', () => {
+      const withoutPulls = removeElements(stage.referenceSolution, { edgeIds: ['analytics-1->object-store-1', 'analytics-1->sql-database-1'] })
+      const logs = connect(withoutPulls, 'web-server-1', 'analytics-1')
+
+      expect(evaluateDesign(stage, updateEdge(logs, 'web-server-1->analytics-1', { mode: 'async' }), {}).failingCount).toBe(0)
+      // Called synchronously, analytics sits on the request path.
+      expect(evaluateDesign(stage, logs, {}).rules.find((result) => result.ruleId === 'offline-analytics')?.passed).toBe(false)
+    })
   })
 
   it('matches the recorded Lesson list', () => {

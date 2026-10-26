@@ -137,6 +137,16 @@ describe('comparePrimerVersions', () => {
     expect(report.brokenReferences).toEqual([{ referrer: 'Quiz "queues-basics"', lessonId: 'queues' }])
   })
 
+  it('lists authored Challenges that practise Lessons the new pin does not have', () => {
+    const before = version('old', ['## Queues', 'b', '## Cache', 'c'])
+    const after = version('new', ['## Cache', 'c'])
+    const challenges = [{ id: 'pastebin', lessonIds: ['cache', 'queues'], stages: [] }]
+
+    const report = comparePrimerVersions({ before, after, authored: { challenges } })
+
+    expect(report.brokenReferences).toEqual([{ referrer: 'Challenge "pastebin"', lessonId: 'queues' }])
+  })
+
   it('reports no broken references when every authored reference resolves', () => {
     const lines = ['## Cache', 'a']
     const glossary = [{ term: 'Cache', explanation: 'x', lessonIds: ['cache'] }]

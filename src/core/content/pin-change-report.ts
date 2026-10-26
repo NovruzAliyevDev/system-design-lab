@@ -1,3 +1,4 @@
+import { challengeLessonReferences } from '../challenges/challenge'
 import { flashcardLessonReferences } from '../flashcards/deck'
 import { glossaryLessonReferences } from '../glossary/glossary'
 import { quizLessonReferences } from '../quizzes/quiz'
@@ -122,6 +123,7 @@ function authoredLessonReferences(authored: AuthoredContent): LessonReference[] 
     ...glossaryLessonReferences(authored.glossary),
     ...flashcardLessonReferences(authored.flashcards),
     ...quizLessonReferences(authored.quizzes),
+    ...challengeLessonReferences(authored.challenges),
   ]
 }
 

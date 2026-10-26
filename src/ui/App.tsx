@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { BrowserRouter, Link, Route, Routes, useLocation, useMatch } from 'react-router-dom'
 import { Attribution } from './Attribution'
+import { ChallengePage } from './ChallengePage'
 import { FlashcardsPage } from './FlashcardsPage'
 import { GlossaryPage } from './GlossaryPage'
 import { LessonList } from './LessonList'
@@ -14,6 +15,7 @@ import { TableOfContents } from './TableOfContents'
 import { UpdatePrompt } from './UpdatePrompt'
 import { t } from './i18n'
 import {
+  CHALLENGE_ROUTE,
   FLASHCARDS_ROUTE,
   GLOSSARY_ROUTE,
   LESSON_ROUTE,
@@ -29,7 +31,9 @@ function Layout() {
   const lessonMatch = useMatch(LESSON_ROUTE)
   const currentLessonId = lessonMatch?.params.lessonId
   // The canvas needs the whole width: the table of contents is only a drawer there.
-  const isCanvasPage = useMatch(SANDBOX_ROUTE) !== null
+  const sandboxMatch = useMatch(SANDBOX_ROUTE)
+  const challengeMatch = useMatch(CHALLENGE_ROUTE)
+  const isCanvasPage = sandboxMatch !== null || challengeMatch !== null
   const { pathname } = useLocation()
   const [tocOpen, setTocOpen] = useState(false)
 
@@ -87,6 +91,7 @@ function Layout() {
               <Route path={STUDY_GUIDE_ROUTE} element={<StudyGuidePage />} />
               <Route path={FLASHCARDS_ROUTE} element={<FlashcardsPage />} />
               <Route path={SANDBOX_ROUTE} element={<SandboxPage />} />
+              <Route path={CHALLENGE_ROUTE} element={<ChallengePage />} />
               <Route path={SETTINGS_ROUTE} element={<SettingsPage />} />
             </Routes>
           </main>

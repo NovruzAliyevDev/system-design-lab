@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import type { Design } from '../../core/design/design'
 import { scheduleReview, type Grade } from '../../core/flashcards/scheduler'
-import type { Progress, ProgressArea, Theme } from '../../core/progress/progress'
+import type { Progress, ProgressArea, StageWork, Theme } from '../../core/progress/progress'
 import { markLessonRead, markLessonUnread } from '../../core/progress/reading'
 import { recordQuizResult } from '../../core/quizzes/results'
 import { progressRepository } from './repository'
@@ -19,6 +19,8 @@ interface ProgressState {
   recordQuiz(quizId: string, score: number): Promise<void>
   /** Stores the Design being edited in a draft, e.g. the sandbox. */
   saveDesign(draftId: string, design: Design): Promise<void>
+  /** Stores the work on a Challenge Stage, by `stageWorkKey`. */
+  saveStageWork(key: string, work: StageWork): Promise<void>
   /** Imports an export file; throws `InvalidProgressFileError` and changes nothing when it is invalid. */
   importProgress(fileText: string): Promise<void>
   /** Resets one area, or everything when no area is given. */
@@ -34,6 +36,7 @@ export const useProgress = create<ProgressState>()(() => ({
     update('flashcards', ({ cards }) => ({ cards: { ...cards, [cardId]: scheduleReview(cards[cardId], grade, new Date()) } })),
   recordQuiz: (quizId, score) => update('quizzes', (quizzes) => recordQuizResult(quizzes, quizId, score, new Date())),
   saveDesign: (draftId, design) => update('designs', ({ drafts }) => ({ drafts: { ...drafts, [draftId]: design } })),
+  saveStageWork: (key, work) => update('challenges', ({ stages }) => ({ stages: { ...stages, [key]: work } })),
   async importProgress(fileText) {
     await progressRepository.importAll(fileText, new Date())
     await load()

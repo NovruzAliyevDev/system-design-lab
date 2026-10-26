@@ -1,3 +1,4 @@
+import { HINT_TIERS, type HintUsage } from '../challenges/rules'
 import { readDesign, type Design } from '../design/design'
 import type { CardStates } from '../flashcards/queue'
 import { readCardState, type CardState } from '../flashcards/scheduler'
@@ -46,6 +47,25 @@ export interface DesignProgress {
   drafts: Record<string, Design>
 }
 
+/** The learner's work on a Stage solved on the Design Canvas. */
+export interface StageWork {
+  /** Auto-saved as it changes; frozen once the Stage is finished. */
+  design: Design
+  /** The Hint tiers opened, which cap the Stage's score. */
+  hintUsage: HintUsage
+  /** When the learner finished the Stage (ISO timestamp); its per-Rule results and Reference Solution show from then on. */
+  finishedAt?: string
+}
+
+export interface ChallengeProgress {
+  /** `stageWorkKey(challengeId, stageId)` → the work on that Stage. */
+  stages: Record<string, StageWork>
+}
+
+export function stageWorkKey(challengeId: string, stageId: string): string {
+  return `${challengeId}/${stageId}`
+}
+
 /** Everything the learner has done, split into areas that are stored and reset separately. */
 export interface Progress {
   reading: ReadingProgress
@@ -53,11 +73,12 @@ export interface Progress {
   flashcards: FlashcardProgress
   quizzes: QuizProgress
   designs: DesignProgress
+  challenges: ChallengeProgress
 }
 
 export type ProgressArea = keyof Progress
 
-export const PROGRESS_AREAS: readonly ProgressArea[] = ['reading', 'settings', 'flashcards', 'quizzes', 'designs']
+export const PROGRESS_AREAS: readonly ProgressArea[] = ['reading', 'settings', 'flashcards', 'quizzes', 'designs', 'challenges']
 
 export function emptyProgress(): Progress {
   return {
@@ -66,10 +87,11 @@ export function emptyProgress(): Progress {
     flashcards: { cards: {} },
     quizzes: { results: {} },
     designs: { drafts: {} },
+    challenges: { stages: {} },
   }
 }
 
-export const PROGRESS_SCHEMA_VERSION = 5
+export const PROGRESS_SCHEMA_VERSION = 6
 
 /** The export file: all progress, versioned so that older files can be migrated on import. */
 export interface ProgressExport {
@@ -155,6 +177,11 @@ const UPGRADES: Record<number, (data: Record<string, unknown>) => Record<string,
     if (!isRecord(progress)) throw malformed('progress is missing')
     return { schemaVersion: 5, exportedAt, progress: { ...progress, designs: { drafts: {} } } }
   },
+  // v5 had no Challenge work.
+  5: ({ exportedAt, progress }) => {
+    if (!isRecord(progress)) throw malformed('progress is missing')
+    return { schemaVersion: 6, exportedAt, progress: { ...progress, challenges: { stages: {} } } }
+  },
 }
 
 function validateCurrent(data: Record<string, unknown>): ProgressExport {
@@ -165,7 +192,7 @@ function validateCurrent(data: Record<string, unknown>): ProgressExport {
 }
 
 function validateProgress(progress: Record<string, unknown>): Progress {
-  const { reading, settings, flashcards, quizzes, designs } = progress
+  const { reading, settings, flashcards, quizzes, designs, challenges } = progress
   if (!isRecord(reading) || !isRecord(reading.readLessons)) throw malformed('reading is missing')
   const readLessons = Object.entries(reading.readLessons)
   for (const [lessonId, readAt] of readLessons) {
@@ -200,6 +227,13 @@ function validateProgress(progress: Record<string, unknown>): Progress {
     return [draftId, design]
   })
 
+  if (!isRecord(challenges) || !isRecord(challenges.stages)) throw malformed('challenges is missing')
+  const stages = Object.entries(challenges.stages).map(([key, value]): [string, StageWork] => {
+    const work = readStageWork(value)
+    if (!work) throw malformed(`the work on Stage ${key} is invalid`)
+    return [key, work]
+  })
+
   // Object.fromEntries defines keys as own properties, so an id such as `__proto__` stays data.
   return {
     reading: { readLessons: Object.fromEntries(readLessons) as Record<string, string> },
@@ -207,6 +241,20 @@ function validateProgress(progress: Record<string, unknown>): Progress {
     flashcards: { cards: Object.fromEntries(cards) },
     quizzes: { results: Object.fromEntries(results) },
     designs: { drafts: Object.fromEntries(drafts) },
+    challenges: { stages: Object.fromEntries(stages) },
+  }
+}
+
+function readStageWork(value: unknown): StageWork | undefined {
+  if (!isRecord(value) || !isRecord(value.hintUsage)) return undefined
+  const { design } = readDesign(value.design)
+  const hints = Object.entries(value.hintUsage)
+  if (!design || !hints.every(([, tiers]) => Number.isInteger(tiers) && (tiers as number) >= 0 && (tiers as number) <= HINT_TIERS)) return undefined
+  if (value.finishedAt !== undefined && !isTimestamp(value.finishedAt)) return undefined
+  return {
+    design,
+    hintUsage: Object.fromEntries(hints) as HintUsage,
+    ...(value.finishedAt !== undefined && { finishedAt: value.finishedAt }),
   }
 }
 

@@ -1,3 +1,4 @@
+import { validateChallenges, type Challenge } from '../challenges/challenge'
 import { buildDeck, linkCards, validateFormerRepoUrls, validateLinkFixes, type Deck, type DeckSource } from '../flashcards/deck'
 import { validateGlossary, type GlossaryTerm } from '../glossary/glossary'
 import { validateQuizzes, type Quiz } from '../quizzes/quiz'
@@ -65,6 +66,8 @@ export interface Catalog {
   decks: Deck[]
   /** Authored Quizzes, at most one per Lesson, in authored order. */
   quizzes: Quiz[]
+  /** System design questions solved Stage by Stage, in authored order. */
+  challenges: Challenge[]
 }
 
 /**
@@ -81,6 +84,8 @@ export interface AuthoredContent {
   flashcards?: unknown
   /** Quizzes shown at the end of Lessons. */
   quizzes?: unknown
+  /** Challenges with their Rules, Hints and Reference Solutions. */
+  challenges?: unknown
 }
 
 /** A Lesson that an authored item references. */
@@ -153,6 +158,8 @@ export function buildContentCatalog(input: {
     lessonIds,
   )
   const quizzes = validateQuizzes(authored.quizzes ?? [], lessonIds)
+  const builtSolutions = buildSolutions(solutions, source, markdown)
+  const challenges = validateChallenges(authored.challenges ?? [], lessonIds, builtSolutions)
   const problems = [
     ...glossary.problems,
     ...imageMirrors.problems,
@@ -161,6 +168,7 @@ export function buildContentCatalog(input: {
     ...formerRepoUrls.problems,
     ...flashcards.problems,
     ...quizzes.problems,
+    ...challenges.problems,
   ]
   if (problems.length > 0) throw new ContentValidationError(problems)
 
@@ -171,10 +179,11 @@ export function buildContentCatalog(input: {
     anchors: mapAnchorsToLessons(headings, sectionsWithLesson),
     glossary: glossary.terms,
     appendix: extractAppendix(lessons),
-    solutions: buildSolutions(solutions, source, markdown),
+    solutions: builtSolutions,
     imageMirrors: imageMirrors.mirrors,
     decks: flashcards.decks,
     quizzes: quizzes.quizzes,
+    challenges: challenges.challenges,
   }
   // The study guide's links resolve against the catalog itself.
   const studyGuide = extractStudyGuide(catalog)

@@ -5,10 +5,7 @@ import { SANDBOX_DRAFT_ID } from '../core/progress/progress'
 import { DesignEditor } from './canvas/DesignEditor'
 import { t } from './i18n'
 import { useProgress } from './progress/store'
-import { useMediaQuery } from './useMediaQuery'
-
-/** Tailwind's `md`: below it the canvas is read-only. */
-const TABLET_QUERY = '(min-width: 48rem)'
+import { TABLET_QUERY, useMediaQuery } from './useMediaQuery'
 
 /** The free sandbox: a Design Canvas outside any Challenge, auto-saved as a draft. */
 export function SandboxPage() {

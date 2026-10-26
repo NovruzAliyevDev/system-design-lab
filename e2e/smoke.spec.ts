@@ -481,3 +481,61 @@ test('shows the sandbox read-only with a notice on a phone', async ({ page }) =>
   await page.getByTestId('node-sql-database-1').click()
   await expect(page.getByRole('region', { name: 'Tənzimləmə' }).getByLabel('Rol')).toBeDisabled()
 })
+
+test('solves the Pastebin high-level design Stage by drag and drop and receives a passing score', async ({ page }) => {
+  await page.setViewportSize({ width: 1366, height: 1000 })
+  await page.goto('/solutions/pastebin')
+  await page.getByRole('link', { name: 'Çağırış kimi həll et' }).click()
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Pastebin.com (və ya Bit.ly) dizayn edin')
+
+  // First feedback names no Rule: only the score and how many problems remain.
+  await page.getByRole('button', { name: 'Yoxla' }).click()
+  await expect(page.getByRole('status')).toContainText('Bal: 0 / 14 (0%)')
+  await expect(page.getByRole('status')).toContainText('Qalan problem: 8')
+
+  const palette = page.getByRole('navigation', { name: 'Komponentlər' })
+  const canvas = page.getByTestId('rf__wrapper')
+  const place: [string, number, number][] = [
+    ['Client', 100, 230],
+    ['Web server', 300, 230],
+    ['Application service', 500, 80],
+    ['Application service', 500, 230],
+    ['Analytics / MapReduce', 500, 380],
+    ['SQL database', 720, 80],
+    ['Object store', 720, 300],
+  ]
+  for (const [component, x, y] of place) {
+    await palette.getByRole('button', { name: `${component}: kətana əlavə et` }).dragTo(canvas, { targetPosition: { x, y } })
+  }
+  const connections = [
+    ['client-1', 'web-server-1'],
+    ['web-server-1', 'app-service-1'],
+    ['web-server-1', 'app-service-2'],
+    ['app-service-1', 'sql-database-1'],
+    ['app-service-1', 'object-store-1'],
+    ['app-service-2', 'sql-database-1'],
+    ['app-service-2', 'object-store-1'],
+    ['analytics-1', 'object-store-1'],
+    ['analytics-1', 'sql-database-1'],
+  ]
+  for (const [source, target] of connections) {
+    await page.getByTestId(`node-${source}`).locator('.react-flow__handle.source').dragTo(page.getByTestId(`node-${target}`).locator('.react-flow__handle.target'))
+  }
+  await expect(page.locator('.react-flow__edge')).toHaveCount(connections.length)
+
+  await page.getByRole('button', { name: 'Yoxla' }).click()
+  await expect(page.getByRole('status')).toContainText('Bal: 14 / 14 (100%)')
+  await expect(page.getByRole('status')).toContainText('Bütün qaydalar ödənilir.')
+
+  // Finishing shows every Rule's result and the Reference Solution beside the learner's Design.
+  await page.getByRole('button', { name: 'Mərhələni bitir' }).click()
+  await page.getByRole('button', { name: 'Bəli, bitir' }).click()
+  await expect(page.getByText('✓ Ödənilir:')).toHaveCount(8)
+  await expect(page.getByRole('application', { name: 'Referans həll' })).toBeVisible()
+  await expect(page.getByRole('link', { name: /Primer-in həllini oxuyun/ })).toHaveAttribute('href', '/solutions/pastebin#step-2-create-a-high-level-design')
+
+  await page.reload()
+  await expect(page.getByText('Mərhələ bitib.')).toBeVisible()
+  await expect(page.getByText('Bal: 14 / 14 (100%)')).toBeVisible()
+  await expect(page.getByRole('application', { name: 'Sizin dizaynınız' }).locator('.react-flow__node')).toHaveCount(place.length)
+})

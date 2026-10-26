@@ -3,6 +3,7 @@ import { execFileSync } from 'node:child_process'
 import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { challenges } from '../content/challenges'
 import { glossary } from '../content/glossary'
 import { flashcardFormerRepoUrls, flashcardLinkFixes, flashcardPlaceholderLinks } from '../content/flashcard-link-fixes'
 import { flashcards } from '../content/flashcards'
@@ -82,7 +83,7 @@ export function loadPrimerCatalog() {
     solutions: readSolutions(),
     decks: readDecks(),
     primerImages: primerImages(),
-    authored: { glossary, imageMirrors, flashcardLinkFixes, flashcardPlaceholderLinks, flashcardFormerRepoUrls, flashcards, quizzes },
+    authored: { glossary, imageMirrors, flashcardLinkFixes, flashcardPlaceholderLinks, flashcardFormerRepoUrls, flashcards, quizzes, challenges },
   })
 }
 
@@ -127,6 +128,6 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   writeFileSync(CATALOG_OUTPUT, JSON.stringify(catalog))
   writeFileSync(SEARCH_OUTPUT, JSON.stringify(buildSearchIndex(searchDocuments(catalog))))
   console.log(
-    `Content catalog: ${catalog.lessons.length} Lessons in ${catalog.groups.length} groups, ${catalog.solutions.length} Solutions, ${catalog.glossary.length} Glossary Terms, ${catalog.decks.reduce((count, deck) => count + deck.cards.length, 0)} Flashcards, ${catalog.quizzes.length} Quizzes, ${assetCount} images (${catalog.source.commit.slice(0, 7)})`,
+    `Content catalog: ${catalog.lessons.length} Lessons in ${catalog.groups.length} groups, ${catalog.solutions.length} Solutions, ${catalog.glossary.length} Glossary Terms, ${catalog.decks.reduce((count, deck) => count + deck.cards.length, 0)} Flashcards, ${catalog.quizzes.length} Quizzes, ${catalog.challenges.length} Challenges, ${assetCount} images (${catalog.source.commit.slice(0, 7)})`,
   )
 }

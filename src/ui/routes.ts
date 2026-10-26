@@ -30,6 +30,12 @@ export const STUDY_GUIDE_ROUTE = '/study-guide'
 
 export const FLASHCARDS_ROUTE = '/flashcards'
 
+export const CHALLENGE_ROUTE = '/challenges/:challengeId'
+
+export function challengePath(challengeId: string): string {
+  return `/challenges/${challengeId}`
+}
+
 /** The free Design Canvas, outside any Challenge. */
 export const SANDBOX_ROUTE = '/sandbox'
 

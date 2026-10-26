@@ -30,6 +30,7 @@ const RESETS: { target: ResetTarget; label: StringKey }[] = [
   { target: 'flashcards', label: 'resetFlashcards' },
   { target: 'quizzes', label: 'resetQuizzes' },
   { target: 'designs', label: 'resetDesigns' },
+  { target: 'challenges', label: 'resetChallenges' },
   { target: 'settings', label: 'resetSettings' },
   { target: 'all', label: 'resetAll' },
 ]
