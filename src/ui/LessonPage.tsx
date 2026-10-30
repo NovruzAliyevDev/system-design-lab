@@ -135,7 +135,8 @@ function useMarkReadAtEnd(
         armedRef.current = false
         void markRead(lessonId)
       })
-    })
+      // The root reaches far above the viewport, so an end jumped past (to a Quiz below it) counts as reached.
+    }, { rootMargin: '1000000px 0px 0px 0px' })
     observer.observe(end)
     return () => {
       active = false
@@ -146,8 +147,12 @@ function useMarkReadAtEnd(
   return { cancel: () => (armedRef.current = false) }
 }
 
+/**
+ * Waits for the images in view that are still loading. Images out of view are left out: they are lazy, so
+ * the ones skipped over on a jump to the end would never load, and they cannot push the end out of view anyway.
+ */
 function imagesLoaded(container: Element): Promise<unknown> {
-  const loading = [...container.querySelectorAll('img')].filter((img) => !img.complete)
+  const loading = [...container.querySelectorAll('img')].filter((img) => !img.complete && isInView(img))
   return Promise.all(
     loading.map(
       (img) =>
@@ -158,4 +163,9 @@ function imagesLoaded(container: Element): Promise<unknown> {
         }),
     ),
   )
+}
+
+function isInView(element: Element): boolean {
+  const { top, bottom } = element.getBoundingClientRect()
+  return bottom >= 0 && top <= window.innerHeight
 }
