@@ -83,7 +83,7 @@ export function emptyProgress(): Progress {
   }
 }
 
-export const PROGRESS_SCHEMA_VERSION = 8
+export const PROGRESS_SCHEMA_VERSION = 9
 
 /** The export file: all progress, versioned so that older files can be migrated on import. */
 export interface ProgressExport {
@@ -188,6 +188,8 @@ const UPGRADES: Record<number, (data: Record<string, unknown>) => Record<string,
     if (!attempts) throw malformed('the Challenge work is not keyed by Challenge and Stage')
     return { schemaVersion: 8, exportedAt, progress: { ...progress, challenges: { attempts } } }
   },
+  // v8 had practice Attempts only; a v8 file is a valid v9 file. The version tells older apps not to read Mock Interviews.
+  8: (file) => ({ ...file, schemaVersion: 9 }),
 }
 
 /**

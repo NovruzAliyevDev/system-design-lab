@@ -26,16 +26,17 @@ const HINT_TIER_LABELS: StringKey[] = ['hintTierQuestion', 'hintTierPointer', 'h
 const HINT_COST_PERCENT = Math.round((HINT_CAPS[0] - HINT_CAPS[1]) * 100)
 
 /**
- * A Stage solved on the canvas: build, check against the Rules and open Hints. Once the Stage is over,
- * every Rule's result and the learner's Design beside the Reference Solution.
+ * A Stage solved on the canvas: build, check against the Rules and open Hints (none in a Mock Interview).
+ * Once the Stage is over, every Rule's result and the learner's Design beside the Reference Solution.
  */
-export function DesignStageView(props: { stage: DesignStage; work: DesignWork; editable: boolean; onChange(work: DesignWork): void }) {
-  const { stage, work, editable, onChange } = props
+export function DesignStageView(props: { stage: DesignStage; work: DesignWork; editable: boolean; hints: boolean; onChange(work: DesignWork): void }) {
+  const { stage, work, editable, hints, onChange } = props
   if (work.outcome) return <OverStage stage={stage} work={work} />
-  return <OpenStage stage={stage} work={work} editable={editable} onChange={onChange} />
+  return <OpenStage stage={stage} work={work} editable={editable} hints={hints} onChange={onChange} />
 }
 
-function OpenStage({ stage, work, editable, onChange }: { stage: DesignStage; work: DesignWork; editable: boolean; onChange(work: DesignWork): void }) {
+function OpenStage(props: { stage: DesignStage; work: DesignWork; editable: boolean; hints: boolean; onChange(work: DesignWork): void }) {
+  const { stage, work, editable, hints, onChange } = props
   const wideEnough = useMediaQuery(TABLET_QUERY)
   const [history, setHistory] = useState<History<Design>>(() => createHistory(work.design))
   /** The Design as it was at the last check; feedback describes it. */
@@ -66,6 +67,7 @@ function OpenStage({ stage, work, editable, onChange }: { stage: DesignStage; wo
               stage={stage}
               evaluation={evaluateDesign(stage, checked, work.hintUsage)}
               stale={checked !== history.present}
+              hints={hints}
               onOpenHint={(ruleId) => onChange({ ...work, hintUsage: openNextHint(work.hintUsage, stage, ruleId) })}
             />
           ) : (
@@ -85,11 +87,13 @@ function Feedback({
   stage,
   evaluation,
   stale,
+  hints,
   onOpenHint,
 }: {
   stage: DesignStage
   evaluation: Evaluation
   stale: boolean
+  hints: boolean
   onOpenHint: (ruleId: string) => void
 }) {
   const { score, maxScore, totalWeight, failingCount } = levelZeroFeedback(evaluation)
@@ -101,7 +105,8 @@ function Feedback({
         {failingCount === 0 ? t('stageAllPass') : t('stageProblemsLeft', { count: failingCount })}
       </p>
       {stale && <p className="text-amber-300">{t('stageCheckStale')}</p>}
-      {failingCount > 0 && (
+      {failingCount > 0 && !hints && <p className="mt-2 text-xs text-zinc-500">{t('stageNoHintsInInterview')}</p>}
+      {failingCount > 0 && hints && (
         <>
           <ol className="mt-2 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
             {problemHints(stage, evaluation).map((problem, i) => (

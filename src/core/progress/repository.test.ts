@@ -186,7 +186,7 @@ describe('ProgressRepository', () => {
     await repository.importAll(JSON.stringify(v0Export), NOW)
 
     expect(await repository.exportAll(NOW)).toEqual({
-      schemaVersion: 8,
+      schemaVersion: 9,
       exportedAt: NOW.toISOString(),
       progress: {
         // v0 did not record when a Lesson was read; the export time is the latest it can have been.
@@ -328,6 +328,16 @@ describe('ProgressRepository', () => {
     })
   })
 
+  it('migrates a v8 export, which had practice Attempts only, unchanged', async () => {
+    const attempt = { mode: 'practice', startedAt: '2026-10-28T08:00:00.000Z', stages: { requirements: { type: 'requirements', chosen: [0], notes: '' } } }
+    const v8Export = { schemaVersion: 8, exportedAt: '2026-10-28T09:00:00.000Z', progress: { ...validProgress, challenges: { attempts: { pastebin: [attempt] } } } }
+    const repository = createInMemoryProgressRepository()
+
+    await repository.importAll(JSON.stringify(v8Export), NOW)
+
+    expect(await repository.exportAll(NOW)).toEqual({ schemaVersion: 9, exportedAt: NOW.toISOString(), progress: v8Export.progress })
+  })
+
   it('reads Challenge work stored before Attempts as an Attempt in progress started when it is read', async () => {
     const repository = createProgressRepository(
       {
@@ -353,7 +363,7 @@ describe('ProgressRepository', () => {
   it('reads a stored Design draft with the config fields it lacks filled in', async () => {
     const [client, cache] = sandboxDesign.nodes
     const stored = { ...sandboxDesign, nodes: [client, { ...cache, config: { strategy: 'write-through' } }] }
-    const file = { schemaVersion: 8, exportedAt: NOW.toISOString(), progress: { ...validProgress, designs: { drafts: { sandbox: stored } } } }
+    const file = { schemaVersion: 9, exportedAt: NOW.toISOString(), progress: { ...validProgress, designs: { drafts: { sandbox: stored } } } }
     const repository = createInMemoryProgressRepository()
 
     await repository.importAll(JSON.stringify(file), NOW)
@@ -392,14 +402,14 @@ describe('ProgressRepository', () => {
   const withStageWork = (work: unknown) =>
     JSON.stringify({ schemaVersion: 7, exportedAt: NOW.toISOString(), progress: { ...v7Progress, challenges: { stages: { 'pastebin/high-level-design': work } } } })
   const withAttempt = (value: unknown) =>
-    JSON.stringify({ schemaVersion: 8, exportedAt: NOW.toISOString(), progress: { ...validProgress, challenges: { attempts: { pastebin: [value] } } } })
+    JSON.stringify({ schemaVersion: 9, exportedAt: NOW.toISOString(), progress: { ...validProgress, challenges: { attempts: { pastebin: [value] } } } })
   const withDraft = (draft: unknown) =>
-    JSON.stringify({ schemaVersion: 8, exportedAt: NOW.toISOString(), progress: { ...validProgress, designs: { drafts: { sandbox: draft } } } })
-  const withSettings = (settings: unknown) => JSON.stringify({ schemaVersion: 8, exportedAt: NOW.toISOString(), progress: { ...validProgress, settings } })
+    JSON.stringify({ schemaVersion: 9, exportedAt: NOW.toISOString(), progress: { ...validProgress, designs: { drafts: { sandbox: draft } } } })
+  const withSettings = (settings: unknown) => JSON.stringify({ schemaVersion: 9, exportedAt: NOW.toISOString(), progress: { ...validProgress, settings } })
   const withCard = (card: unknown) =>
-    JSON.stringify({ schemaVersion: 8, exportedAt: NOW.toISOString(), progress: { ...validProgress, flashcards: { cards: { 'system-design/1': card } } } })
+    JSON.stringify({ schemaVersion: 9, exportedAt: NOW.toISOString(), progress: { ...validProgress, flashcards: { cards: { 'system-design/1': card } } } })
   const withQuizResult = (result: unknown) =>
-    JSON.stringify({ schemaVersion: 8, exportedAt: NOW.toISOString(), progress: { ...validProgress, quizzes: { results: { 'cache-basics': result } } } })
+    JSON.stringify({ schemaVersion: 9, exportedAt: NOW.toISOString(), progress: { ...validProgress, quizzes: { results: { 'cache-basics': result } } } })
 
   it.each([
     ['not JSON', '{"schemaVersion": 1,', 'not-json'],
@@ -408,15 +418,15 @@ describe('ProgressRepository', () => {
     ['a newer schemaVersion', JSON.stringify({ schemaVersion: 99, exportedAt: NOW.toISOString(), progress: validProgress }), 'unsupported-version'],
     ['a missing area', JSON.stringify({ schemaVersion: 1, exportedAt: NOW.toISOString(), progress: { reading: validProgress.reading } }), 'malformed'],
     ['no flashcards area', JSON.stringify({ schemaVersion: 3, exportedAt: NOW.toISOString(), progress: { ...validProgress, flashcards: undefined } }), 'malformed'],
-    ['no quizzes area', JSON.stringify({ schemaVersion: 8, exportedAt: NOW.toISOString(), progress: { ...validProgress, quizzes: undefined } }), 'malformed'],
-    ['no designs area', JSON.stringify({ schemaVersion: 8, exportedAt: NOW.toISOString(), progress: { ...validProgress, designs: undefined } }), 'malformed'],
-    ['no challenges area', JSON.stringify({ schemaVersion: 8, exportedAt: NOW.toISOString(), progress: { ...validProgress, challenges: undefined } }), 'malformed'],
+    ['no quizzes area', JSON.stringify({ schemaVersion: 9, exportedAt: NOW.toISOString(), progress: { ...validProgress, quizzes: undefined } }), 'malformed'],
+    ['no designs area', JSON.stringify({ schemaVersion: 9, exportedAt: NOW.toISOString(), progress: { ...validProgress, designs: undefined } }), 'malformed'],
+    ['no challenges area', JSON.stringify({ schemaVersion: 9, exportedAt: NOW.toISOString(), progress: { ...validProgress, challenges: undefined } }), 'malformed'],
     ['v7 Stage work whose Design is not a Design', withStageWork({ ...legacyStageWork, design: { nodes: [] } }), 'malformed'],
     ['v7 Stage work with more than three Hint tiers open', withStageWork({ ...legacyStageWork, hintUsage: { 'separate-apis': 4 } }), 'malformed'],
     ['v7 Stage work with a fractional Hint count', withStageWork({ ...legacyStageWork, hintUsage: { 'separate-apis': 1.5 } }), 'malformed'],
     ['v7 Stage work that is not an object', withStageWork('done'), 'malformed'],
     ['v7 Challenge work keyed by something other than a Challenge and Stage', JSON.stringify({ schemaVersion: 7, exportedAt: NOW.toISOString(), progress: { ...v7Progress, challenges: { stages: { pastebin: legacyStageWork } } } }), 'malformed'],
-    ['no list of Attempts', JSON.stringify({ schemaVersion: 8, exportedAt: NOW.toISOString(), progress: { ...validProgress, challenges: { attempts: { pastebin: attempt } } } }), 'malformed'],
+    ['no list of Attempts', JSON.stringify({ schemaVersion: 9, exportedAt: NOW.toISOString(), progress: { ...validProgress, challenges: { attempts: { pastebin: attempt } } } }), 'malformed'],
     ['an Attempt that is not one', withAttempt({ ...attempt, mode: 'exam' }), 'malformed'],
     ['an Attempt whose score is above 1', withAttempt({ ...finishedAttempt, score: 1.2 }), 'malformed'],
     ['a Design draft that is not a Design', withDraft({ nodes: 'none' }), 'malformed'],

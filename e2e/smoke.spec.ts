@@ -802,3 +802,78 @@ test('runs the Pastebin Challenge Stage by Stage, scores the Attempt and retries
   await search.getByRole('combobox', { name: 'Axtar' }).fill('pastebin')
   await expect(search.getByRole('option').filter({ hasText: 'Çağırış' })).toHaveCount(1)
 })
+
+test('runs a Mock Interview against the clock without Hints, self-assesses it and tells it apart in the history', async ({ page }) => {
+  // The clock stands still unless the test moves it.
+  await page.clock.install({ time: new Date('2026-10-30T08:59:00Z') })
+  await page.clock.pauseAt(new Date('2026-10-30T09:00:00Z'))
+  await page.setViewportSize({ width: 1366, height: 1000 })
+  await page.goto('/challenges/pastebin')
+
+  // The time boxes follow the interview's length: 30 minutes are shared out as 3, 3, 10, 7 and 7.
+  await page.getByText('Müsahibə simulyasiyası', { exact: true }).click()
+  await page.getByRole('textbox', { name: 'Ümumi vaxt (dəqiqə)' }).fill('30')
+  await expect(page.getByRole('textbox', { name: 'Tələblər (dəqiqə)' })).toHaveValue('3')
+  await expect(page.getByRole('textbox', { name: 'Miqyaslama (dəqiqə)' })).toHaveValue('7')
+  await page.getByRole('button', { name: 'Müsahibəyə başla' }).click()
+
+  const timer = page.getByRole('timer', { name: 'Müsahibə vaxtı' })
+  await expect(timer).toContainText('Qalan vaxt: 30:00')
+  await expect(page.getByRole('navigation', { name: 'Mərhələlər' })).toContainText('1. Tələblər3 dəq')
+
+  // A time box shows when it is overrun but blocks nothing, and the clock carries on across a reload.
+  await page.clock.fastForward('03:30')
+  await expect(timer).toContainText('Tələblər: 3:30 / 3:00')
+  await page.reload()
+  await expect(timer).toContainText('Qalan vaxt: 26:30')
+
+  await giveUpStage(page, 'Hesablama')
+  await giveUpStage(page, 'Yüksək səviyyəli dizayn')
+  await page.getByRole('button', { name: 'Yoxla' }).click()
+  await expect(page.getByRole('status')).toContainText('Qalan problem: 8')
+  await expect(page.getByText('Müsahibə simulyasiyasında ipucu yoxdur: problemləri özünüz tapın.')).toBeVisible()
+  await expect(page.getByRole('button', { name: /İpucu aç/ })).toHaveCount(0)
+
+  await giveUpStage(page, 'Dərin təhlil')
+  await giveUpStage(page, 'Miqyaslama')
+  await page.getByRole('button', { name: 'Təslim ol' }).click()
+  await page.getByRole('button', { name: 'Bəli, cavabı göstər' }).click()
+  await expect(timer).toHaveCount(0)
+
+  // The end screen: the automatic scores, the times, and the rubric to fill in.
+  const summary = page.getByRole('region', { name: /Cəhdin nəticəsi/ })
+  await expect(summary).toContainText('Çağırış balı: 0%')
+  await expect(summary).toContainText('Müsahibə 3:30 çəkdi (30 dəqiqədən).')
+  const save = page.getByRole('button', { name: 'Qiymətləndirməni saxla' })
+  await expect(save).toBeDisabled()
+  // A new Attempt would leave the interview unassessed for good, so it asks first.
+  await page.getByRole('button', { name: 'Sıfırdan yenidən başla' }).click()
+  await expect(page.getByText('Son müsahibəni hələ qiymətləndirməmisiniz; yeni cəhd başlasa, onu qiymətləndirmək olmayacaq.')).toBeVisible()
+  await page.getByRole('button', { name: 'Ləğv et' }).click()
+  const ratings: [string, string][] = [
+    ['Ünsiyyət', '4 · Yaxşı'],
+    ['Tələbləri dəqiqləşdirmə', '3 · Orta'],
+    ['Hesablama', '5 · Əla'],
+    ['Dizayn', '4 · Yaxşı'],
+    ['Trade-off-lar', '2 · Kifayət deyil'],
+    ['Miqyaslama', '3 · Orta'],
+  ]
+  for (const [criterion, level] of ratings) {
+    await page.getByRole('group', { name: new RegExp(`^${criterion} ·`) }).getByText(level).click()
+  }
+  await page.getByRole('textbox', { name: 'Qeydlər' }).fill('Hesablamada tələsdim.')
+  await save.click()
+  await expect(page.getByText('Saxlanıldı: 30.10.2026')).toBeVisible()
+
+  // A practice Attempt after it: the history tells the two modes apart.
+  await page.getByRole('button', { name: 'Sıfırdan yenidən başla' }).click()
+  const history = page.getByRole('region', { name: 'Cəhdlər' }).getByRole('listitem')
+  await expect(history.nth(0)).toContainText('Cəhd 2Məşq')
+  await expect(history.nth(1)).toContainText('Cəhd 1Müsahibə simulyasiyası')
+  await expect(history.nth(1)).toContainText('özünüqiymətləndirmə: 3,5 / 5')
+
+  // The interview opens read-only, with its self-assessment.
+  await history.nth(1).getByRole('button', { name: 'Bax' }).click()
+  await expect(page.getByRole('group', { name: /^Hesablama ·/ }).getByRole('radio', { name: '5 · Əla' })).toBeChecked()
+  await expect(page.getByRole('textbox', { name: 'Qeydlər' })).toBeDisabled()
+})

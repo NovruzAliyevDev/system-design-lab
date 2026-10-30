@@ -1,20 +1,23 @@
 import { useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
-import { finishStage, newAttempt, openStageCount, stageWork, updateStage, type Attempt, type StageWork } from '../core/challenges/attempt'
+import { finishStage, newAttempt, openStageCount, stageWork, updateStage, type Attempt, type AttemptMode, type StageWork } from '../core/challenges/attempt'
 import { findChallenge, isDesignStageType, type Challenge, type DesignStage, type Stage } from '../core/challenges/challenge'
+import { assessInterview, startMockInterview, type InterviewPlan, type SelfAssessmentInput } from '../core/challenges/mock-interview'
 import { DeepDiveStageView } from './challenge/DeepDiveStageView'
 import { DesignStageView } from './challenge/DesignStageView'
 import { EstimationStageView } from './challenge/EstimationStageView'
+import { formatAverageRating, InterviewTimer, InterviewTimes, MockInterviewStart, SelfAssessmentPanel } from './challenge/MockInterview'
 import { RequirementsStageView } from './challenge/RequirementsStageView'
 import { buttonClass, ConfirmButton, outcomeStatus, percent, primaryButtonClass, STAGE_NAMES } from './challenge/shared'
 import { catalog } from './catalog'
-import { formatDate, t } from './i18n'
+import { formatDate, t, type StringKey } from './i18n'
 import { useProgress } from './progress/store'
 import { solutionPath } from './routes'
 
 /**
- * A Challenge solved Stage by Stage. The current Attempt is the last one stored (or a new one, stored
- * on its first change); `?attempt=N` shows an earlier Attempt read-only and `?stage=id` picks a Stage.
+ * A Challenge solved Stage by Stage, in practice or as a Mock Interview. The current Attempt is the last
+ * one stored (or a new one, stored on its first change); `?attempt=N` shows an earlier Attempt read-only
+ * and `?stage=id` picks a Stage.
  */
 export function ChallengePage() {
   const { challengeId = '' } = useParams()
@@ -45,6 +48,17 @@ function Workspace({ challenge }: { challenge: Challenge }) {
   const attemptNumber = Number.isInteger(requested) && requested >= 1 && requested < currentNumber ? requested : currentNumber
   const attempt = attempts[attemptNumber - 1]
   const isCurrent = attemptNumber === currentNumber
+  const isInterview = attempt.mode === 'mock-interview'
+  const last = stored?.at(-1)
+  // What a new Attempt would leave behind for good: an Attempt in progress, or an interview not yet self-assessed.
+  const leaving: { retry?: StringKey; interview?: StringKey } =
+    last === undefined
+      ? {}
+      : last.finishedAt === undefined
+        ? { retry: 'retryConfirm', interview: 'mockInterviewStartConfirm' }
+        : last.mode === 'mock-interview' && !last.selfAssessment
+          ? { retry: 'leaveUnassessedConfirm', interview: 'leaveUnassessedConfirm' }
+          : {}
 
   const openCount = openStageCount(challenge, attempt)
   // The Stage to work on: the last one open, which is the last Stage once every Stage is over.
@@ -70,6 +84,11 @@ function Workspace({ challenge }: { challenge: Challenge }) {
 
   function retry(from?: Attempt) {
     void startAttempt(challenge.id, newAttempt(new Date(), from))
+    setParams(new URLSearchParams())
+  }
+
+  function startInterview(plan: InterviewPlan) {
+    void startAttempt(challenge.id, startMockInterview(challenge, plan, new Date()))
     setParams(new URLSearchParams())
   }
 
@@ -102,6 +121,11 @@ function Workspace({ challenge }: { challenge: Challenge }) {
           </button>
         </p>
       )}
+      {isCurrent && isInterview && attempt.finishedAt === undefined ? (
+        <InterviewTimer challenge={challenge} attempt={attempt} />
+      ) : (
+        isCurrent && <MockInterviewStart challenge={challenge} confirm={leaving.interview} onStart={startInterview} />
+      )}
       <StageSteps challenge={challenge} attempt={attempt} selected={stage} openCount={openCount} onSelect={(stageId) => show({ stage: stageId })} />
 
       <section aria-labelledby="stage-heading" className="mt-6">
@@ -124,6 +148,7 @@ function Workspace({ challenge }: { challenge: Challenge }) {
           stage={stage}
           work={work}
           editable={isCurrent && !work.outcome}
+          hints={!isInterview}
           onChange={(input) => void saveCurrentAttempt(challenge.id, updateStage(challenge, attempt, stage.id, input))}
         />
         {work.outcome && nextStage && challenge.stages.indexOf(nextStage) < openCount && (
@@ -133,11 +158,19 @@ function Workspace({ challenge }: { challenge: Challenge }) {
         )}
       </section>
 
-      {attempt.finishedAt !== undefined && <AttemptSummary challenge={challenge} attempt={attempt} />}
+      {attempt.finishedAt !== undefined && (
+        <AttemptSummary
+          challenge={challenge}
+          attempt={attempt}
+          editable={isCurrent}
+          onAssess={(input) => void saveCurrentAttempt(challenge.id, assessInterview(attempt, input, new Date()))}
+        />
+      )}
       <AttemptHistory
         challenge={challenge}
         attempts={stored ?? []}
         shown={attemptNumber}
+        retryConfirm={leaving.retry}
         onShow={(number) => show({ attempt: number })}
         onRetry={retry}
       />
@@ -145,7 +178,8 @@ function Workspace({ challenge }: { challenge: Challenge }) {
   )
 }
 
-function StageView({ stage, work, editable, onChange }: { stage: Stage; work: StageWork; editable: boolean; onChange(input: StageWork): void }) {
+function StageView(props: { stage: Stage; work: StageWork; editable: boolean; hints: boolean; onChange(input: StageWork): void }) {
+  const { stage, work, editable, hints, onChange } = props
   // `stageWork` gives each Stage work of its own type.
   switch (stage.type) {
     case 'requirements':
@@ -156,11 +190,13 @@ function StageView({ stage, work, editable, onChange }: { stage: Stage; work: St
       return <DeepDiveStageView stage={stage} work={work as Extract<StageWork, { type: 'deep-dive' }>} editable={editable} onChange={onChange} />
     case 'high-level-design':
     case 'scaling':
-      return <DesignStageView stage={stage} work={work as Extract<StageWork, { type: DesignStage['type'] }>} editable={editable} onChange={onChange} />
+      return (
+        <DesignStageView stage={stage} work={work as Extract<StageWork, { type: DesignStage['type'] }>} editable={editable} hints={hints} onChange={onChange} />
+      )
   }
 }
 
-/** The Stages in order, each with its score once it is over; Stages not open yet cannot be picked. */
+/** The Stages in order, each with its score once it is over and its time box in a Mock Interview; Stages not open yet cannot be picked. */
 function StageSteps(props: { challenge: Challenge; attempt: Attempt; selected: Stage; openCount: number; onSelect(stageId: string): void }) {
   const { challenge, attempt, selected, openCount, onSelect } = props
   return (
@@ -181,6 +217,9 @@ function StageSteps(props: { challenge: Challenge; attempt: Attempt; selected: S
                 onClick={() => onSelect(stage.id)}
               >
                 {t('stageTitle', { number: i + 1, name: t(STAGE_NAMES[stage.type]) })}
+                {attempt.interview && (
+                  <span className="ml-2 text-xs text-zinc-500">{t('mockInterviewTimeBoxMinutes', { minutes: attempt.interview.timeBoxes[stage.id] ?? '–' })}</span>
+                )}
                 {status && <span className={`ml-2 text-xs ${outcome?.gaveUp ? 'text-rose-400' : 'text-emerald-400'}`}>{status}</span>}
               </button>
             </li>
@@ -213,12 +252,14 @@ function Outcome({ stage, work, solutionId }: { stage: Stage; work: StageWork; s
   )
 }
 
-/** A finished Attempt's Challenge score and how each Stage contributed to it. */
-function AttemptSummary({ challenge, attempt }: { challenge: Challenge; attempt: Attempt }) {
+/** A finished Attempt's Challenge score and how each Stage contributed to it; for a Mock Interview, its times and the self-assessment too. */
+function AttemptSummary(props: { challenge: Challenge; attempt: Attempt; editable: boolean; onAssess(input: SelfAssessmentInput): void }) {
+  const { challenge, attempt, editable, onAssess } = props
   return (
     <section aria-labelledby="attempt-summary" className="mt-10 max-w-4xl rounded-lg border border-zinc-700 p-4">
       <h2 id="attempt-summary" className="text-lg font-semibold text-zinc-50">
         {t('attemptSummaryTitle')}
+        <span className="ml-2 text-sm font-normal text-zinc-500">{t(MODE_NAMES[attempt.mode])}</span>
       </h2>
       <p className="mt-1 text-xl font-semibold text-zinc-50">{t('attemptScore', { percent: percent(attempt.score ?? 0) })}</p>
       <p className="text-xs text-zinc-500">{t('attemptScoreHint')}</p>
@@ -236,18 +277,38 @@ function AttemptSummary({ challenge, attempt }: { challenge: Challenge; attempt:
           )
         })}
       </ul>
+      {attempt.mode === 'mock-interview' && (
+        <>
+          <InterviewTimes challenge={challenge} attempt={attempt} />
+          <SelfAssessmentPanel key={attempt.startedAt} attempt={attempt} editable={editable} onSave={onAssess} />
+        </>
+      )}
     </section>
   )
 }
 
-/** Every stored Attempt, newest first, with the way to start another: fresh, or from the last one's inputs. */
-function AttemptHistory(props: { challenge: Challenge; attempts: Attempt[]; shown: number; onShow(number: number): void; onRetry(from?: Attempt): void }) {
-  const { challenge, attempts, shown, onShow, onRetry } = props
+const MODE_NAMES: Record<AttemptMode, StringKey> = {
+  practice: 'attemptModePractice',
+  'mock-interview': 'attemptModeMockInterview',
+}
+
+/**
+ * Every stored Attempt, newest first, with the way to start another: fresh, or from the last one's inputs.
+ * `retryConfirm` asks first when that would leave something behind.
+ */
+function AttemptHistory(props: {
+  challenge: Challenge
+  attempts: Attempt[]
+  shown: number
+  retryConfirm?: StringKey
+  onShow(number: number): void
+  onRetry(from?: Attempt): void
+}) {
+  const { challenge, attempts, shown, retryConfirm, onShow, onRetry } = props
   const last = attempts.at(-1)
-  const lastInProgress = last !== undefined && last.finishedAt === undefined
   const retryButton = (label: string, from?: Attempt) =>
-    lastInProgress ? (
-      <ConfirmButton label={label} confirm={t('retryConfirm')} yes={t('retryYes')} onConfirm={() => onRetry(from)} />
+    retryConfirm ? (
+      <ConfirmButton label={label} confirm={t(retryConfirm)} yes={t('retryYes')} onConfirm={() => onRetry(from)} />
     ) : (
       <button type="button" className={buttonClass} onClick={() => onRetry(from)}>
         {label}
@@ -275,11 +336,14 @@ function AttemptHistory(props: { challenge: Challenge; attempts: Attempt[]; show
             .map(({ attempt, number }) => (
               <li key={attempt.startedAt + number} className="flex flex-wrap items-baseline gap-x-3 gap-y-1 px-4 py-2.5 text-sm">
                 <span className="font-medium text-zinc-100">{t('attemptLabel', { number })}</span>
-                <span className="text-zinc-500">{t('attemptModePractice')}</span>
+                <span className={attempt.mode === 'mock-interview' ? 'text-sky-300' : 'text-zinc-500'}>{t(MODE_NAMES[attempt.mode])}</span>
                 <span className="text-zinc-500">{t('attemptStarted', { date: formatDate(new Date(attempt.startedAt)) })}</span>
                 <span className="text-zinc-200">
                   {attempt.score !== undefined ? t('attemptScore', { percent: percent(attempt.score) }) : t('attemptInProgress')}
                 </span>
+                {attempt.selfAssessment && (
+                  <span className="text-zinc-400">{formatAverageRating(attempt.selfAssessment.ratings)}</span>
+                )}
                 <span className="text-xs text-zinc-500">
                   {challenge.stages
                     .map((stage) => {
