@@ -659,7 +659,7 @@ async function finishStage(page: Page) {
   await page.getByRole('button', { name: 'Bəli, bitir' }).click()
 }
 
-test('solves the Pastebin high-level design Stage by drag and drop and receives a passing score', async ({ page }) => {
+test('solves the Pastebin high-level design Stage by drag and drop, then simulates it against the Scaling target and the Reference Solution', async ({ page }) => {
   await page.setViewportSize({ width: 1366, height: 1000 })
   await page.goto('/solutions/pastebin')
   await page.getByRole('link', { name: 'Çağırış kimi həll et' }).click()
@@ -728,7 +728,22 @@ test('solves the Pastebin high-level design Stage by drag and drop and receives 
   await expect(page.getByText('Bu mərhələ yüksək səviyyəli dizaynınızla başlayır.')).toBeVisible()
   await expect(page.getByTestId('rf__wrapper').locator('.react-flow__node')).toHaveCount(place.length)
   await page.getByRole('button', { name: 'Yoxla' }).click()
-  await expect(page.getByRole('status')).toContainText('Qalan problem: 7')
+  // The structural Rules it misses, and the peak-load target: the single Web Server cannot take 1,100 requests a second.
+  await expect(page.getByRole('status')).toContainText('Qalan problem: 8')
+  await expect(page.getByRole('textbox', { name: 'Oxuma (sorğu/san)' })).toHaveValue('1000')
+  await page.getByRole('button', { name: 'Simulyasiya et' }).click()
+  await expect(page.getByTestId('node-web-server-1')).toHaveAttribute('data-overloaded', 'true')
+
+  // Once the Stage is over, the Reference Solution is simulated beside the learner's Design under the same load.
+  await page.getByRole('button', { name: 'Təslim ol' }).click()
+  await page.getByRole('button', { name: 'Bəli, cavabı göstər' }).click()
+  await page.getByRole('button', { name: 'Simulyasiya et' }).click()
+  const yours = page.getByRole('region', { name: 'Sizin dizaynınızın nəticəsi' })
+  const reference = page.getByRole('region', { name: 'Referans həllin nəticəsi' })
+  await expect(yours).toContainText('Web server: 110% · Həddən artıq yüklənib')
+  await expect(reference).toBeVisible()
+  await expect(reference).not.toContainText('Həddən artıq yüklənib')
+  await expect(page.getByRole('application', { name: 'Referans həll' }).getByTestId('node-web-server-1')).toHaveAttribute('data-overloaded', 'false')
 })
 
 test('runs the Pastebin Challenge Stage by Stage, scores the Attempt and retries from it', async ({ page }) => {

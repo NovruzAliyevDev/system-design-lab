@@ -13,6 +13,7 @@ import {
 import type { Design } from '../../core/design/design'
 import { createHistory, type History } from '../../core/design/history'
 import { DesignEditor } from '../canvas/DesignEditor'
+import { draftOf, SimulationSummary, useLoadControls, useSimulation } from '../canvas/SimulationPanel'
 import { formatNumber, t, type StringKey } from '../i18n'
 import { TABLET_QUERY, useMediaQuery } from '../useMediaQuery'
 import { primaryButtonClass } from './shared'
@@ -42,6 +43,8 @@ function OpenStage(props: { stage: DesignStage; work: DesignWork; editable: bool
   /** The Design as it was at the last check; feedback describes it. */
   const [checked, setChecked] = useState<Design>()
   const canEdit = editable && wideEnough
+  const load = useLoadControls(draftOf(stage.loadProfile))
+  const simulation = useSimulation(history.present, load.profile)
 
   function change(next: History<Design>) {
     setHistory(next)
@@ -76,7 +79,10 @@ function OpenStage(props: { stage: DesignStage; work: DesignWork; editable: bool
         </section>
       )}
       <div className="mt-4">
-        <DesignEditor history={history} onChange={change} readOnly={!canEdit} />
+        <DesignEditor history={history} onChange={change} readOnly={!canEdit} simulation={simulation} />
+        {/* Under the canvas, which stays in view beside the Stage's task. */}
+        <div className="mt-3">{load.controls}</div>
+        {simulation && <SimulationSummary design={history.present} result={simulation} />}
       </div>
     </>
   )
@@ -143,12 +149,18 @@ function ScoreLine({ score, totalWeight }: { score: number; totalWeight: number 
   )
 }
 
-/** After the Stage: every Rule's result as recorded when it ended, and the learner's Design beside the Reference Solution. */
+/**
+ * After the Stage: every Rule's result as recorded when it ended, and the learner's Design beside the
+ * Reference Solution, both simulated under the same load to compare them.
+ */
 function OverStage({ stage, work }: { stage: DesignStage; work: DesignWork }) {
   const evaluation = work.outcome?.evaluation ?? evaluateDesign(stage, work.design, work.hintUsage)
   const [reference] = useState(() => createHistory(stage.referenceSolution))
   const [yours] = useState(() => createHistory(work.design))
   const descriptions = new Map(stage.rules.map((rule) => [rule.id, rule.description]))
+  const load = useLoadControls(draftOf(stage.loadProfile))
+  const yourSimulation = useSimulation(yours.present, load.profile)
+  const referenceSimulation = useSimulation(reference.present, load.profile)
 
   return (
     <>
@@ -173,15 +185,18 @@ function OverStage({ stage, work }: { stage: DesignStage; work: DesignWork }) {
       </section>
 
       <section className="mt-6">
-        <h3 className="text-lg font-semibold text-zinc-100">{t('stageCompareTitle')}</h3>
-        <div className="mt-3 grid gap-6 lg:grid-cols-2">
+        <h3 className="mb-3 text-lg font-semibold text-zinc-100">{t('stageCompareTitle')}</h3>
+        {load.controls}
+        <div className="grid gap-6 lg:grid-cols-2">
           <div>
             <h4 className="mb-2 text-sm font-medium text-zinc-300">{t('stageYourDesign')}</h4>
-            <DesignEditor history={yours} onChange={() => {}} readOnly compact label={t('stageYourDesign')} />
+            <DesignEditor history={yours} onChange={() => {}} readOnly compact label={t('stageYourDesign')} simulation={yourSimulation} />
+            {yourSimulation && <SimulationSummary design={yours.present} result={yourSimulation} label={t('stageYourSimulation')} />}
           </div>
           <div>
             <h4 className="mb-2 text-sm font-medium text-zinc-300">{t('stageReferenceSolution')}</h4>
-            <DesignEditor history={reference} onChange={() => {}} readOnly compact label={t('stageReferenceSolution')} />
+            <DesignEditor history={reference} onChange={() => {}} readOnly compact label={t('stageReferenceSolution')} simulation={referenceSimulation} />
+            {referenceSimulation && <SimulationSummary design={reference.present} result={referenceSimulation} label={t('stageReferenceSimulation')} />}
           </div>
         </div>
       </section>

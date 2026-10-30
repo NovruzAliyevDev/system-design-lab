@@ -75,6 +75,8 @@ export const challenges: ChallengeInput[] = [
       'nosql',
       'sql-or-nosql',
     ],
+    // The primer's average traffic: 100 million reads and 10 million writes a month, about 1 KB each.
+    loadProfile: { readQps: 40, writeQps: 4, requestBytes: 1_000 },
     stages: [
       {
         id: 'requirements',
@@ -491,9 +493,22 @@ export const challenges: ChallengeInput[] = [
         type: 'scaling',
         weight: 3,
         prompt:
-          'Yüksək səviyyəli dizaynınızdan davam edin və onu məhdudiyyətlərə görə miqyaslayın: trafik qeyri-bərabərdir və pik anlarda çoxalır, oxumalar yazmalardan 10 dəfə çoxdur, populyar paste-lər təkrar-təkrar açılır, statistika ayrıca analitik bazada saxlanılmalıdır. Darboğazları tapın, komponent əlavə edin və ya dəyişin, "Yoxla" düyməsini basın.',
+          'Yüksək səviyyəli dizaynınızdan davam edin və onu məhdudiyyətlərə görə miqyaslayın: trafik qeyri-bərabərdir və pik anlarda çoxalır, oxumalar yazmalardan 10 dəfə çoxdur, populyar paste-lər təkrar-təkrar açılır, statistika ayrıca analitik bazada saxlanılmalıdır. Dizayn pik yükə dözməlidir: saniyədə 1000 oxuma və 100 yazma altında oxumanın və yazmanın orta gecikməsi 200 ms-i keçməməli, heç bir node həddən artıq yüklənməməli və heç bir sorğu xəta ilə bitməməlidir. Bunu trafik simulyasiyası ilə yoxlayın. Darboğazları tapın, komponent əlavə edin və ya dəyişin, "Yoxla" düyməsini basın.',
         solutionAnchor: 'step-4-scale-the-design',
+        // An authored peak, not the primer's: 25 times its average, keeping the 10:1 read/write mix.
+        loadProfile: { readQps: 1_000, writeQps: 100, requestBytes: 1_000 },
         rules: [
+          {
+            id: 'peak-load',
+            weight: 3,
+            description: 'Pik yükdə (saniyədə 1000 oxuma, 100 yazma) orta gecikmə 200 ms-dən çox deyil, həddən artıq yüklənən node və xəta yoxdur.',
+            hints: [
+              'Saniyədə 1000 oxuma gələndə dizaynınızın hansı node-u ilk tıxanır?',
+              'Trafik simulyasiyasını işə salın və "Darboğazlar" siyahısına baxın. Ən çox yüklənən node-un "instances" sahəsini artırın və ya yükü cache, CDN və read replica-larla ondan götürün.',
+              'Hər node bir nüsxədə məhdud sorğu emal edir; yük tutumu keçəndə node həddən artıq yüklənir, artıq sorğular atılır, gecikmə kəskin artır. Pik yükdə web server-lər və Read API kimi stateless serverlər horizontal miqyaslanır, populyar paste-lər cache-dən verilir, cache-də olmayan oxumalar read replica-lara gedir, paste mətni isə bir neçə nüsxəli Object Store-dan oxunur.',
+            ],
+            check: { type: 'simulation', maxLatencyMs: { read: 200, write: 200 }, maxOverloadedNodes: 0, maxErrorRate: 0 },
+          },
           {
             id: 'load-balancer',
             weight: 2,
@@ -622,7 +637,8 @@ export const challenges: ChallengeInput[] = [
             node('cache-1', 'cache', 'Memory Cache', 960, 520, { instances: 3 }),
             node('sql-database-1', 'sql-database', 'SQL Write Master-Slave', 1200, 120, { instances: 2 }),
             node('sql-database-2', 'sql-database', 'SQL Read Replicas', 1200, 360, { role: 'replica', instances: 3 }),
-            node('object-store-1', 'object-store', 'Object Store', 1200, 600),
+            // Serves the CDN's and the Read API's reads at the peak load.
+            node('object-store-1', 'object-store', 'Object Store', 1200, 600, { instances: 3 }),
             node('data-warehouse-1', 'data-warehouse', 'SQL Analytics', 1200, 800),
           ],
           edges: [

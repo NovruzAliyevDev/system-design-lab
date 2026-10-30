@@ -1,6 +1,6 @@
-import { useId } from 'react'
+import { useId, useMemo, useState, type ReactElement } from 'react'
 import type { Design } from '../../core/design/design'
-import type { LoadProfile, SimulationResult } from '../../core/simulation/simulate'
+import { simulate, type LoadProfile, type SimulationResult } from '../../core/simulation/simulate'
 import { parseDecimal } from '../EstimationSteps'
 import { formatDecimal, formatInteger, formatNumber, t } from '../i18n'
 
@@ -15,11 +15,30 @@ export interface LoadDraft {
 
 export const DEFAULT_LOAD: LoadDraft = { read: '1000', write: '100', requestKb: '1' }
 
+/** The fields describing a Load Profile, e.g. a Challenge Stage's. */
+export function draftOf({ readQps, writeQps, requestBytes }: LoadProfile): LoadDraft {
+  return { read: String(readQps), write: String(writeQps), requestKb: String(requestBytes / 1_000) }
+}
+
 /** The Load Profile the fields describe; undefined while one is not a number of at least 0. */
 export function loadProfileOf(draft: LoadDraft): LoadProfile | undefined {
   const [readQps, writeQps, requestKb] = [draft.read, draft.write, draft.requestKb].map(parseDecimal)
   if ([readQps, writeQps, requestKb].some((value) => value === undefined || value < 0)) return undefined
   return { readQps: readQps!, writeQps: writeQps!, requestBytes: requestKb! * 1_000 }
+}
+
+/** The Load Profile being typed, starting from `initial`, with the controls that change it; `profile` is set only while the simulation is on. */
+export function useLoadControls(initial: LoadDraft): { profile: LoadProfile | undefined; controls: ReactElement } {
+  const [draft, setDraft] = useState(initial)
+  const [simulating, setSimulating] = useState(false)
+  const profile = simulating ? loadProfileOf(draft) : undefined
+  const controls = <LoadControls draft={draft} simulating={simulating} onChange={setDraft} onToggle={() => setSimulating((on) => !on)} />
+  return { profile, controls }
+}
+
+/** The Traffic Simulation of a Design under a Load Profile, computed again only when either changes; none without both. */
+export function useSimulation(design: Design | undefined, profile: LoadProfile | undefined): SimulationResult | undefined {
+  return useMemo(() => (design && profile ? simulate(design, profile) : undefined), [design, profile?.readQps, profile?.writeQps, profile?.requestBytes])
 }
 
 /** The slider's range of total load, 100 to 100,000 requests per second, on a log scale. */
@@ -105,9 +124,9 @@ export function LoadControls(props: { draft: LoadDraft; simulating: boolean; onC
   )
 }
 
-/** End-to-end latency, error rate, cost, the bottlenecks and each request path. */
-export function SimulationSummary({ design, result }: { design: Design; result: SimulationResult }) {
-  const label = (nodeId: string) => design.nodes.find((node) => node.id === nodeId)?.label || nodeId
+/** End-to-end latency, error rate, cost, the bottlenecks and each request path. `label` tells summaries on one page apart. */
+export function SimulationSummary({ design, result, label = t('trafficSummary') }: { design: Design; result: SimulationResult; label?: string }) {
+  const nodeLabel = (nodeId: string) => design.nodes.find((node) => node.id === nodeId)?.label || nodeId
   const hasClient = design.nodes.some((node) => node.componentType === 'client')
   const { read, write } = result.meanLatencyMs
   const stats: { name: string; value: string; bad?: boolean }[] = [
@@ -120,8 +139,8 @@ export function SimulationSummary({ design, result }: { design: Design; result: 
   const paths = [...result.paths].sort((a, b) => b.share - a.share)
 
   return (
-    <section aria-label={t('trafficSummary')} className="mt-3 rounded border border-zinc-800 p-3 text-sm">
-      <h2 className="font-semibold text-zinc-100">{t('trafficSummary')}</h2>
+    <section aria-label={label} className="mt-3 rounded border border-zinc-800 p-3 text-sm">
+      <h2 className="font-semibold text-zinc-100">{label}</h2>
       {!hasClient && <p className="mt-1 text-xs text-amber-300">{t('trafficNoClient')}</p>}
       <dl className="mt-2 grid grid-cols-2 gap-x-6 gap-y-1 sm:grid-cols-3 lg:grid-cols-5">
         {stats.map(({ name, value, bad }) => (
@@ -142,7 +161,7 @@ export function SimulationSummary({ design, result }: { design: Design; result: 
                 const metrics = result.nodes[nodeId]
                 return (
                   <li key={nodeId} className={metrics.overloaded ? 'text-rose-300' : 'text-zinc-300'}>
-                    {label(nodeId)}: {t('trafficPercent', { percent: formatPercent(metrics.utilisation) })}
+                    {nodeLabel(nodeId)}: {t('trafficPercent', { percent: formatPercent(metrics.utilisation) })}
                     {metrics.overloaded && ` · ${t('nodeOverloaded')}`}
                   </li>
                 )
@@ -155,7 +174,7 @@ export function SimulationSummary({ design, result }: { design: Design; result: 
           <ul className="mt-1 space-y-0.5 text-xs text-zinc-300">
             {paths.slice(0, 8).map((path) => (
               <li key={`${path.kind}:${path.nodeIds.join('>')}`}>
-                <span className="text-zinc-500">{t(path.kind === 'read' ? 'trafficPathRead' : 'trafficPathWrite')}:</span> {path.nodeIds.map(label).join(' → ')} ·{' '}
+                <span className="text-zinc-500">{t(path.kind === 'read' ? 'trafficPathRead' : 'trafficPathWrite')}:</span> {path.nodeIds.map(nodeLabel).join(' → ')} ·{' '}
                 {formatMs(path.latencyMs)} · {t('trafficPathShare', { percent: formatPercent(path.share) })}
                 {path.errorRate > 0 && <span className="text-rose-300"> · {t('trafficPathErrors', { percent: formatPercent(path.errorRate) })}</span>}
               </li>

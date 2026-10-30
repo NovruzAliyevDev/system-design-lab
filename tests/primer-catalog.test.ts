@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { loadPrimerCatalog } from '../scripts/build-content'
 import { findChallenge, type Challenge, type DesignStage, type Stage, type StageType } from '../src/core/challenges/challenge'
-import { evaluateDesign } from '../src/core/challenges/rules'
+import { evaluateDesign, problemHints } from '../src/core/challenges/rules'
 import { CALCULATOR_LESSONS } from '../src/core/content/calculator-lessons'
 import { findUnresolvedLinks, resolveLink } from '../src/core/content/links'
 import { linkUrls } from '../src/core/content/markdown'
@@ -196,6 +196,19 @@ describe('catalog of the pinned primer commit', () => {
     }
   })
 
+  it('has Challenges with a default Load Profile, whose Reference Solutions meet their own simulation targets', () => {
+    for (const challenge of catalog.challenges) {
+      expect(challenge.loadProfile.readQps + challenge.loadProfile.writeQps, challenge.id).toBeGreaterThan(0)
+      const designStages = challenge.stages.filter((stage): stage is DesignStage => stage.type === 'high-level-design' || stage.type === 'scaling')
+      for (const stage of designStages) {
+        const targets = stage.rules.filter((rule) => rule.check.type === 'simulation')
+        const results = evaluateDesign({ rules: targets, loadProfile: stage.loadProfile }, stage.referenceSolution, {}).rules
+
+        expect(results.filter((result) => !result.passed).map((result) => result.ruleId), `${challenge.id}/${stage.id}`).toEqual([])
+      }
+    }
+  })
+
   it('has Estimation Stages whose every question has a reference value and a worked solution', () => {
     for (const challenge of catalog.challenges) {
       for (const stage of challenge.stages) {
@@ -252,6 +265,30 @@ describe('catalog of the pinned primer commit', () => {
 
       expect(evaluateDesign(stage, readsFromPrimary, {}).rules.find(isReplicaRule)?.passed).toBe(false)
       expect(evaluateDesign(stage, setNodeConfig(readsFromPrimary, 'sql-database-1', 'replicas', 2), {}).failingCount).toBe(0)
+    })
+
+    describe('Scaling Stage simulation target', () => {
+      const scaling = stageOfType(pastebin, 'scaling')
+      const peakLoad = (design: Design) => evaluateDesign(scaling, design, {}).rules.find((result) => result.ruleId === 'peak-load')!
+
+      it("starts the Challenge at the primer's average load and checks the Scaling Stage at a peak 25 times as high", () => {
+        expect(pastebin.loadProfile).toEqual({ readQps: 40, writeQps: 4, requestBytes: 1_000 })
+        expect(stageOfType(pastebin, 'high-level-design').loadProfile).toEqual(pastebin.loadProfile)
+        expect(scaling.loadProfile).toEqual({ readQps: 1_000, writeQps: 100, requestBytes: 1_000 })
+      })
+
+      it('is missed by the high-level design, whose single Web Server cannot take the peak', () => {
+        expect(peakLoad(stageOfType(pastebin, 'high-level-design').referenceSolution).passed).toBe(false)
+      })
+
+      it('is missed when one Node of the scaled design is too small, and offers its Hints like any other Rule', () => {
+        const oneObjectStore = setNodeConfig(scaling.referenceSolution, 'object-store-1', 'instances', 1)
+        const evaluation = evaluateDesign(scaling, oneObjectStore, { 'peak-load': 1 })
+
+        expect(peakLoad(oneObjectStore).passed).toBe(false)
+        expect(evaluation.failingCount).toBe(1)
+        expect(problemHints(scaling, evaluation)).toEqual([{ ruleId: 'peak-load', opened: scaling.rules[0].hints.slice(0, 1), canOpenMore: true }])
+      })
     })
   })
 

@@ -1,10 +1,9 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { emptyDesign, readDesign, type Design } from '../core/design/design'
 import { createHistory, type History } from '../core/design/history'
 import { SANDBOX_DRAFT_ID } from '../core/progress/progress'
-import { simulate } from '../core/simulation/simulate'
 import { DesignEditor } from './canvas/DesignEditor'
-import { DEFAULT_LOAD, LoadControls, loadProfileOf, SimulationSummary } from './canvas/SimulationPanel'
+import { DEFAULT_LOAD, SimulationSummary, useLoadControls, useSimulation } from './canvas/SimulationPanel'
 import { t } from './i18n'
 import { useProgress } from './progress/store'
 import { TABLET_QUERY, useMediaQuery } from './useMediaQuery'
@@ -15,12 +14,9 @@ export function SandboxPage() {
   const saveDesign = useProgress((state) => state.saveDesign)
   const editable = useMediaQuery(TABLET_QUERY)
   const [history, setHistory] = useState<History<Design>>()
-  const [load, setLoad] = useState(DEFAULT_LOAD)
-  const [simulating, setSimulating] = useState(false)
-  const profile = loadProfileOf(load)
+  const load = useLoadControls(DEFAULT_LOAD)
   // Once started, the results follow every change to the Design or the load.
-  const design = history?.present
-  const result = useMemo(() => (simulating && design && profile ? simulate(design, profile) : undefined), [simulating, design, profile?.readQps, profile?.writeQps, profile?.requestBytes])
+  const result = useSimulation(history?.present, load.profile)
 
   useEffect(() => {
     if (!loaded || history) return
@@ -47,7 +43,7 @@ export function SandboxPage() {
       <div className="mt-4">
         {history ? (
           <>
-            <LoadControls draft={load} simulating={simulating} onChange={setLoad} onToggle={() => setSimulating((on) => !on)} />
+            {load.controls}
             <DesignEditor history={history} onChange={change} readOnly={!editable} simulation={result} />
             {result && <SimulationSummary design={history.present} result={result} />}
           </>

@@ -7,6 +7,8 @@ import { assessInterview, averageRating, defaultInterviewPlan, interviewClock, s
 const hints = ['Sual?', 'İşarə.', 'İzah.']
 const withClient = addNode(emptyDesign(), 'client', { x: 0, y: 0 }, 'Client').design
 
+const load = { readQps: 40, writeQps: 4, requestBytes: 1_000 }
+
 const highLevel: DesignStage = {
   id: 'high-level-design',
   type: 'high-level-design',
@@ -14,6 +16,7 @@ const highLevel: DesignStage = {
   weight: 4,
   rules: [{ id: 'client', weight: 1, description: 'Client', hints, check: { type: 'node', node: 'client' } }],
   referenceSolution: withClient,
+  loadProfile: load,
 }
 
 const stages: Stage[] = [
@@ -38,7 +41,7 @@ const stages: Stage[] = [
   { ...highLevel, id: 'scaling', type: 'scaling', weight: 2 },
 ]
 
-const challenge: Challenge = { id: 'pastebin', title: 'Pastebin', kind: 'architecture', source: 'primer', lessonIds: [], stages }
+const challenge: Challenge = { id: 'pastebin', title: 'Pastebin', kind: 'architecture', source: 'primer', lessonIds: [], loadProfile: load, stages }
 
 const start = new Date('2026-10-30T09:00:00Z')
 const minutesLater = (minutes: number) => new Date(start.getTime() + minutes * 60_000)

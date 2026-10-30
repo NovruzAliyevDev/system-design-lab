@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { buildContentCatalog, ContentValidationError } from '../content/catalog'
+import type { DesignStage } from './challenge'
+import { evaluateDesign } from './rules'
 
 const source = {
   repoUrl: 'https://github.com/donnemartin/system-design-primer',
@@ -77,11 +79,39 @@ const pastebin = {
   source: 'primer',
   solutionId: 'pastebin',
   lessonIds: ['cache', 'database'],
+  loadProfile: { readQps: 40, writeQps: 4, requestBytes: 1_000 },
   stages: [stage],
 }
 
 const withStage = (change: Record<string, unknown>) => [{ ...pastebin, stages: [{ ...stage, ...change }] }]
 const withRule = (check: unknown, extra: Record<string, unknown> = {}) => withStage({ rules: [rule('only', check, extra)] })
+
+describe('Load Profiles and simulation targets', () => {
+  /** Under this load the reference's single application service (500 QPS) is overloaded. */
+  const peak = { readQps: 900, writeQps: 100, requestBytes: 1_000 }
+  const target = rule('target', { type: 'simulation', maxOverloadedNodes: 0, maxErrorRate: 0 })
+
+  it('give every Challenge its default Load Profile, and every design Stage that load unless it sets its own', () => {
+    const [challenge] = catalogWith([{ ...pastebin, stages: [stage, { ...stage, id: 'scaling', type: 'scaling', loadProfile: peak }] }]).challenges
+    const [highLevel, scaling] = challenge.stages
+
+    expect(challenge.loadProfile).toEqual(pastebin.loadProfile)
+    expect(highLevel).toMatchObject({ loadProfile: pastebin.loadProfile })
+    expect(scaling).toMatchObject({ loadProfile: peak })
+  })
+
+  it('check simulation targets under the Load Profile of their Stage', () => {
+    const [challenge] = catalogWith(withStage({ rules: [...stage.rules, target] })).challenges
+
+    expect(evaluateDesign(challenge.stages[0] as DesignStage, (challenge.stages[0] as DesignStage).referenceSolution, {}).failingCount).toBe(0)
+  })
+
+  it('fail the build when a Reference Solution misses its own simulation target', () => {
+    const failing = withStage({ loadProfile: peak, rules: [...stage.rules, target] })
+
+    expect(problemsOf(failing)).toEqual(['Challenge "pastebin" Stage "high-level-design": the Reference Solution fails Rule "target"'])
+  })
+})
 
 describe('authored Challenges', () => {
   it('become part of the catalog, with their Reference Solution read as a Design', () => {
@@ -132,6 +162,17 @@ describe('authored Challenges', () => {
     ['an empty any-of', withRule({ type: 'any-of', predicates: [] }), 'check: "predicates" must list at least one predicate'],
     ['an invalid part of a combinator', withRule({ type: 'not', predicate: { type: 'node', node: 'mainframe' } }), 'check: unknown component type "mainframe"'],
     ['an unregistered custom predicate', withRule({ type: 'custom', name: 'is-scalable' }), 'check: no custom predicate "is-scalable" is registered'],
+    ['a simulation predicate without a target', withRule({ type: 'simulation' }), 'check: a simulation predicate must set at least one target'],
+    ['a latency target that is not positive', withRule({ type: 'simulation', maxLatencyMs: { read: 0 } }), 'check: "maxLatencyMs" must give positive numbers for "read" and "write" only'],
+    ['a latency target for an unknown kind', withRule({ type: 'simulation', maxLatencyMs: { delete: 5 } }), 'check: "maxLatencyMs" must give positive numbers for "read" and "write" only'],
+    ['an overload target that is not a count', withRule({ type: 'simulation', maxOverloadedNodes: 1.5 }), 'check: "maxOverloadedNodes" must be a whole number of at least 0'],
+    ['an error-rate target above 1', withRule({ type: 'simulation', maxErrorRate: 2 }), 'check: "maxErrorRate" must be a number from 0 to 1'],
+    ['no default Load Profile', [{ ...pastebin, loadProfile: undefined }], 'loadProfile: must be an object'],
+    ['a Load Profile with a negative rate', [{ ...pastebin, loadProfile: { ...pastebin.loadProfile, writeQps: -1 } }], 'loadProfile: "writeQps" must be a number of at least 0'],
+    ['a Load Profile without a request size', [{ ...pastebin, loadProfile: { readQps: 40, writeQps: 4 } }], 'loadProfile: "requestBytes" must be a number of at least 0'],
+    ['a Load Profile sending nothing', [{ ...pastebin, loadProfile: { readQps: 0, writeQps: 0, requestBytes: 1_000 } }], 'loadProfile: must send some reads or writes'],
+    ['an unknown Load Profile field', [{ ...pastebin, loadProfile: { ...pastebin.loadProfile, users: 5 } }], 'loadProfile: unknown field "users"'],
+    ['an invalid Stage Load Profile', withStage({ loadProfile: { readQps: 'many', writeQps: 4, requestBytes: 1_000 } }), 'loadProfile: "readQps" must be a number of at least 0'],
   ])('fail the build with %s', (_, challenges, problem) => {
     expect(problemsOf(challenges).some((reported) => reported.endsWith(problem))).toBe(true)
   })

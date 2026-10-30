@@ -1,6 +1,7 @@
 import { isRecord, isText } from '../content/validation'
 import { componentDefinition, configProblem, isComponentType, type ComponentType, type ConfigValue } from '../design/components'
 import { EDGE_MODES, type Design, type DesignEdge, type DesignNode, type EdgeMode } from '../design/design'
+import { REQUEST_KINDS, simulate, type LoadProfile, type RequestKind, type SimulationResult, type Traffic } from '../simulation/simulate'
 
 // The Rule Engine: checks a Design against a Challenge Stage's Rules. Rules are declarative,
 // serialisable data built from a fixed set of predicates, so that they can be authored as content
@@ -26,6 +27,7 @@ export type Predicate =
   | AnyOfPredicate
   | NotPredicate
   | CustomPredicate
+  | SimulationPredicate
 
 /** Reads travel along edges carrying `read` or `both`; writes along `write` or `both`. */
 export type TrafficKind = 'read' | 'write'
@@ -101,6 +103,19 @@ export interface CustomPredicate {
   name: string
 }
 
+/**
+ * Simulated under its Stage's Load Profile, the Design meets every target given: each kind of request the
+ * load sends reaches some Node, and the mean latency per kind, the number of overloaded Nodes and the share
+ * of failing requests stay at most their targets.
+ */
+export interface SimulationPredicate {
+  type: 'simulation'
+  maxLatencyMs?: Partial<Record<RequestKind, number>>
+  maxOverloadedNodes?: number
+  /** From 0 to 1. */
+  maxErrorRate?: number
+}
+
 /** Checks registered in code, by the name a `custom` predicate gives. */
 export const CUSTOM_PREDICATES: Readonly<Record<string, (design: Design) => boolean>> = {
   /** There are at least two nodes, each joined to every other through edges, whichever way they point: nothing stands apart. */
@@ -130,6 +145,8 @@ export interface Rule {
 /** A Stage checked by Rules, e.g. a Challenge's high-level design. */
 export interface RuledStage {
   rules: readonly Rule[]
+  /** The load `simulation` predicates simulate the Design under. */
+  loadProfile?: LoadProfile
 }
 
 /** Rule id → how many of its Hint tiers have been opened (0 to 3). */
@@ -165,8 +182,9 @@ export const HINT_CAPS = [1, 0.75, 0.5, 0.25] as const
 export const HINT_TIERS = HINT_CAPS.length - 1
 
 export function evaluateDesign(stage: RuledStage, design: Design, hintUsage: HintUsage): Evaluation {
+  const context = checkContext(design, stage.loadProfile)
   const rules = stage.rules.map((rule): RuleResult => {
-    const passed = holds(rule.check, design)
+    const passed = holds(rule.check, context)
     const hintsOpened = tiersOpened(hintUsage, rule.id)
     const maxPoints = rule.weight * HINT_CAPS[hintsOpened]
     return {
@@ -231,7 +249,26 @@ function tiersOpened(hintUsage: HintUsage, ruleId: string): number {
   return opened
 }
 
-function holds(predicate: Predicate, design: Design): boolean {
+/** What predicates check: the Design and, simulated at most once per evaluation, its Traffic Simulation. */
+interface CheckContext {
+  design: Design
+  simulation(): { load: LoadProfile; result: SimulationResult }
+}
+
+function checkContext(design: Design, loadProfile: LoadProfile | undefined): CheckContext {
+  let result: SimulationResult | undefined
+  return {
+    design,
+    simulation() {
+      if (!loadProfile) throw new RangeError('A simulation predicate needs its Stage to have a Load Profile.')
+      result ??= simulate(design, loadProfile)
+      return { load: loadProfile, result }
+    },
+  }
+}
+
+function holds(predicate: Predicate, context: CheckContext): boolean {
+  const { design } = context
   switch (predicate.type) {
     case 'node': {
       const count = matching(design, predicate.node).length
@@ -259,17 +296,32 @@ function holds(predicate: Predicate, design: Design): boolean {
       return edges.length > 0 && edges.every((edge) => edge.mode === predicate.mode)
     }
     case 'all-of':
-      return predicate.predicates.every((part) => holds(part, design))
+      return predicate.predicates.every((part) => holds(part, context))
     case 'any-of':
-      return predicate.predicates.some((part) => holds(part, design))
+      return predicate.predicates.some((part) => holds(part, context))
     case 'not':
-      return !holds(predicate.predicate, design)
+      return !holds(predicate.predicate, context)
     case 'custom': {
       const check = CUSTOM_PREDICATES[predicate.name]
       if (!check) throw new RangeError(`No custom predicate "${predicate.name}".`)
       return check(design)
     }
+    case 'simulation':
+      return meetsTargets(predicate, context.simulation())
   }
+}
+
+function meetsTargets(targets: SimulationPredicate, { load, result }: { load: LoadProfile; result: SimulationResult }): boolean {
+  const served = Object.values(result.nodes).filter((metrics) => metrics.capacityQps !== undefined)
+  const qpsOf = (traffic: Traffic, kind: RequestKind) => (kind === 'read' ? traffic.readQps : traffic.writeQps)
+  for (const kind of REQUEST_KINDS) {
+    if (qpsOf(load, kind) > 0 && !served.some((metrics) => qpsOf(metrics, kind) > 0)) return false
+    const maxLatency = targets.maxLatencyMs?.[kind]
+    if (maxLatency !== undefined && (result.meanLatencyMs[kind] ?? 0) > maxLatency) return false
+  }
+  const overloaded = Object.values(result.nodes).filter((metrics) => metrics.overloaded).length
+  if (targets.maxOverloadedNodes !== undefined && overloaded > targets.maxOverloadedNodes) return false
+  return targets.maxErrorRate === undefined || result.errorRate <= targets.maxErrorRate
 }
 
 /** Nodes reachable from `starts` along edges carrying `traffic`, never entering a `blocked` node. */
@@ -341,6 +393,7 @@ const PREDICATE_FIELDS: Record<Predicate['type'], ReadonlySet<string>> = {
   'any-of': new Set(['type', 'predicates']),
   not: new Set(['type', 'predicate']),
   custom: new Set(['type', 'name']),
+  simulation: new Set(['type', 'maxLatencyMs', 'maxOverloadedNodes', 'maxErrorRate']),
 }
 
 /**
@@ -414,6 +467,16 @@ function checkPredicate(value: unknown, fail: (message: string) => void): void {
     case 'custom':
       if (!isText(value.name) || !Object.hasOwn(CUSTOM_PREDICATES, value.name)) fail(`no custom predicate "${String(value.name)}" is registered`)
       return
+    case 'simulation': {
+      const { maxLatencyMs, maxOverloadedNodes, maxErrorRate } = value
+      if ([maxLatencyMs, maxOverloadedNodes, maxErrorRate].every((target) => target === undefined)) return fail('a simulation predicate must set at least one target')
+      const latencies = isRecord(maxLatencyMs) ? Object.entries(maxLatencyMs) : []
+      const latenciesFit = latencies.length > 0 && latencies.every(([kind, ms]) => REQUEST_KINDS.includes(kind as RequestKind) && isPositive(ms))
+      if (maxLatencyMs !== undefined && !latenciesFit) fail('"maxLatencyMs" must give positive numbers for "read" and "write" only')
+      if (maxOverloadedNodes !== undefined && !isCount(maxOverloadedNodes)) fail('"maxOverloadedNodes" must be a whole number of at least 0')
+      if (maxErrorRate !== undefined && !(typeof maxErrorRate === 'number' && maxErrorRate >= 0 && maxErrorRate <= 1)) fail('"maxErrorRate" must be a number from 0 to 1')
+      return
+    }
   }
 }
 
@@ -452,4 +515,8 @@ function checkConfigValues(types: ComponentType[], key: string, values: unknown[
 
 function isCount(value: unknown): boolean {
   return Number.isInteger(value) && (value as number) >= 0
+}
+
+function isPositive(value: unknown): boolean {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0
 }

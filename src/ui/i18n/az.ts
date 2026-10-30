@@ -345,6 +345,8 @@ export const az = {
   stageCompareTitle: 'Referans həll ilə müqayisə',
   stageYourDesign: 'Sizin dizaynınız',
   stageReferenceSolution: 'Referans həll',
+  stageYourSimulation: 'Sizin dizaynınızın nəticəsi',
+  stageReferenceSimulation: 'Referans həllin nəticəsi',
   stageReadSolution: 'Primer-in həllini oxuyun',
   challengesTitle: 'Çağırışlar',
   challengesDescription: 'System design suallarını müsahibədəki kimi mərhələ-mərhələ həll edin: tələblər, hesablama, yüksək səviyyəli dizayn, dərin təhlil və miqyaslama.',

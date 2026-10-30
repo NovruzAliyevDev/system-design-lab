@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { defaultConfig, type ComponentType } from '../design/components'
 import { connect, setNodeConfig, updateEdge, type Design, type DesignNode, type EdgeMode, type EdgeTraffic } from '../design/design'
+import type { LoadProfile } from '../simulation/simulate'
 import { evaluateDesign, levelZeroFeedback, openNextHint, problemHints, type Predicate, type Rule } from './rules'
 
 const HINTS: Rule['hints'] = ['Sual?', 'İşarə.', 'Tam izah.']
@@ -264,6 +265,70 @@ describe('evaluateDesign predicates', () => {
     it('"all-connected" fails with fewer than two nodes, which connect nothing', () => {
       expect(passes(check, build([]))).toBe(false)
       expect(passes(check, build(['client-1']))).toBe(false)
+    })
+  })
+
+  describe('simulation target met', () => {
+    // One web server serves 1,000 QPS at a base latency of 0.52 ms: 1.04 ms at half load.
+    const server = build(['client-1', 'web-server-1'], ['client-1->web-server-1'])
+    const atLoad = (readQps: number, writeQps = 0): LoadProfile => ({ readQps, writeQps, requestBytes: 1_000 })
+    /** Whether a Design passes a single simulation Rule under a Load Profile. */
+    const meets = (check: Predicate, design: Design, loadProfile: LoadProfile) =>
+      evaluateDesign({ rules: [rule('r', check)], loadProfile }, design, {}).rules[0].passed
+
+    it('passes when the Design meets every target under the Stage Load Profile', () => {
+      const check: Predicate = { type: 'simulation', maxLatencyMs: { read: 1.1 }, maxOverloadedNodes: 0, maxErrorRate: 0 }
+
+      expect(meets(check, server, atLoad(500))).toBe(true)
+    })
+
+    it('fails when the mean latency of a kind of request is above its target', () => {
+      const check: Predicate = { type: 'simulation', maxLatencyMs: { read: 1 } }
+
+      expect(meets(check, server, atLoad(500))).toBe(false)
+      expect(meets({ type: 'simulation', maxLatencyMs: { write: 1 } }, server, atLoad(500, 100))).toBe(false)
+    })
+
+    it('fails when more Nodes are overloaded than the target allows', () => {
+      const check: Predicate = { type: 'simulation', maxOverloadedNodes: 0 }
+      const twoInstances = setNodeConfig(server, 'web-server-1', 'instances', 2)
+
+      expect(meets(check, server, atLoad(1_500))).toBe(false)
+      expect(meets(check, twoInstances, atLoad(1_500))).toBe(true)
+      expect(meets({ type: 'simulation', maxOverloadedNodes: 1 }, server, atLoad(1_500))).toBe(true)
+    })
+
+    it('fails when more requests fail than the error-rate target allows', () => {
+      // At 2,000 QPS the server serves 1,000 and drops the rest: half the requests fail.
+      expect(meets({ type: 'simulation', maxErrorRate: 0.4 }, server, atLoad(2_000))).toBe(false)
+      expect(meets({ type: 'simulation', maxErrorRate: 0.5 }, server, atLoad(2_000))).toBe(true)
+    })
+
+    it('checks the same Design against the load of the Stage it belongs to', () => {
+      const check: Predicate = { type: 'simulation', maxOverloadedNodes: 0 }
+
+      expect(meets(check, server, atLoad(500))).toBe(true)
+      expect(meets(check, server, atLoad(5_000))).toBe(false)
+    })
+
+    it('fails when no Node serves a kind of request the Load Profile sends, however fast the rest is', () => {
+      const check: Predicate = { type: 'simulation', maxLatencyMs: { read: 200 }, maxOverloadedNodes: 0, maxErrorRate: 0 }
+      const readsOnly = updateEdge(server, 'client-1->web-server-1', { traffic: 'read' })
+
+      expect(meets(check, build(['client-1', 'web-server-1']), atLoad(500))).toBe(false)
+      expect(meets(check, readsOnly, atLoad(500, 50))).toBe(false)
+      expect(meets(check, readsOnly, atLoad(500))).toBe(true)
+    })
+
+    it('combines with other predicates like any other', () => {
+      const check: Predicate = { type: 'all-of', predicates: [{ type: 'node', node: 'cache' }, { type: 'simulation', maxOverloadedNodes: 0 }] }
+
+      expect(meets(check, server, atLoad(500))).toBe(false)
+      expect(meets({ type: 'not', predicate: { type: 'simulation', maxOverloadedNodes: 0 } }, server, atLoad(5_000))).toBe(true)
+    })
+
+    it('throws a RangeError when the Stage has no Load Profile to simulate with', () => {
+      expect(() => passes({ type: 'simulation', maxOverloadedNodes: 0 }, server)).toThrow(RangeError)
     })
   })
 })

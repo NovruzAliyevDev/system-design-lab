@@ -20,7 +20,7 @@ export type SimulationMode = 'simple'
 
 export type RequestKind = 'read' | 'write'
 
-const KINDS: RequestKind[] = ['read', 'write']
+export const REQUEST_KINDS: readonly RequestKind[] = ['read', 'write']
 
 /** Requests per second of each kind, e.g. along an Edge. */
 export interface Traffic {
@@ -128,7 +128,7 @@ export function simulate(design: Design, load: LoadProfile, _scenario?: ChaosSce
     nodes[node.id] = metrics
     const served = metrics.utilisation < 1 ? 1 : 1 / metrics.utilisation
     servedShare.set(node.id, served)
-    for (const kind of KINDS) {
+    for (const kind of REQUEST_KINDS) {
       for (const { edge, fraction } of routesOf(node, kind)) {
         // Work handed to a queue, or along an asynchronous Edge, is deferred from then on.
         const sync = edge.mode === 'sync' && !QUEUES.has(node.componentType)
@@ -167,7 +167,7 @@ export function simulate(design: Design, load: LoadProfile, _scenario?: ChaosSce
   const meanLatencyMs: Partial<Record<RequestKind, number>> = {}
   let failed = 0
   const paths: RequestPath[] = []
-  for (const kind of KINDS) {
+  for (const kind of REQUEST_KINDS) {
     const qps = kind === 'read' ? load.readQps : load.writeQps
     if (qps <= 0 || clients.length === 0) continue
     const perClient = clients.map((client) => expect(client, kind))

@@ -11,6 +11,7 @@ import {
   type QuizOption,
   type QuizOptionInput,
 } from '../quizzes/quiz'
+import type { LoadProfile } from '../simulation/simulate'
 import { evaluateDesign, validateRules, type Rule } from './rules'
 
 // A Challenge is a system design question solved Stage by Stage, the way an interview runs. Its
@@ -72,10 +73,15 @@ export interface EstimationStage extends StageBase {
   questions: EstimationQuestion[]
 }
 
-/** A Stage solved on the Design Canvas and checked by Rules. A Scaling Stage starts from the learner's high-level design. */
+/**
+ * A Stage solved on the Design Canvas and checked by Rules, simulation targets among them. A Scaling
+ * Stage starts from the learner's high-level design.
+ */
 export interface DesignStage extends StageBase {
   type: 'high-level-design' | 'scaling'
   rules: Rule[]
+  /** The load its simulation targets are checked under and its Traffic Simulation starts from: the Challenge's, unless the Stage sets its own. */
+  loadProfile: LoadProfile
   /** Mirrors the primer's diagram for the question. Hidden until the Stage is over. */
   referenceSolution: Design
 }
@@ -105,6 +111,8 @@ export interface Challenge {
   solutionId?: string
   /** Lessons the Challenge practises. */
   lessonIds: string[]
+  /** The default Load Profile, e.g. the question's average traffic. */
+  loadProfile: LoadProfile
   /** In interview order, each type at most once. */
   stages: Stage[]
 }
@@ -113,31 +121,32 @@ export interface Challenge {
 export type AuthoredStage =
   | (Omit<RequirementsStage, 'items'> & { items: (QuizOptionInput & { section: RequirementSection })[] })
   | (Omit<EstimationStage, 'questions'> & { questions: Omit<EstimationQuestion, 'referenceValue'>[] })
-  | (Omit<DesignStage, 'referenceSolution'> & { referenceSolution: unknown })
+  | (Omit<DesignStage, 'referenceSolution' | 'loadProfile'> & { referenceSolution: unknown; loadProfile?: LoadProfile })
   | (Omit<DeepDiveStage, 'questions'> & { questions: (MultipleChoiceQuestion<QuizOptionInput> | MultiSelectQuestion<QuizOptionInput>)[] })
 
 /** A Challenge as it is authored. */
 export type ChallengeInput = Omit<Challenge, 'stages'> & { stages: AuthoredStage[] }
 
-const CHALLENGE_FIELDS = new Set(['id', 'title', 'kind', 'source', 'solutionId', 'lessonIds', 'stages'])
+const CHALLENGE_FIELDS = new Set(['id', 'title', 'kind', 'source', 'solutionId', 'lessonIds', 'loadProfile', 'stages'])
 const COMMON_STAGE_FIELDS = ['id', 'type', 'prompt', 'weight', 'solutionAnchor']
 const STAGE_FIELDS: Record<StageType, Set<string>> = {
   requirements: new Set([...COMMON_STAGE_FIELDS, 'items']),
   estimation: new Set([...COMMON_STAGE_FIELDS, 'inputs', 'explanation', 'questions']),
-  'high-level-design': new Set([...COMMON_STAGE_FIELDS, 'rules', 'referenceSolution']),
+  'high-level-design': new Set([...COMMON_STAGE_FIELDS, 'rules', 'referenceSolution', 'loadProfile']),
   'deep-dive': new Set([...COMMON_STAGE_FIELDS, 'questions']),
-  scaling: new Set([...COMMON_STAGE_FIELDS, 'rules', 'referenceSolution']),
+  scaling: new Set([...COMMON_STAGE_FIELDS, 'rules', 'referenceSolution', 'loadProfile']),
 }
 const ITEM_FIELDS = new Set(['section', 'text', 'correct', 'explanation'])
 const ESTIMATION_QUESTION_FIELDS = new Set(['id', 'quantity', 'prompt'])
 const REQUIRED_INPUTS = ['writesPerMonth', 'readsPerMonth', 'bytesPerWrite'] as const
 const OPTIONAL_INPUTS = ['bytesPerRead', 'peakFactor', 'years'] as const
 const INPUT_FIELDS = new Set<string>([...REQUIRED_INPUTS, ...OPTIONAL_INPUTS])
+const LOAD_FIELDS = new Set<string>(['readQps', 'writeQps', 'requestBytes'] satisfies (keyof LoadProfile)[])
 
 /**
  * Checks authored Challenges against their schema, the Lessons and Solution pages they reference, and
- * their own Rules: every Reference Solution must pass every Rule of its Stage. Returns the Challenges
- * in authored order, or every problem found.
+ * their own Rules: every Reference Solution must pass every Rule of its Stage, simulation targets
+ * included. Returns the Challenges in authored order, or every problem found.
  */
 export function validateChallenges(
   input: unknown,
@@ -166,6 +175,7 @@ export function validateChallenges(
     if (item.solutionId !== undefined && !solution) problem(`unknown Solution page "${String(item.solutionId)}"`)
     if (!isTextList(item.lessonIds)) problem('"lessonIds" must be a list of Lesson ids')
     else for (const lessonId of item.lessonIds) if (!lessonIds.has(lessonId)) problem(`unknown Lesson id "${lessonId}"`)
+    const loadProfile = validateLoadProfile(item.loadProfile, (message) => problem(`loadProfile: ${message}`))
 
     if (!Array.isArray(item.stages) || item.stages.length === 0) return problem('"stages" must list at least one Stage')
     const stageIds = new Set<string>()
@@ -174,7 +184,7 @@ export function validateChallenges(
     const stages = item.stages.map((stageItem: unknown, s) => {
       const stageName = isRecord(stageItem) && isText(stageItem.id) ? `Stage "${stageItem.id}"` : `Stage #${s + 1}`
       const stageProblem = (message: string) => problems.push(`${name} ${stageName}: ${message}`)
-      const stage = validateStage(stageItem, item.solutionId === undefined ? 'none' : solution, stageProblem)
+      const stage = validateStage(stageItem, item.solutionId === undefined ? 'none' : solution, loadProfile, stageProblem)
       if (!stage) return undefined
       if (stageIds.has(stage.id)) stageProblem('its id is already used in the Challenge')
       stageIds.add(stage.id)
@@ -191,13 +201,30 @@ export function validateChallenges(
 
     if (problems.length > before) return
     const { id, title, kind, source, solutionId, lessonIds: lessons } = item as unknown as Challenge
-    challenges.push({ id, title, kind, source, ...(solutionId !== undefined && { solutionId }), lessonIds: lessons, stages: stages as Stage[] })
+    challenges.push({
+      id,
+      title,
+      kind,
+      source,
+      ...(solutionId !== undefined && { solutionId }),
+      lessonIds: lessons,
+      loadProfile: loadProfile!,
+      stages: stages as Stage[],
+    })
   })
   return { challenges, problems }
 }
 
-/** `solution` is `'none'` when the Challenge has no Solution page, and undefined when it names one that does not exist. */
-function validateStage(item: unknown, solution: Solution | 'none' | undefined, problem: (message: string) => void): Stage | undefined {
+/**
+ * `solution` is `'none'` when the Challenge has no Solution page, and undefined when it names one that
+ * does not exist. `defaultLoad` is the Challenge's Load Profile, undefined when it is invalid (and reported).
+ */
+function validateStage(
+  item: unknown,
+  solution: Solution | 'none' | undefined,
+  defaultLoad: LoadProfile | undefined,
+  problem: (message: string) => void,
+): Stage | undefined {
   if (!isRecord(item)) return void problem('must be an object')
   const type = STAGE_TYPES.find((known) => known === item.type)
   if (!type) return void problem(`"type" must be one of ${STAGE_TYPES.join(', ')}`)
@@ -259,8 +286,9 @@ function validateStage(item: unknown, solution: Solution | 'none' | undefined, p
       const rules = validateRules(item.rules, fail)
       const { design, problems } = readDesign(item.referenceSolution)
       for (const designProblem of problems) fail(`Reference Solution: ${designProblem}`)
-      if (!valid || !rules || !design) return undefined
-      const stage: DesignStage = { type, ...base, rules, referenceSolution: design }
+      const loadProfile = item.loadProfile === undefined ? defaultLoad : validateLoadProfile(item.loadProfile, (message) => fail(`loadProfile: ${message}`))
+      if (!valid || !rules || !design || !loadProfile) return undefined
+      const stage: DesignStage = { type, ...base, rules, referenceSolution: design, loadProfile }
       // A Reference Solution that fails its own Rules means a Rule (or the solution) is wrong.
       for (const result of evaluateDesign(stage, design, {}).rules) {
         if (!result.passed) fail(`the Reference Solution fails Rule "${result.ruleId}"`)
@@ -307,6 +335,24 @@ function validateEstimationInputs(value: unknown, fail: (message: string) => voi
   for (const field of REQUIRED_INPUTS) if (!isPositive(value[field])) inputFail(`"${field}" must be a positive number`)
   for (const field of OPTIONAL_INPUTS) if (value[field] !== undefined && !isPositive(value[field])) inputFail(`"${field}" must be a positive number`)
   return valid ? (value as unknown as EstimationInputs) : undefined
+}
+
+function validateLoadProfile(value: unknown, fail: (message: string) => void): LoadProfile | undefined {
+  if (!isRecord(value)) return void fail('must be an object')
+  let valid = true
+  const loadFail = (message: string) => {
+    valid = false
+    fail(message)
+  }
+  for (const field of Object.keys(value)) if (!LOAD_FIELDS.has(field)) loadFail(`unknown field "${field}"`)
+  for (const field of LOAD_FIELDS) {
+    const rate = value[field]
+    if (typeof rate !== 'number' || !Number.isFinite(rate) || rate < 0) loadFail(`"${field}" must be a number of at least 0`)
+  }
+  if (!valid) return undefined
+  const { readQps, writeQps, requestBytes } = value as unknown as LoadProfile
+  if (readQps + writeQps === 0) return void fail('must send some reads or writes')
+  return { readQps, writeQps, requestBytes }
 }
 
 function validateEstimationQuestions(value: unknown, fail: (message: string) => void): Omit<EstimationQuestion, 'referenceValue'>[] | undefined {

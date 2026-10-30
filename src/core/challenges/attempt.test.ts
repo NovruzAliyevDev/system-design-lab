@@ -45,6 +45,8 @@ const estimation: EstimationStage = {
   ],
 }
 
+const load = { readQps: 40, writeQps: 4, requestBytes: 1_000 }
+
 const highLevel: DesignStage = {
   id: 'high-level-design',
   type: 'high-level-design',
@@ -55,6 +57,7 @@ const highLevel: DesignStage = {
     { id: 'cache', weight: 1, description: 'Cache', hints, check: { type: 'node', node: 'cache' } },
   ],
   referenceSolution: withClient,
+  loadProfile: load,
 }
 
 const deepDive: DeepDiveStage = {
@@ -90,6 +93,7 @@ const challenge: Challenge = {
   kind: 'architecture',
   source: 'primer',
   lessonIds: [],
+  loadProfile: load,
   stages: [requirements, estimation, highLevel, deepDive, scaling],
 }
 

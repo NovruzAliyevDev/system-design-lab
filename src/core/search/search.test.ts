@@ -142,6 +142,7 @@ describe('search', () => {
       kind: 'architecture',
       source: 'authored',
       lessonIds: ['cache'],
+      loadProfile: { readQps: 40, writeQps: 4, requestBytes: 1_000 },
       stages: [
         {
           id: 'requirements',
