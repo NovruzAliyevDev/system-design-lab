@@ -7,6 +7,7 @@ import {
   isFieldApplicable,
   type ComponentConfig,
   type ComponentType,
+  type SimulationDefaults,
 } from './components'
 
 // A Design is a graph of Nodes (components) and Edges (data flow), shared by the Design Canvas, the
@@ -39,10 +40,17 @@ interface NodeBase<T extends ComponentType> {
   zoneId?: string
   /** Where the canvas draws it. Rules and the simulation ignore it. */
   position: Position
+  /** What the Traffic Simulation uses instead of the component defaults; absent when it uses them all. */
+  simulation?: SimulationSettings
 }
 
 /** A component in a Design, with the config of its type. */
 export type DesignNode = { [T in ComponentType]: NodeBase<T> }[ComponentType]
+
+/** The numbers of the Traffic Simulation a Node can set for itself. */
+export const SIMULATION_SETTINGS = ['capacityQps', 'baseLatencyMs', 'monthlyCostUsd', 'hitRatio'] as const
+export type SimulationSetting = (typeof SIMULATION_SETTINGS)[number]
+export type SimulationSettings = Partial<Record<SimulationSetting, number>>
 
 export const EDGE_MODES = ['sync', 'async'] as const
 export type EdgeMode = (typeof EDGE_MODES)[number]
@@ -141,6 +149,46 @@ export function setNodeConfig(design: Design, nodeId: string, key: string, value
     }
     return { ...node, config } as DesignNode
   })
+}
+
+/** What the Traffic Simulation uses for a Node: its component's defaults with the Node's own settings; none for a client. */
+export function nodeSimulation(node: DesignNode): SimulationDefaults | undefined {
+  const defaults = componentDefinition(node.componentType).simulation
+  return defaults && { ...defaults, ...node.simulation }
+}
+
+/**
+ * Sets one simulation number of a Node, or clears it back to the default with `undefined`. Throws a
+ * `RangeError` for a value that makes no sense, or a setting the component does not have.
+ */
+export function setNodeSimulation(design: Design, nodeId: string, key: SimulationSetting, value: number | undefined): Design {
+  return updateNode(design, nodeId, (node) => {
+    const { simulation: _, ...rest } = node
+    const settings: SimulationSettings = { ...node.simulation }
+    if (value === undefined) delete settings[key]
+    else {
+      const problem = simulationProblem(node.componentType, key, value)
+      if (problem) throw new RangeError(`${node.componentType} simulation "${key}": ${problem}.`)
+      settings[key] = value
+    }
+    return (Object.keys(settings).length === 0 ? rest : { ...rest, simulation: settings }) as DesignNode
+  })
+}
+
+/** Why a value cannot be a simulation setting: one the component lacks, not a number, or out of its range. */
+export type SimulationProblem = 'no-such-setting' | 'not-a-number' | 'not-positive' | 'negative' | 'not-a-share'
+
+/** Why `value` cannot be the `key` simulation setting of a component type's Node, or undefined when it can. */
+export function simulationProblem(componentType: ComponentType, key: string, value: unknown): SimulationProblem | undefined {
+  const defaults = componentDefinition(componentType).simulation
+  if (!defaults || !(SIMULATION_SETTINGS as readonly string[]).includes(key) || (key === 'hitRatio' && defaults.hitRatio === undefined)) {
+    return 'no-such-setting'
+  }
+  if (typeof value !== 'number' || !Number.isFinite(value)) return 'not-a-number'
+  // A hit ratio is a share; a cost may be 0; capacity and latency must be more than 0.
+  if (key === 'hitRatio') return value >= 0 && value <= 1 ? undefined : 'not-a-share'
+  if (key === 'monthlyCostUsd') return value >= 0 ? undefined : 'negative'
+  return value > 0 ? undefined : 'not-positive'
 }
 
 /** Whether an Edge from `source` to `target` may be added: both exist, they differ and are not yet connected that way. */
@@ -431,6 +479,13 @@ function readNode(item: unknown, problem: (message: string) => void): DesignNode
     const fieldProblem = configProblem(componentType, key, value, config)
     if (fieldProblem) fail(`config "${key}": ${fieldProblem}`)
   }
+  const { simulation } = item
+  if (simulation !== undefined && !isRecord(simulation)) fail('"simulation" must be an object when set')
+  const settings = isRecord(simulation) ? simulation : {}
+  for (const [key, value] of Object.entries(settings)) {
+    const settingProblem = simulationProblem(componentType, key, value)
+    if (settingProblem) fail(`simulation "${key}": ${settingProblem}`)
+  }
   if (!valid) return undefined
 
   const point = position as Record<string, number>
@@ -442,6 +497,10 @@ function readNode(item: unknown, problem: (message: string) => void): DesignNode
     notes,
     ...(zoneId !== undefined && { zoneId }),
     position: { x: point.x, y: point.y },
+    // Settings in a fixed order, so that a Design reads the same however it was stored.
+    ...(Object.keys(settings).length > 0 && {
+      simulation: Object.fromEntries(SIMULATION_SETTINGS.filter((key) => Object.hasOwn(settings, key)).map((key) => [key, settings[key]])),
+    }),
   } as DesignNode
 }
 

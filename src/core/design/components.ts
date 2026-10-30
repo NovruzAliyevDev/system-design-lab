@@ -68,6 +68,8 @@ export interface SimulationDefaults {
   /** How `baseLatencyMs` is made up from the primer's latency numbers, so that it stays explainable. */
   latency: LatencyTerm[]
   monthlyCostUsd: number
+  /** For a cache: the share of reads it answers itself, from 0 to 1; the rest go on as misses. */
+  hitRatio?: number
 }
 
 export interface ComponentDefinition {
@@ -97,11 +99,11 @@ export const MAX_REPLICAS = 15
 const replicas: IntegerField = { kind: 'integer', min: 0, max: MAX_REPLICAS, default: 0, onlyWhen: { role: 'primary' } }
 const shardKey: TextField = { kind: 'text', maxLength: 60, default: '' }
 
-function simulation(capacityQps: number, terms: [PrimerOperation, number][], monthlyCostUsd: number): SimulationDefaults {
+function simulation(capacityQps: number, terms: [PrimerOperation, number][], monthlyCostUsd: number, hitRatio?: number): SimulationDefaults {
   const latency = terms.map(([operation, times]) => ({ operation, nanoseconds: PRIMER_LATENCY_NS[operation], times }))
   const nanoseconds = latency.reduce((sum, term) => sum + term.nanoseconds * term.times, 0)
   // Rounded to the microsecond, so sums of decimal fractions read cleanly.
-  return { capacityQps, baseLatencyMs: Math.round(nanoseconds / 1000) / 1000, latency, monthlyCostUsd }
+  return { capacityQps, baseLatencyMs: Math.round(nanoseconds / 1000) / 1000, latency, monthlyCostUsd, ...(hitRatio !== undefined && { hitRatio }) }
 }
 
 const ROUND_TRIP = 'Round trip within same datacenter'
@@ -150,7 +152,8 @@ const COMPONENTS = {
       eviction: choice(['lru', 'lfu', 'fifo'], 'lru'),
       instances,
     },
-    simulation: simulation(50_000, [[ROUND_TRIP, 1], ['Main memory reference', 10]], 100),
+    // A warm cache in front of a database typically answers most reads; 80% is a common rule of thumb.
+    simulation: simulation(50_000, [[ROUND_TRIP, 1], ['Main memory reference', 10]], 100, 0.8),
   },
   'sql-database': {
     glossaryTermId: 'relational-database-management-system',

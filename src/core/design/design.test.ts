@@ -19,6 +19,8 @@ import {
   serializeDesign,
   setNodeConfig,
   setNodeNotes,
+  setNodeSimulation,
+  nodeSimulation,
   setZoneBounds,
   updateEdge,
   zoneAt,
@@ -482,5 +484,41 @@ describe('zones', () => {
     design = removeElements(design, { zoneIds: ['zone-1'] })
 
     expect(addZone(design, { x: 0, y: 0 }, ZONE_MIN_SIZE, 'Zone').zoneId).toBe('zone-3')
+  })
+})
+
+describe('simulation settings of a Node', () => {
+  const design = addNode(addNode(emptyDesign(), 'cache', { x: 0, y: 0 }, 'Cache').design, 'client', { x: 0, y: 100 }, 'Users').design
+
+  it('start from the component defaults, which a Node can override one by one', () => {
+    expect(nodeSimulation(design.nodes[0])).toEqual({ ...componentDefinition('cache').simulation })
+    const tuned = setNodeSimulation(setNodeSimulation(design, 'cache-1', 'capacityQps', 80_000), 'cache-1', 'hitRatio', 0.95)
+
+    expect(tuned.nodes[0].simulation).toEqual({ capacityQps: 80_000, hitRatio: 0.95 })
+    expect(nodeSimulation(tuned.nodes[0])).toMatchObject({ capacityQps: 80_000, hitRatio: 0.95, baseLatencyMs: 0.501, monthlyCostUsd: 100 })
+  })
+
+  it('go back to the default when cleared', () => {
+    const tuned = setNodeSimulation(design, 'cache-1', 'monthlyCostUsd', 5)
+
+    expect(setNodeSimulation(tuned, 'cache-1', 'monthlyCostUsd', undefined).nodes[0]).not.toHaveProperty('simulation')
+  })
+
+  it('refuses values that make no sense, and settings a component does not have', () => {
+    expect(() => setNodeSimulation(design, 'cache-1', 'capacityQps', 0)).toThrow(RangeError)
+    expect(() => setNodeSimulation(design, 'cache-1', 'baseLatencyMs', -1)).toThrow(RangeError)
+    expect(() => setNodeSimulation(design, 'cache-1', 'monthlyCostUsd', Number.NaN)).toThrow(RangeError)
+    expect(() => setNodeSimulation(design, 'cache-1', 'hitRatio', 1.5)).toThrow(RangeError)
+    expect(() => setNodeSimulation(addNode(design, 'web-server', { x: 0, y: 0 }, 'Web').design, 'web-server-1', 'hitRatio', 0.5)).toThrow(RangeError)
+    expect(() => setNodeSimulation(design, 'client-1', 'capacityQps', 10)).toThrow(RangeError)
+  })
+
+  it('are kept when the Design is stored and read back, and checked when read', () => {
+    const tuned = setNodeSimulation(design, 'cache-1', 'hitRatio', 0.5)
+    const stored = JSON.parse(serializeDesign(tuned))
+
+    expect(deserializeDesign(serializeDesign(tuned))).toEqual(tuned)
+    stored.nodes[0].simulation = { hitRatio: 2 }
+    expect(readDesign(stored).problems).toEqual(['node 1: simulation "hitRatio": not-a-share'])
   })
 })

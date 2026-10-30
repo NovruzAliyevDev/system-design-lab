@@ -15,8 +15,12 @@ import {
   NOTES_MAX_LENGTH,
   renameNode,
   renameZone,
+  nodeSimulation,
   setNodeConfig,
   setNodeNotes,
+  setNodeSimulation,
+  SIMULATION_SETTINGS,
+  simulationProblem,
   updateEdge,
   type Design,
   type DesignEdge,
@@ -24,8 +28,11 @@ import {
   type DesignZone,
   type EdgeMode,
   type EdgeTraffic,
+  type SimulationProblem,
+  type SimulationSetting,
 } from '../../core/design/design'
-import { formatInteger, formatNumber, t, type StringKey } from '../i18n'
+import { parseDecimal } from '../EstimationSteps'
+import { formatNumber, t, type StringKey } from '../i18n'
 import { EDGE_MODE_LABELS, TRAFFIC_LABELS, componentName, fieldLabel, optionLabel } from './componentText'
 
 /** Commits a changed Design as an undo step; commits with the same `mergeKey` in a row undo as one. */
@@ -151,7 +158,7 @@ function NodeConfig({ design, node, onCommit, onEndEdit }: EditProps & { node: D
           onEndEdit={onEndEdit}
         />
       ))}
-      <SimulationDefaults node={node} />
+      <SimulationSettings design={design} node={node} onCommit={onCommit} onEndEdit={onEndEdit} />
     </>
   )
 }
@@ -248,25 +255,44 @@ function problemText(problem: ConfigProblem, field: ConfigField): string {
   return t(PROBLEM_TEXT[problem as keyof typeof PROBLEM_TEXT])
 }
 
-/** What one instance handles, how long it takes and what it costs, ready for the Traffic Simulation. */
-function SimulationDefaults({ node }: { node: DesignNode }) {
-  const { simulation } = componentDefinition(node.componentType)
+/** How each setting reads in the panel: its label, the unit it is typed in, and how many of that make one stored unit. */
+const SETTING_TEXT: Record<SimulationSetting, { label: StringKey; unit: StringKey; scale: number }> = {
+  capacityQps: { label: 'simulationCapacity', unit: 'simulationUnitQps', scale: 1 },
+  baseLatencyMs: { label: 'simulationLatency', unit: 'simulationUnitMs', scale: 1 },
+  monthlyCostUsd: { label: 'simulationCost', unit: 'simulationUnitUsd', scale: 1 },
+  // Typed as a percentage, stored as a share.
+  hitRatio: { label: 'simulationHitRatio', unit: 'simulationUnitPercent', scale: 100 },
+}
+
+/**
+ * What one instance handles, how long it takes and what it costs in the Traffic Simulation: the
+ * component's defaults, each of which the Node can set for itself and reset.
+ */
+function SimulationSettings({ design, node, onCommit, onEndEdit }: EditProps & { node: DesignNode }) {
+  const id = useId()
+  const defaults = componentDefinition(node.componentType).simulation
+  const current = nodeSimulation(node)
   return (
     <div className="mt-5 border-t border-zinc-800 pt-3">
       <h3 className="text-xs font-semibold text-zinc-300">{t('simulationTitle')}</h3>
-      {simulation ? (
+      {defaults && current ? (
         <>
-          <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
-            <dt className="text-zinc-500">{t('simulationCapacity')}</dt>
-            <dd className="text-zinc-200">{t('simulationCapacityValue', { qps: formatInteger(simulation.capacityQps) })}</dd>
-            <dt className="text-zinc-500">{t('simulationLatency')}</dt>
-            <dd className="text-zinc-200">{t('simulationLatencyValue', { ms: formatNumber(simulation.baseLatencyMs) })}</dd>
-            <dt className="text-zinc-500">{t('simulationCost')}</dt>
-            <dd className="text-zinc-200">{t('simulationCostValue', { usd: formatInteger(simulation.monthlyCostUsd) })}</dd>
-          </dl>
-          <p className="mt-2 text-xs text-zinc-500">{t('simulationLatencyBasis', { table: 'Latency numbers' })}</p>
+          {SIMULATION_SETTINGS.filter((key) => defaults[key] !== undefined).map((key) => (
+            <SimulationSettingInput
+              key={key}
+              id={`${id}-${key}`}
+              setting={key}
+              check={(value) => simulationProblem(node.componentType, key, value)}
+              value={current[key]!}
+              defaultValue={defaults[key]!}
+              overridden={node.simulation?.[key] !== undefined}
+              onChange={(value) => onCommit(setNodeSimulation(design, node.id, key, value), `simulation:${node.id}:${key}`)}
+              onEndEdit={onEndEdit}
+            />
+          ))}
+          <p className="mt-3 text-xs text-zinc-500">{t('simulationLatencyBasis', { table: 'Latency numbers' })}</p>
           <ul className="mt-1 space-y-0.5 text-xs text-zinc-400">
-            {simulation.latency.map((term) => (
+            {defaults.latency.map((term) => (
               <li key={term.operation}>
                 {term.times} × {term.operation} ({formatDuration(term.nanoseconds)})
               </li>
@@ -277,6 +303,84 @@ function SimulationDefaults({ node }: { node: DesignNode }) {
         <p className="mt-2 text-xs text-zinc-500">{t('simulationClient')}</p>
       )}
     </div>
+  )
+}
+
+const SIMULATION_PROBLEM_TEXT: Record<SimulationProblem, StringKey> = {
+  'no-such-setting': 'configUnknownField',
+  'not-a-number': 'simulationInvalidPositive',
+  'not-positive': 'simulationInvalidPositive',
+  negative: 'simulationInvalidCost',
+  'not-a-share': 'simulationInvalidPercent',
+}
+
+/** One simulation setting, typed in its unit. A value that makes no sense is shown with the reason and never committed. */
+function SimulationSettingInput(props: {
+  id: string
+  setting: SimulationSetting
+  value: number
+  defaultValue: number
+  overridden: boolean
+  check(value: unknown): SimulationProblem | undefined
+  onChange(value: number | undefined): void
+  onEndEdit(): void
+}) {
+  const { id, setting, value, defaultValue, overridden, check, onChange, onEndEdit } = props
+  const { label, unit, scale } = SETTING_TEXT[setting]
+  const show = (stored: number) => formatNumber(Number((stored * scale).toPrecision(6)))
+  const [draft, setDraft] = useState<string>()
+  const [problem, setProblem] = useState<SimulationProblem>()
+  const invalid = problem !== undefined
+
+  function change(text: string) {
+    setDraft(text)
+    const typed = parseDecimal(text)
+    const stored = typed === undefined ? Number.NaN : typed / scale
+    const nextProblem = check(stored)
+    setProblem(nextProblem)
+    if (!nextProblem) onChange(stored)
+  }
+
+  const errorId = `${id}-error`
+  return (
+    <>
+      <label className={labelClass} htmlFor={id}>
+        {t(label)} ({t(unit)})
+      </label>
+      <div className="flex items-center gap-2">
+        <input
+          id={id}
+          className={inputClass}
+          inputMode="decimal"
+          // An undo or redo changes the stored value under the input: show it, unless an invalid draft is being typed.
+          value={invalid && draft !== undefined ? draft : show(value)}
+          aria-invalid={invalid ? true : undefined}
+          aria-describedby={invalid ? errorId : undefined}
+          onBlur={() => {
+            setProblem(undefined)
+            setDraft(undefined)
+            onEndEdit()
+          }}
+          onChange={(event) => change(event.target.value)}
+        />
+        {overridden && (
+          <button
+            type="button"
+            className="mt-1 shrink-0 rounded border border-zinc-700 px-2 py-1 text-xs text-zinc-300 hover:border-zinc-500"
+            title={t('simulationResetTitle', { value: show(defaultValue) })}
+            onClick={() => onChange(undefined)}
+          >
+            {t('simulationReset')}
+          </button>
+        )}
+      </div>
+      <p className="mt-0.5 text-xs text-zinc-500">{t('simulationDefault', { value: show(defaultValue) })}</p>
+      {problem && (
+        <p id={errorId} role="alert" className="mt-1 text-xs text-red-400">
+          {t(SIMULATION_PROBLEM_TEXT[problem])}
+        </p>
+      )}
+    </>
   )
 }
 

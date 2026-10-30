@@ -31,8 +31,9 @@ import {
 } from '../../core/design/design'
 import { canRedo, canUndo, commit, endMerge, redo, undo, type History } from '../../core/design/history'
 import { autoLayout } from '../../core/design/layout'
+import type { SimulationResult } from '../../core/simulation/simulate'
 import { downloadDataUrl } from '../download'
-import { t } from '../i18n'
+import { formatInteger, t } from '../i18n'
 import { useProgress } from '../progress/store'
 import { ComponentNode, type ComponentFlowNode } from './ComponentNode'
 import { TRAFFIC_LABELS, componentName } from './componentText'
@@ -86,6 +87,8 @@ interface DesignEditorProps {
   compact?: boolean
   /** Names the canvas when a page shows more than one. */
   label?: string
+  /** Traffic Simulation results to show on the Nodes and Edges. */
+  simulation?: SimulationResult
 }
 
 export function DesignEditor(props: DesignEditorProps) {
@@ -96,7 +99,7 @@ export function DesignEditor(props: DesignEditorProps) {
   )
 }
 
-function Editor({ history, onChange, readOnly, compact = false, label = t('canvasLabel') }: DesignEditorProps) {
+function Editor({ history, onChange, readOnly, compact = false, label = t('canvasLabel'), simulation }: DesignEditorProps) {
   const design = history.present
   const theme = useProgress((state) => state.progress?.settings.theme)
   const sketch = useProgress((state) => state.progress?.settings.canvasStyle === 'sketch')
@@ -170,13 +173,13 @@ function Editor({ history, onChange, readOnly, compact = false, label = t('canva
           id: node.id,
           type: 'component',
           position: node.position,
-          data: { node, sketch },
+          data: { node, sketch, metrics: simulation?.nodes[node.id] },
           measured: measured[node.id],
           selected: selection.nodeIds.includes(node.id),
         }),
       ),
     ],
-    [shown, measured, selection.nodeIds, selection.zoneIds, sketch, readOnly, resizeZone],
+    [shown, measured, selection.nodeIds, selection.zoneIds, sketch, readOnly, resizeZone, simulation],
   )
 
   const edges = useMemo(
@@ -184,22 +187,28 @@ function Editor({ history, onChange, readOnly, compact = false, label = t('canva
       design.edges.map((edge) => {
         const color = TRAFFIC_COLORS[edge.traffic]
         const selected = selection.edgeIds.includes(edge.id)
+        const flow = simulation?.edges[edge.id]
+        const qps = flow ? flow.readQps + flow.writeQps : 0
+        const trafficLabel = t(TRAFFIC_LABELS[edge.traffic])
+        // Under simulation, requests flow along the Edge as moving dashes, the thicker the more there are.
+        const width = (selected ? 3 : 2) + (qps > 0 ? Math.min(4, Math.log10(qps)) : 0)
         return {
           id: edge.id,
           type: 'design',
           source: edge.source,
           target: edge.target,
           selected,
-          label: t(TRAFFIC_LABELS[edge.traffic]),
+          label: flow ? t('edgeFlow', { label: trafficLabel, qps: formatInteger(qps) }) : trafficLabel,
+          animated: qps > 0,
           labelStyle: { fill: color, fontSize: 11 },
           labelBgStyle: { fill: 'var(--color-zinc-950)' },
           markerEnd: { type: MarkerType.ArrowClosed, color },
-          style: { stroke: color, strokeWidth: selected ? 3 : 2, strokeDasharray: edge.mode === 'async' ? '6 4' : undefined },
+          style: { stroke: color, strokeWidth: width, strokeDasharray: edge.mode === 'async' ? '6 4' : undefined },
           ariaLabel: `${edge.source} → ${edge.target}`,
           data: { mode: edge.mode, traffic: edge.traffic, sketch },
         }
       }),
-    [design.edges, selection.edgeIds, sketch],
+    [design.edges, selection.edgeIds, sketch, simulation],
   )
 
   const zoneIds = useMemo(() => new Set(design.zones.map((zone) => zone.id)), [design.zones])

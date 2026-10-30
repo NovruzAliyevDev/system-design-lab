@@ -452,7 +452,7 @@ test('builds a sandbox Design by drag and drop, and keeps it after a reload', as
   await instances.fill('3')
   await expect(cache).toContainText('Redis')
   await expect(cache).toContainText('Write-through · LRU · ×3')
-  await expect(panel.getByText('50 000 sorğu/san')).toBeVisible()
+  await expect(panel.getByLabel('Tutum (sorğu/san)')).toHaveValue('50000')
 
   await webServer.locator('.react-flow__handle.source').dragTo(cache.locator('.react-flow__handle.target'))
   const edge = page.locator('.react-flow__edge')
@@ -876,4 +876,47 @@ test('runs a Mock Interview against the clock without Hints, self-assesses it an
   await history.nth(1).getByRole('button', { name: 'Bax' }).click()
   await expect(page.getByRole('group', { name: /^Hesablama ·/ }).getByRole('radio', { name: '5 · Əla' })).toBeChecked()
   await expect(page.getByRole('textbox', { name: 'Qeydlər' })).toBeDisabled()
+})
+
+test('simulates traffic on an undersized sandbox Design, flags the overloaded Node and clears it once scaled out', async ({ page }) => {
+  await page.setViewportSize({ width: 1366, height: 1000 })
+  await page.goto('/sandbox')
+  const palette = page.getByRole('navigation', { name: 'Komponentlər' })
+  const canvas = page.getByTestId('rf__wrapper')
+  await palette.getByRole('button', { name: 'Client: kətana əlavə et' }).dragTo(canvas, { targetPosition: { x: 120, y: 150 } })
+  await palette.getByRole('button', { name: 'Web server: kətana əlavə et' }).dragTo(canvas, { targetPosition: { x: 520, y: 150 } })
+  const client = page.getByTestId('node-client-1')
+  const webServer = page.getByTestId('node-web-server-1')
+  await client.locator('.react-flow__handle.source').dragTo(webServer.locator('.react-flow__handle.target'))
+  await expect(page.locator('.react-flow__edge')).toHaveCount(1)
+
+  // One web server serves 1,000 requests a second; 1,500 overload it.
+  await page.getByLabel('Oxuma (sorğu/san)').fill('1400')
+  await page.getByLabel('Yazma (sorğu/san)').fill('100')
+  await page.getByRole('button', { name: 'Simulyasiya et' }).click()
+  await expect(webServer).toHaveAttribute('data-overloaded', 'true')
+  await expect(webServer).toContainText('1 500 / 1 000 sorğu/san · 150%')
+  await expect(webServer).toContainText('Həddən artıq yüklənib')
+  await expect(client).toContainText('1 500 sorğu/san göndərir')
+  await expect(page.locator('.react-flow__edge.animated')).toHaveCount(1)
+  const summary = page.getByRole('region', { name: 'Nəticə' })
+  await expect(summary).toContainText('Xəta nisbəti33,3%')
+  await expect(summary).toContainText('Atılan sorğular500 sorğu/san')
+  await expect(summary).toContainText('Web server: 150% · Həddən artıq yüklənib')
+
+  // The results follow the Design: two instances carry the load.
+  await webServer.click()
+  await page.getByRole('region', { name: 'Tənzimləmə' }).getByLabel('Nüsxə sayı').fill('2')
+  await expect(webServer).toHaveAttribute('data-overloaded', 'false')
+  await expect(summary).toContainText('Xəta nisbəti0%')
+  await expect(summary).toContainText('Aylıq xərc140 $')
+
+  // ...and the load: at 100,000 requests a second it breaks again.
+  await page.getByRole('slider', { name: 'Ümumi yük' }).fill('5')
+  await expect(page.getByText('Ümumi yük: 100 000 sorğu/san')).toBeVisible()
+  await expect(webServer).toHaveAttribute('data-overloaded', 'true')
+
+  await page.getByRole('button', { name: 'Simulyasiyanı dayandır' }).click()
+  await expect(summary).toHaveCount(0)
+  await expect(webServer).not.toHaveAttribute('data-overloaded')
 })
