@@ -28,7 +28,7 @@ export function TableOfContents({ currentLessonId }: { currentLessonId?: string 
   return (
     <nav ref={navRef} aria-label={t('tableOfContents')}>
       {/* Wider screens link these pages from the header. */}
-      <ul className="mb-4 md:hidden">
+      <ul className="mb-4 lg:hidden">
         {HEADER_PAGES.map(({ to, label }) => (
           <li key={to}>
             <NavLink to={to} className={(state) => `${lessonLinkClass(state)} font-medium`}>

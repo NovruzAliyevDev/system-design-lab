@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { BrowserRouter, Link, Route, Routes, useLocation, useMatch } from 'react-router-dom'
 import { Attribution } from './Attribution'
+import { CalculatorsPage } from './CalculatorsPage'
 import { ChallengePage } from './ChallengePage'
 import { ChallengesPage } from './ChallengesPage'
 import { FlashcardsPage } from './FlashcardsPage'
@@ -16,6 +17,7 @@ import { TableOfContents } from './TableOfContents'
 import { UpdatePrompt } from './UpdatePrompt'
 import { t } from './i18n'
 import {
+  CALCULATORS_ROUTE,
   CHALLENGE_ROUTE,
   CHALLENGES_ROUTE,
   FLASHCARDS_ROUTE,
@@ -62,9 +64,9 @@ function Layout() {
           <div className="ml-auto self-center">
             <Search />
           </div>
-          {/* A narrow header has no room for them; the table of contents drawer links them there. */}
+          {/* A narrow header has no room for them; below `lg` the table of contents drawer links them. */}
           {HEADER_PAGES.map(({ to, label }) => (
-            <Link key={to} to={to} className="hidden text-sm text-zinc-400 hover:text-zinc-100 md:inline">
+            <Link key={to} to={to} className="hidden text-sm text-zinc-400 hover:text-zinc-100 lg:inline">
               {t(label)}
             </Link>
           ))}
@@ -93,6 +95,7 @@ function Layout() {
               <Route path={STUDY_GUIDE_ROUTE} element={<StudyGuidePage />} />
               <Route path={FLASHCARDS_ROUTE} element={<FlashcardsPage />} />
               <Route path={SANDBOX_ROUTE} element={<SandboxPage />} />
+              <Route path={CALCULATORS_ROUTE} element={<CalculatorsPage />} />
               <Route path={CHALLENGES_ROUTE} element={<ChallengesPage />} />
               <Route path={CHALLENGE_ROUTE} element={<ChallengePage />} />
               <Route path={SETTINGS_ROUTE} element={<SettingsPage />} />

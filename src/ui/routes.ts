@@ -1,4 +1,5 @@
 import type { CardSelection } from '../core/flashcards/deck'
+import type { CalculatorId } from '../core/content/calculator-lessons'
 import type { StringKey } from './i18n'
 
 /** App route of a Lesson, optionally scrolled to a heading inside it. */
@@ -39,6 +40,13 @@ export function challengePath(challengeId: string, stageId?: string): string {
   return `${CHALLENGES_ROUTE}/${challengeId}${stageId ? `?stage=${encodeURIComponent(stageId)}` : ''}`
 }
 
+export const CALCULATORS_ROUTE = '/calculators'
+
+/** App route of a calculator. */
+export function calculatorPath(calculatorId: CalculatorId): string {
+  return `${CALCULATORS_ROUTE}#${calculatorId}`
+}
+
 /** The free Design Canvas, outside any Challenge. */
 export const SANDBOX_ROUTE = '/sandbox'
 
@@ -64,11 +72,12 @@ export function flashcardsPath(selection: CardSelection): string {
   return query ? `${FLASHCARDS_ROUTE}?${query}` : FLASHCARDS_ROUTE
 }
 
-/** Pages besides the Lessons, linked from the header (from `md` up) and the table of contents drawer. */
+/** Pages besides the Lessons, linked from the header (from `lg` up) and the table of contents drawer. */
 export const HEADER_PAGES: { to: string; label: StringKey }[] = [
   { to: CHALLENGES_ROUTE, label: 'challengesTitle' },
   { to: FLASHCARDS_ROUTE, label: 'flashcardsTitle' },
   { to: SANDBOX_ROUTE, label: 'sandboxTitle' },
+  { to: CALCULATORS_ROUTE, label: 'calculatorsTitle' },
   { to: STUDY_GUIDE_ROUTE, label: 'studyGuideTitle' },
   { to: SOLUTIONS_ROUTE, label: 'solutionsTitle' },
   { to: GLOSSARY_ROUTE, label: 'glossaryTitle' },

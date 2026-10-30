@@ -2,11 +2,13 @@ import { describe, expect, it } from 'vitest'
 import { loadPrimerCatalog } from '../scripts/build-content'
 import { findChallenge, type Challenge, type DesignStage, type Stage, type StageType } from '../src/core/challenges/challenge'
 import { evaluateDesign } from '../src/core/challenges/rules'
+import { CALCULATOR_LESSONS } from '../src/core/content/calculator-lessons'
 import { findUnresolvedLinks, resolveLink } from '../src/core/content/links'
 import { linkUrls } from '../src/core/content/markdown'
 import { defaultConfig, paletteGlossaryProblems, PRIMER_LATENCY_NS } from '../src/core/design/components'
 import { connect, removeElements, setNodeConfig, updateEdge, type Design, type DesignNode } from '../src/core/design/design'
 import { BYTE_UNITS, estimate, gradeEstimate, workedSteps } from '../src/core/estimation/estimate'
+import { compareLatencies } from '../src/core/estimation/latency'
 import { htmlLinkUrls } from '../src/core/flashcards/deck'
 import { findLessonQuiz } from '../src/core/quizzes/quiz'
 
@@ -211,6 +213,19 @@ describe('catalog of the pinned primer commit', () => {
     const tableUnits = catalog.appendix.powersOfTwo!.rows.flatMap((row) => (row.bytes?.startsWith('1 ') ? [[row.bytes.slice(2), row.power]] : []))
 
     expect(tableUnits).toEqual(BYTE_UNITS.filter(({ unit }) => unit !== 'B' && unit !== 'PB').map(({ unit, power }) => [unit, power]))
+  })
+
+  it('fits 15 HDD seeks in a cross-continent round trip, by the latency numbers table', () => {
+    const rows = catalog.appendix.latencyNumbers!.rows
+    const row = (operation: string) => rows.find((candidate) => candidate.operation === operation)!
+
+    expect(compareLatencies(row('Send packet CA->Netherlands->CA'), row('HDD seek')).ratio).toBe(15)
+  })
+
+  it('links the calculators from Lessons that exist', () => {
+    const lessonIds = new Set(catalog.lessons.map((lesson) => lesson.id))
+
+    expect(Object.values(CALCULATOR_LESSONS).flat().filter((lessonId) => !lessonIds.has(lessonId))).toEqual([])
   })
 
   describe('the Pastebin Challenge', () => {

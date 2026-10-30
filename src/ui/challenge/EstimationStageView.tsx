@@ -1,71 +1,13 @@
 import { useId, useState } from 'react'
 import type { StageWork } from '../../core/challenges/attempt'
 import type { EstimationQuestion, EstimationStage } from '../../core/challenges/challenge'
-import {
-  BYTE_UNITS,
-  ESTIMATION_QUANTITIES,
-  estimate,
-  fromUnit,
-  gradeEstimate,
-  inBestUnit,
-  workedSteps,
-  type ByteUnit,
-  type EstimationQuantity,
-  type EstimationStep,
-  type Operand,
-  type QuantityKind,
-} from '../../core/estimation/estimate'
-import { formatInteger, formatNumber, t, type StringKey } from '../i18n'
+import { BYTE_UNITS, ESTIMATION_QUANTITIES, estimate, fromUnit, gradeEstimate, inBestUnit, workedSteps, type ByteUnit } from '../../core/estimation/estimate'
+import { CalculatorLinks } from '../CalculatorsPage'
+import { formatMeasure, formatRounded, parseDecimal, StepLine } from '../EstimationSteps'
+import { formatNumber, t } from '../i18n'
 import { Verdict } from './shared'
 
 type EstimationWork = Extract<StageWork, { type: 'estimation' }>
-
-const QUANTITY_NAMES: Record<EstimationQuantity, StringKey> = {
-  writeQps: 'quantityWriteQps',
-  readQps: 'quantityReadQps',
-  peakWriteQps: 'quantityPeakWriteQps',
-  peakReadQps: 'quantityPeakReadQps',
-  storagePerMonth: 'quantityStoragePerMonth',
-  storagePerYear: 'quantityStoragePerYear',
-  storageTotal: 'quantityStorageTotal',
-  writeBandwidth: 'quantityWriteBandwidth',
-  readBandwidth: 'quantityReadBandwidth',
-}
-
-const OPERAND_NAMES: Record<Exclude<Operand, { kind: 'quantity' }>['name'], StringKey> = {
-  writesPerMonth: 'inputWritesPerMonth',
-  readsPerMonth: 'inputReadsPerMonth',
-  bytesPerWrite: 'inputBytesPerWrite',
-  bytesPerRead: 'inputBytesPerRead',
-  peakFactor: 'inputPeakFactor',
-  years: 'inputYears',
-  secondsPerMonth: 'constantSecondsPerMonth',
-  monthsPerYear: 'constantMonthsPerYear',
-}
-
-/** A number rounded to 4 significant digits, whole numbers grouped: "12,71", "457,6", "10 000 000". */
-function formatRounded(value: number): string {
-  const rounded = Number(value.toPrecision(4))
-  return Number.isInteger(rounded) ? formatInteger(rounded) : formatNumber(rounded)
-}
-
-/** A value of a quantity kind in its best unit, e.g. "12,71 GB", "40 sorğu/san", "50,84 KB/san". */
-export function formatMeasure(value: number, kind: QuantityKind): string {
-  const { value: inUnit, unit } = inBestUnit(value, kind)
-  const number = formatRounded(inUnit)
-  if (kind === 'requests-per-second') return `${number} ${t('estimationRequestsPerSecond')}`
-  return kind === 'bytes' ? `${number} ${unit}` : `${number} ${t('estimationPerSecond', { unit: unit! })}`
-}
-
-function formatOperand(operand: Operand): string {
-  if (operand.kind === 'quantity') return formatMeasure(operand.value, ESTIMATION_QUANTITIES[operand.name])
-  if (operand.name === 'bytesPerWrite' || operand.name === 'bytesPerRead') return formatMeasure(operand.value, 'bytes')
-  return formatRounded(operand.value)
-}
-
-function operandName(operand: Operand): string {
-  return t(operand.kind === 'quantity' ? QUANTITY_NAMES[operand.name] : OPERAND_NAMES[operand.name])
-}
 
 /** The learner's estimates, each a number and a unit; once the Stage is over, each is graded and the worked solution shows. */
 export function EstimationStageView(props: { stage: EstimationStage; work: EstimationWork; editable: boolean; onChange(work: EstimationWork): void }) {
@@ -80,6 +22,8 @@ export function EstimationStageView(props: { stage: EstimationStage; work: Estim
   return (
     <div className="mt-4 max-w-4xl">
       {!over && <p className="text-xs text-zinc-500">{t('estimationTolerance')}</p>}
+      {/* A new tab keeps the Stage in view; the Attempt is saved either way. */}
+      <CalculatorLinks calculators={['back-of-the-envelope', 'latency']} newTab />
       <ol className="mt-2 space-y-3">
         {stage.questions.map((question) =>
           over ? (
@@ -112,9 +56,8 @@ function EstimateInput(props: { question: EstimationQuestion; value?: number; di
 
   function change(text: string, unit: ByteUnit) {
     setDraft({ text, unit })
-    const number = Number(text.trim().replace(',', '.'))
-    const valid = text.trim() !== '' && Number.isFinite(number)
-    onChange(valid ? (kind === 'requests-per-second' ? number : fromUnit(number, unit)) : undefined)
+    const number = parseDecimal(text)
+    onChange(number === undefined ? undefined : kind === 'requests-per-second' ? number : fromUnit(number, unit))
   }
 
   return (
@@ -187,16 +130,5 @@ function WorkedSolution({ stage }: { stage: EstimationStage }) {
           ))}
       </ol>
     </section>
-  )
-}
-
-function StepLine({ step }: { step: EstimationStep }) {
-  const [left, right] = step.operands
-  const sign = step.operation === 'multiply' ? '×' : '÷'
-  return (
-    <>
-      <span className="text-zinc-100">{t(QUANTITY_NAMES[step.quantity])}</span> = {operandName(left)} {sign} {operandName(right)} = {formatOperand(left)} {sign}{' '}
-      {formatOperand(right)} = <span className="text-zinc-100">{formatMeasure(step.value, ESTIMATION_QUANTITIES[step.quantity])}</span>
-    </>
   )
 }

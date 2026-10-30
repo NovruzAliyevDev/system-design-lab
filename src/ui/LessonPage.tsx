@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, type RefObject } from 'react'
 import { Link, useParams } from 'react-router-dom'
+import { calculatorsOfLesson } from '../core/content/calculator-lessons'
 import { findLesson } from '../core/content/catalog'
 import { adjacentLessons } from '../core/content/navigation'
 import { selectCards } from '../core/flashcards/deck'
@@ -7,6 +8,7 @@ import { isLessonRead } from '../core/progress/reading'
 import { findLessonQuiz } from '../core/quizzes/quiz'
 import { appendixTablesOf } from './AppendixTables'
 import { Attribution } from './Attribution'
+import { CalculatorLinks } from './CalculatorsPage'
 import { LessonQuiz } from './LessonQuiz'
 import { catalog } from './catalog'
 import { t } from './i18n'
@@ -69,6 +71,8 @@ export function LessonPage() {
           </Link>
         </p>
       )}
+
+      <CalculatorLinks calculators={calculatorsOfLesson(lessonId)} />
 
       <div lang="en" className={`${PRIMER_PROSE_CLASS} mt-8`}>
         <PrimerMarkdown text={lesson} codeBlocks={appendixTables} />

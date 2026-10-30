@@ -245,6 +245,36 @@ test('sorts and filters the latency numbers table of the appendix', async ({ pag
   await expect(page.getByText('Heç bir sətir uyğun gəlmir.')).toBeVisible()
 })
 
+test('estimates from users with the calculator and compares two latencies, on a phone', async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 812 })
+  await page.goto('/lessons/back-of-the-envelope-calculations')
+  await page.getByRole('link', { name: 'Back-of-the-envelope kalkulyatoru' }).click()
+  await expect(page.getByRole('heading', { level: 1, name: 'Kalkulyatorlar' })).toBeVisible()
+
+  // It starts from the primer's Twitter usage: 100 million users post 5 tweets of 10 KB a day.
+  await expect(page.getByText('Saniyədə yazma = ayda yazma ÷ ayda saniyə = 15 000 000 000 ÷ 2 500 000 = 6 000 sorğu/san')).toBeVisible()
+  await expect(page.getByText('Ayda yeni məlumat = ayda yazma × bir yazmanın ölçüsü = 15 000 000 000 × 10 KB = 150 TB')).toBeVisible()
+  const result = (quantity: string) => page.locator('dl > div').filter({ has: page.getByText(quantity, { exact: true }) })
+  await expect(result('Saniyədə yazma')).toContainText('500 000 000 sorğu/gün')
+
+  await page.getByRole('textbox', { name: 'Pik əmsalı' }).fill('3')
+  await expect(result('Pikdə saniyədə yazma')).toContainText('18 000 sorğu/san')
+  await page.getByRole('combobox', { name: 'Vahid: Bir yazmanın ölçüsü' }).selectOption('MB')
+  await expect(result('Ayda yeni məlumat')).toContainText('150 PB')
+  await page.getByRole('textbox', { name: 'Gündəlik aktiv istifadəçi' }).fill('çox')
+  await expect(page.getByRole('alert')).toHaveText('Bütün sahələrə mənfi olmayan ədəd yazın.')
+
+  // The latency comparison answers the primer's kind of question, or compares any two operations.
+  await expect(page.getByText('15 dəfə')).toBeVisible()
+  await page.getByRole('button', { name: 'Data mərkəzi daxilində bir round trip-ə neçə yaddaş müraciəti sığır?' }).click()
+  await expect(page.getByText('5 000 dəfə')).toBeVisible()
+  await page.getByRole('combobox', { name: 'Birinci əməliyyat' }).selectOption({ label: 'L1 cache reference (0.5 ns)' })
+  await expect(page.getByText('200 dəfə')).toBeVisible()
+
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)
+  expect(overflow).toBeLessThanOrEqual(0)
+})
+
 test('reads a Solution page from the primer, with its diagrams and links back to Lessons', async ({ page }) => {
   await page.setViewportSize({ width: 1366, height: 900 })
   await page.goto('/lessons/system-design-interview-questions-with-solutions')
@@ -718,6 +748,8 @@ test('runs the Pastebin Challenge Stage by Stage, scores the Attempt and retries
   await page.getByRole('button', { name: 'Növbəti mərhələ: Hesablama →' }).click()
 
   // Estimation: answers within a factor of 2 of the reference pass, whatever unit they are given in.
+  // The calculators open in a new tab, beside the Stage.
+  await expect(page.getByRole('link', { name: 'Back-of-the-envelope kalkulyatoru' })).toHaveAttribute('target', '_blank')
   await page.getByRole('textbox', { name: 'Orta hesabla saniyədə neçə paste yazılır?' }).fill('4')
   await page.getByRole('textbox', { name: 'Orta hesabla saniyədə neçə oxuma sorğusu gəlir?' }).fill('30')
   await page.getByRole('textbox', { name: 'Bir ildə nə qədər yeni paste məlumatı yığılır?' }).fill('150')
