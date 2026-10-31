@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { loadPrimerCatalog } from '../scripts/build-content'
 import { findChallenge, type Challenge, type DesignStage, type Stage, type StageType } from '../src/core/challenges/challenge'
-import { evaluateDesign, problemHints } from '../src/core/challenges/rules'
+import { chaosScenarioOf, evaluateDesign, problemHints } from '../src/core/challenges/rules'
 import { CALCULATOR_LESSONS } from '../src/core/content/calculator-lessons'
 import { findUnresolvedLinks, resolveLink } from '../src/core/content/links'
 import { linkUrls } from '../src/core/content/markdown'
@@ -10,6 +10,7 @@ import { connect, removeElements, setNodeConfig, updateEdge, type Design, type D
 import { BYTE_UNITS, estimate, gradeEstimate, workedSteps } from '../src/core/estimation/estimate'
 import { compareLatencies } from '../src/core/estimation/latency'
 import { htmlLinkUrls } from '../src/core/flashcards/deck'
+import { simulate } from '../src/core/simulation/simulate'
 import { findLessonQuiz } from '../src/core/quizzes/quiz'
 
 /** The Stage interface of a Stage type, e.g. `DesignStage` for `'scaling'`. */
@@ -196,13 +197,13 @@ describe('catalog of the pinned primer commit', () => {
     }
   })
 
-  it('has Challenges with a default Load Profile, whose Reference Solutions meet their own simulation targets', () => {
+  it('has Challenges with a default Load Profile, whose Reference Solutions meet their own simulation targets, under their Chaos tasks too', () => {
     for (const challenge of catalog.challenges) {
       expect(challenge.loadProfile.readQps + challenge.loadProfile.writeQps, challenge.id).toBeGreaterThan(0)
       const designStages = challenge.stages.filter((stage): stage is DesignStage => stage.type === 'high-level-design' || stage.type === 'scaling')
       for (const stage of designStages) {
         const targets = stage.rules.filter((rule) => rule.check.type === 'simulation')
-        const results = evaluateDesign({ rules: targets, loadProfile: stage.loadProfile }, stage.referenceSolution, {}).rules
+        const results = evaluateDesign({ ...stage, rules: targets }, stage.referenceSolution, {}).rules
 
         expect(results.filter((result) => !result.passed).map((result) => result.ruleId), `${challenge.id}/${stage.id}`).toEqual([])
       }
@@ -286,8 +287,34 @@ describe('catalog of the pinned primer commit', () => {
         const evaluation = evaluateDesign(scaling, oneObjectStore, { 'peak-load': 1 })
 
         expect(peakLoad(oneObjectStore).passed).toBe(false)
-        expect(evaluation.failingCount).toBe(1)
-        expect(problemHints(scaling, evaluation)).toEqual([{ ruleId: 'peak-load', opened: scaling.rules[0].hints.slice(0, 1), canOpenMore: true }])
+        // The overloaded Object Store drops reads under the Chaos task too.
+        expect(problemHints(scaling, evaluation)).toEqual([
+          { ruleId: 'peak-load', opened: scaling.rules[0].hints.slice(0, 1), canOpenMore: true },
+          { ruleId: 'primary-db-down', opened: [], canOpenMore: true },
+        ])
+      })
+    })
+
+    describe('Scaling Stage Chaos task', () => {
+      const scaling = stageOfType(pastebin, 'scaling')
+      const survives = (design: Design) => evaluateDesign(scaling, design, {}).rules.find((result) => result.ruleId === 'primary-db-down')!.passed
+
+      it('takes the primary of the shortlink table down, and the Reference Solution keeps reading from its replicas', () => {
+        expect(scaling.chaosTasks?.map((task) => task.id)).toEqual(['primary-db-down'])
+        const scenario = chaosScenarioOf(scaling.chaosTasks![0].scenario, scaling.referenceSolution)
+        expect(scenario).toEqual({ type: 'node-down', nodeIds: ['sql-database-1'] })
+
+        const result = simulate(scaling.referenceSolution, scaling.loadProfile, scenario)
+        expect(result.errorRateByKind).toEqual({ read: 0, write: 1 })
+        expect(survives(scaling.referenceSolution)).toBe(true)
+      })
+
+      it('is failed by a design reading the shortlinks from the primary, and passed with replicas configured on it', () => {
+        const withoutReplicaNode = removeElements(scaling.referenceSolution, { nodeIds: ['sql-database-2'] })
+        const readsFromPrimary = updateEdge(connect(withoutReplicaNode, 'app-service-2', 'sql-database-1'), 'app-service-2->sql-database-1', { traffic: 'read' })
+
+        expect(survives(setNodeConfig(readsFromPrimary, 'sql-database-1', 'instances', 3))).toBe(false)
+        expect(survives(setNodeConfig(readsFromPrimary, 'sql-database-1', 'replicas', 2))).toBe(true)
       })
     })
   })

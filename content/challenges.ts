@@ -35,6 +35,12 @@ const READ_REPLICAS: Predicate = {
   ],
 }
 
+/** The primary holding the shortlink table: the SQL master, or a key-value store's primary. */
+const METADATA_PRIMARY: NodeSelector[] = [
+  { component: 'sql-database', config: { role: 'primary' } },
+  { component: 'nosql-store', config: { kind: 'key-value', role: 'primary' } },
+]
+
 /** Some node matches one of the selectors. */
 const anyNode = (selectors: NodeSelector[]): Predicate => ({ type: 'any-of', predicates: selectors.map((selector) => ({ type: 'node', node: selector })) })
 
@@ -493,10 +499,17 @@ export const challenges: ChallengeInput[] = [
         type: 'scaling',
         weight: 3,
         prompt:
-          'Yüksək səviyyəli dizaynınızdan davam edin və onu məhdudiyyətlərə görə miqyaslayın: trafik qeyri-bərabərdir və pik anlarda çoxalır, oxumalar yazmalardan 10 dəfə çoxdur, populyar paste-lər təkrar-təkrar açılır, statistika ayrıca analitik bazada saxlanılmalıdır. Dizayn pik yükə dözməlidir: saniyədə 1000 oxuma və 100 yazma altında oxumanın və yazmanın orta gecikməsi 200 ms-i keçməməli, heç bir node həddən artıq yüklənməməli və heç bir sorğu xəta ilə bitməməlidir. Bunu trafik simulyasiyası ilə yoxlayın. Darboğazları tapın, komponent əlavə edin və ya dəyişin, "Yoxla" düyməsini basın.',
+          'Yüksək səviyyəli dizaynınızdan davam edin və onu məhdudiyyətlərə görə miqyaslayın: trafik qeyri-bərabərdir və pik anlarda çoxalır, oxumalar yazmalardan 10 dəfə çoxdur, populyar paste-lər təkrar-təkrar açılır, statistika ayrıca analitik bazada saxlanılmalıdır. Dizayn pik yükə dözməlidir: saniyədə 1000 oxuma və 100 yazma altında oxumanın və yazmanın orta gecikməsi 200 ms-i keçməməli, heç bir node həddən artıq yüklənməməli və heç bir sorğu xəta ilə bitməməlidir. Xaos tapşırığı: link bazasının primary-si sıradan çıxanda oxumalar xətasız davam etməlidir. Bunu trafik simulyasiyası ilə yoxlayın. Darboğazları tapın, komponent əlavə edin və ya dəyişin, "Yoxla" düyməsini basın.',
         solutionAnchor: 'step-4-scale-the-design',
         // An authored peak, not the primer's: 25 times its average, keeping the 10:1 read/write mix.
         loadProfile: { readQps: 1_000, writeQps: 100, requestBytes: 1_000 },
+        chaosTasks: [
+          {
+            id: 'primary-db-down',
+            prompt: 'Link bazasının primary-si sıradan çıxıb: oxumalar xətasız işləməyə davam etməlidir.',
+            scenario: { type: 'node-down', nodes: METADATA_PRIMARY },
+          },
+        ],
         rules: [
           {
             id: 'peak-load',
@@ -508,6 +521,17 @@ export const challenges: ChallengeInput[] = [
               'Hər node bir nüsxədə məhdud sorğu emal edir; yük tutumu keçəndə node həddən artıq yüklənir, artıq sorğular atılır, gecikmə kəskin artır. Pik yükdə web server-lər və Read API kimi stateless serverlər horizontal miqyaslanır, populyar paste-lər cache-dən verilir, cache-də olmayan oxumalar read replica-lara gedir, paste mətni isə bir neçə nüsxəli Object Store-dan oxunur.',
             ],
             check: { type: 'simulation', maxLatencyMs: { read: 200, write: 200 }, maxOverloadedNodes: 0, maxErrorRate: 0 },
+          },
+          {
+            id: 'primary-db-down',
+            weight: 2,
+            description: 'Link bazasının primary-si sıradan çıxanda pik yükdə oxumalar xətasız davam edir.',
+            hints: [
+              'Yazmaları qəbul edən baza birdən sıradan çıxsa, istifadəçilər paste-ləri hələ də oxuya bilərmi?',
+              'Trafik simulyasiyasında "Xaos ssenarisi" siyahısından bu tapşırığı seçin və qırmızı oxuma yollarına baxın. Read API link oxumalarını primary-dən yox, read replica-dan almalıdır.',
+              'Primer master-slave replication-da master sıradan çıxanda sistemin, slave master-ə yüksəldilənə qədər, yalnız oxuma rejimində işləyə bildiyini deyir. Oxumalar read replica-lara gedirsə (ayrıca replica node-u, ya da primary-nin "replicas" sahəsi), primary-nin itməsi yalnız yazmaları dayandırır; oxumalar primary-dən keçirsə, onlar da xəta ilə bitir.',
+            ],
+            check: { type: 'simulation', chaos: 'primary-db-down', maxErrorRate: { read: 0 } },
           },
           {
             id: 'load-balancer',

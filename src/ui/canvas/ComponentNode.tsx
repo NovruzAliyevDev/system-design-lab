@@ -25,13 +25,27 @@ function configSummary(node: DesignNode): string {
   return parts.join(' · ')
 }
 
-/** A Node's Traffic Simulation results: load against capacity, latency and cost, or what a client sends. */
+/**
+ * A Node's Traffic Simulation results: load against capacity, latency and cost, or what a client sends;
+ * what a Chaos Scenario broke in it, and the requests it drops.
+ */
 function MetricsOverlay({ metrics }: { metrics: NodeMetrics }) {
   if (metrics.capacityQps === undefined) {
     return <div className="mt-1 border-t border-zinc-800 pt-1 text-xs text-sky-300">{t('nodeMetricsSent', { load: formatInteger(metrics.loadQps) })}</div>
   }
+  const dropped = metrics.droppedQps > 0 && <div className="text-rose-300">{t('nodeDropped', { qps: formatInteger(metrics.droppedQps) })}</div>
+  if (metrics.down) {
+    return (
+      <div className="mt-1 border-t border-rose-800 pt-1 text-xs">
+        <div className="font-semibold text-rose-300">{t('nodeDown')}</div>
+        {dropped}
+      </div>
+    )
+  }
   return (
     <div className={`mt-1 border-t pt-1 text-xs ${metrics.overloaded ? 'border-rose-800 text-rose-200' : 'border-zinc-800 text-sky-300'}`}>
+      {metrics.primaryDown && <div className="font-semibold text-rose-300">{t('nodePrimaryDown')}</div>}
+      {metrics.cold && <div className="font-semibold text-amber-300">{t('nodeCold')}</div>}
       <div>
         {t('nodeMetricsLoad', {
           load: formatInteger(metrics.loadQps),
@@ -48,6 +62,7 @@ function MetricsOverlay({ metrics }: { metrics: NodeMetrics }) {
         {metrics.backlogQps > 0 && ` · ${t('nodeBacklog', { qps: formatInteger(metrics.backlogQps) })}`}
       </div>
       {metrics.overloaded && <div className="font-semibold text-rose-300">{t('nodeOverloaded')}</div>}
+      {dropped}
     </div>
   )
 }
@@ -55,18 +70,24 @@ function MetricsOverlay({ metrics }: { metrics: NodeMetrics }) {
 export function ComponentNode({ data: { node, sketch, metrics }, selected, isConnectable }: NodeProps<ComponentFlowNode>) {
   const summary = configSummary(node)
   const overloaded = metrics?.overloaded ?? false
+  const down = metrics?.down ?? false
   // Sketched, the border is a Rough.js box drawn over the background instead.
   const frame = sketch
     ? 'border-transparent'
-    : overloaded
-      ? `border-rose-500 ${selected ? 'ring-2 ring-sky-400' : 'ring-1 ring-rose-500'}`
-      : selected
-        ? 'border-sky-400 ring-1 ring-sky-400'
-        : 'border-zinc-700'
+    : down
+      ? `border-dashed border-rose-500 ${selected ? 'ring-2 ring-sky-400' : ''}`
+      : overloaded
+        ? `border-rose-500 ${selected ? 'ring-2 ring-sky-400' : 'ring-1 ring-rose-500'}`
+        : selected
+          ? 'border-sky-400 ring-1 ring-sky-400'
+          : 'border-zinc-700'
+  // A Node that is down is greyed out, so the rest of the request path stands out.
+  const background = down ? 'bg-zinc-950 opacity-75' : overloaded ? 'bg-rose-950' : 'bg-zinc-900'
   return (
     <div
-      className={`relative rounded-md border px-3 py-2 text-left shadow ${overloaded ? 'bg-rose-950' : 'bg-zinc-900'} ${frame}`}
+      className={`relative rounded-md border px-3 py-2 text-left shadow ${background} ${frame}`}
       data-overloaded={metrics ? overloaded : undefined}
+      data-down={metrics ? down : undefined}
       style={{ width: NODE_SIZE.width, minHeight: NODE_SIZE.height, fontFamily: sketch ? SKETCH_FONT : undefined }}
       data-testid={`node-${node.id}`}
     >
@@ -74,8 +95,8 @@ export function ComponentNode({ data: { node, sketch, metrics }, selected, isCon
         <SketchBox
           id={node.id}
           strokeStyle={{
-            stroke: selected ? 'var(--color-sky-400)' : overloaded ? 'var(--color-rose-500)' : 'var(--color-zinc-400)',
-            strokeWidth: selected || overloaded ? 2.5 : 1.5,
+            stroke: selected ? 'var(--color-sky-400)' : overloaded || down ? 'var(--color-rose-500)' : 'var(--color-zinc-400)',
+            strokeWidth: selected || overloaded || down ? 2.5 : 1.5,
           }}
         />
       )}

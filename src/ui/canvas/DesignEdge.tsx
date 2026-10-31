@@ -3,7 +3,8 @@ import { useMemo } from 'react'
 import type { EdgeMode, EdgeTraffic } from '../../core/design/design'
 import { SKETCH_FONT, sketchLines, sketchPath } from './sketch'
 
-export type DesignFlowEdge = Edge<{ mode: EdgeMode; traffic: EdgeTraffic; sketch: boolean }, 'design'>
+/** `failed`: a Chaos Scenario fails the requests along it, so it is drawn broken. */
+export type DesignFlowEdge = Edge<{ mode: EdgeMode; traffic: EdgeTraffic; sketch: boolean; failed?: boolean }, 'design'>
 
 /** An Edge drawn as a clean curve with an arrow marker, or sketched by hand with Rough.js. */
 export function DesignEdge({
@@ -25,7 +26,7 @@ export function DesignEdge({
 }: EdgeProps<DesignFlowEdge>) {
   const [path, labelX, labelY] = getBezierPath({ sourceX, sourceY, sourcePosition, targetX, targetY, targetPosition })
   const sketch = data?.sketch ?? false
-  const dashed = data?.mode === 'async'
+  const dashed = data?.mode === 'async' || (data?.failed ?? false)
 
   const strokes = useMemo(() => {
     if (!sketch) return []

@@ -12,6 +12,7 @@ import {
 } from '../../core/challenges/rules'
 import type { Design } from '../../core/design/design'
 import { createHistory, type History } from '../../core/design/history'
+import { useChaosControls } from '../canvas/ChaosPanel'
 import { DesignEditor } from '../canvas/DesignEditor'
 import { draftOf, SimulationSummary, useLoadControls, useSimulation } from '../canvas/SimulationPanel'
 import { formatNumber, t, type StringKey } from '../i18n'
@@ -44,7 +45,8 @@ function OpenStage(props: { stage: DesignStage; work: DesignWork; editable: bool
   const [checked, setChecked] = useState<Design>()
   const canEdit = editable && wideEnough
   const load = useLoadControls(draftOf(stage.loadProfile))
-  const simulation = useSimulation(history.present, load.profile)
+  const chaos = useChaosControls(stage.chaosTasks ?? [], history.present)
+  const simulation = useSimulation(history.present, load.profile, chaos.scenarioFor(history.present))
 
   function change(next: History<Design>) {
     setHistory(next)
@@ -81,7 +83,10 @@ function OpenStage(props: { stage: DesignStage; work: DesignWork; editable: bool
       <div className="mt-4">
         <DesignEditor history={history} onChange={change} readOnly={!canEdit} simulation={simulation} />
         {/* Under the canvas, which stays in view beside the Stage's task. */}
-        <div className="mt-3">{load.controls}</div>
+        <div className="mt-3">
+          {load.controls}
+          {chaos.controls}
+        </div>
         {simulation && <SimulationSummary design={history.present} result={simulation} />}
       </div>
     </>
@@ -159,8 +164,10 @@ function OverStage({ stage, work }: { stage: DesignStage; work: DesignWork }) {
   const [yours] = useState(() => createHistory(work.design))
   const descriptions = new Map(stage.rules.map((rule) => [rule.id, rule.description]))
   const load = useLoadControls(draftOf(stage.loadProfile))
-  const yourSimulation = useSimulation(yours.present, load.profile)
-  const referenceSimulation = useSimulation(reference.present, load.profile)
+  // Only the Stage's Chaos tasks, which pick their Nodes in each Design alike.
+  const chaos = useChaosControls(stage.chaosTasks ?? [])
+  const yourSimulation = useSimulation(yours.present, load.profile, chaos.scenarioFor(yours.present))
+  const referenceSimulation = useSimulation(reference.present, load.profile, chaos.scenarioFor(reference.present))
 
   return (
     <>
@@ -187,6 +194,7 @@ function OverStage({ stage, work }: { stage: DesignStage; work: DesignWork }) {
       <section className="mt-6">
         <h3 className="mb-3 text-lg font-semibold text-zinc-100">{t('stageCompareTitle')}</h3>
         {load.controls}
+        {chaos.controls}
         <div className="grid gap-6 lg:grid-cols-2">
           <div>
             <h4 className="mb-2 text-sm font-medium text-zinc-300">{t('stageYourDesign')}</h4>

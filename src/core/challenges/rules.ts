@@ -1,7 +1,18 @@
 import { isRecord, isText } from '../content/validation'
 import { componentDefinition, configProblem, isComponentType, type ComponentType, type ConfigValue } from '../design/components'
 import { EDGE_MODES, type Design, type DesignEdge, type DesignNode, type EdgeMode } from '../design/design'
-import { REQUEST_KINDS, simulate, type LoadProfile, type RequestKind, type SimulationResult, type Traffic } from '../simulation/simulate'
+import {
+  CHAOS_TYPES,
+  REQUEST_KINDS,
+  simulate,
+  type ChaosScenario,
+  type ChaosType,
+  type LoadProfile,
+  type NodeMetrics,
+  type RequestKind,
+  type SimulationResult,
+  type Traffic,
+} from '../simulation/simulate'
 
 // The Rule Engine: checks a Design against a Challenge Stage's Rules. Rules are declarative,
 // serialisable data built from a fixed set of predicates, so that they can be authored as content
@@ -104,16 +115,55 @@ export interface CustomPredicate {
 }
 
 /**
- * Simulated under its Stage's Load Profile, the Design meets every target given: each kind of request the
- * load sends reaches some Node, and the mean latency per kind, the number of overloaded Nodes and the share
- * of failing requests stay at most their targets.
+ * Simulated under its Stage's Load Profile, and under one of its Chaos tasks when `chaos` names it, the
+ * Design meets every target given: each kind of request the load sends reaches some Node that is up, and
+ * the mean latency per kind, the number of overloaded Nodes and the share of failing requests stay at
+ * most their targets.
  */
 export interface SimulationPredicate {
   type: 'simulation'
+  /** The id of the Stage's Chaos task to simulate under. */
+  chaos?: string
   maxLatencyMs?: Partial<Record<RequestKind, number>>
   maxOverloadedNodes?: number
-  /** From 0 to 1. */
-  maxErrorRate?: number
+  /** From 0 to 1: of all requests, or per kind. */
+  maxErrorRate?: number | Partial<Record<RequestKind, number>>
+}
+
+/**
+ * A Chaos Scenario as a Challenge authors it: the Nodes it breaks are picked by selectors, a Node matching
+ * any of them, so that it applies to whatever Design the learner builds.
+ * - `zone-down`: the zones holding a Node the selectors pick.
+ * - `partition`: the network between the Nodes of one side and those of the other.
+ */
+export type ChaosTaskScenario =
+  | { type: 'node-down'; nodes: readonly NodeSelector[] }
+  | { type: 'zone-down'; zonesOf: readonly NodeSelector[] }
+  | { type: 'cache-cold'; nodes: readonly NodeSelector[] }
+  | { type: 'partition'; sides: readonly [readonly NodeSelector[], readonly NodeSelector[]] }
+
+/** Part of the system broken on purpose in a Design Stage; Rules check simulation targets under it, e.g. that reads keep working. */
+export interface ChaosTask {
+  /** Unique within its Stage; `simulation` predicates name it. */
+  id: string
+  /** What breaks and what must keep working, in Azerbaijani. */
+  prompt: string
+  scenario: ChaosTaskScenario
+}
+
+/** The Chaos Scenario a Chaos task makes of a Design: its selectors resolved to the Design's Nodes and zones. */
+export function chaosScenarioOf(scenario: ChaosTaskScenario, design: Design): ChaosScenario {
+  const picked = (selectors: readonly NodeSelector[]) => design.nodes.filter((node) => selectors.some((selector) => matches(node, selector)))
+  const pickedIds = (selectors: readonly NodeSelector[]) => picked(selectors).map((node) => node.id)
+  switch (scenario.type) {
+    case 'node-down':
+    case 'cache-cold':
+      return { type: scenario.type, nodeIds: pickedIds(scenario.nodes) }
+    case 'zone-down':
+      return { type: 'zone-down', zoneIds: [...new Set(picked(scenario.zonesOf).flatMap((node) => (node.zoneId === undefined ? [] : [node.zoneId])))] }
+    case 'partition':
+      return { type: 'partition', sides: [pickedIds(scenario.sides[0]), pickedIds(scenario.sides[1])] }
+  }
 }
 
 /** Checks registered in code, by the name a `custom` predicate gives. */
@@ -147,6 +197,8 @@ export interface RuledStage {
   rules: readonly Rule[]
   /** The load `simulation` predicates simulate the Design under. */
   loadProfile?: LoadProfile
+  /** What `simulation` predicates can break while they simulate. */
+  chaosTasks?: readonly ChaosTask[]
 }
 
 /** Rule id → how many of its Hint tiers have been opened (0 to 3). */
@@ -182,7 +234,7 @@ export const HINT_CAPS = [1, 0.75, 0.5, 0.25] as const
 export const HINT_TIERS = HINT_CAPS.length - 1
 
 export function evaluateDesign(stage: RuledStage, design: Design, hintUsage: HintUsage): Evaluation {
-  const context = checkContext(design, stage.loadProfile)
+  const context = checkContext(design, stage)
   const rules = stage.rules.map((rule): RuleResult => {
     const passed = holds(rule.check, context)
     const hintsOpened = tiersOpened(hintUsage, rule.id)
@@ -249,19 +301,27 @@ function tiersOpened(hintUsage: HintUsage, ruleId: string): number {
   return opened
 }
 
-/** What predicates check: the Design and, simulated at most once per evaluation, its Traffic Simulation. */
+/** What predicates check: the Design and its Traffic Simulation, simulated at most once per evaluation and Chaos task. */
 interface CheckContext {
   design: Design
-  simulation(): { load: LoadProfile; result: SimulationResult }
+  /** Under the Chaos task with this id, when given. */
+  simulation(chaos?: string): { load: LoadProfile; result: SimulationResult }
 }
 
-function checkContext(design: Design, loadProfile: LoadProfile | undefined): CheckContext {
-  let result: SimulationResult | undefined
+function checkContext(design: Design, { loadProfile, chaosTasks = [] }: RuledStage): CheckContext {
+  /** Chaos task id, or undefined for none → the simulation. */
+  const results = new Map<string | undefined, SimulationResult>()
   return {
     design,
-    simulation() {
+    simulation(chaos) {
       if (!loadProfile) throw new RangeError('A simulation predicate needs its Stage to have a Load Profile.')
-      result ??= simulate(design, loadProfile)
+      const task = chaos === undefined ? undefined : chaosTasks.find((candidate) => candidate.id === chaos)
+      if (chaos !== undefined && !task) throw new RangeError(`No Chaos task ${chaos}.`)
+      let result = results.get(chaos)
+      if (!result) {
+        result = simulate(design, loadProfile, task && chaosScenarioOf(task.scenario, design))
+        results.set(chaos, result)
+      }
       return { load: loadProfile, result }
     },
   }
@@ -307,21 +367,26 @@ function holds(predicate: Predicate, context: CheckContext): boolean {
       return check(design)
     }
     case 'simulation':
-      return meetsTargets(predicate, context.simulation())
+      return meetsTargets(predicate, context.simulation(predicate.chaos))
   }
 }
 
 function meetsTargets(targets: SimulationPredicate, { load, result }: { load: LoadProfile; result: SimulationResult }): boolean {
-  const served = Object.values(result.nodes).filter((metrics) => metrics.capacityQps !== undefined)
+  const servers = Object.values(result.nodes).filter((metrics) => metrics.capacityQps !== undefined && !metrics.down)
   const qpsOf = (traffic: Traffic, kind: RequestKind) => (kind === 'read' ? traffic.readQps : traffic.writeQps)
+  // A primary whose primary copy is down serves reads only.
+  const serves = (metrics: NodeMetrics, kind: RequestKind) => qpsOf(metrics, kind) > 0 && !(kind === 'write' && metrics.primaryDown)
+  const { maxErrorRate } = targets
   for (const kind of REQUEST_KINDS) {
-    if (qpsOf(load, kind) > 0 && !served.some((metrics) => qpsOf(metrics, kind) > 0)) return false
+    if (qpsOf(load, kind) > 0 && !servers.some((metrics) => serves(metrics, kind))) return false
     const maxLatency = targets.maxLatencyMs?.[kind]
     if (maxLatency !== undefined && (result.meanLatencyMs[kind] ?? 0) > maxLatency) return false
+    const maxKindErrors = typeof maxErrorRate === 'object' ? maxErrorRate[kind] : undefined
+    if (maxKindErrors !== undefined && (result.errorRateByKind[kind] ?? 0) > maxKindErrors) return false
   }
   const overloaded = Object.values(result.nodes).filter((metrics) => metrics.overloaded).length
   if (targets.maxOverloadedNodes !== undefined && overloaded > targets.maxOverloadedNodes) return false
-  return targets.maxErrorRate === undefined || result.errorRate <= targets.maxErrorRate
+  return typeof maxErrorRate !== 'number' || result.errorRate <= maxErrorRate
 }
 
 /** Nodes reachable from `starts` along edges carrying `traffic`, never entering a `blocked` node. */
@@ -393,14 +458,15 @@ const PREDICATE_FIELDS: Record<Predicate['type'], ReadonlySet<string>> = {
   'any-of': new Set(['type', 'predicates']),
   not: new Set(['type', 'predicate']),
   custom: new Set(['type', 'name']),
-  simulation: new Set(['type', 'maxLatencyMs', 'maxOverloadedNodes', 'maxErrorRate']),
+  simulation: new Set(['type', 'chaos', 'maxLatencyMs', 'maxOverloadedNodes', 'maxErrorRate']),
 }
 
 /**
  * Checks authored Rules against the Rule schema: known predicates, component types, config fields and
- * values, three Hint tiers each and unique ids. Returns the Rules, or undefined after reporting every problem.
+ * values, three Hint tiers each, unique ids, and only the Stage's `chaosTaskIds` named. Returns the Rules,
+ * or undefined after reporting every problem.
  */
-export function validateRules(input: unknown, problem: (message: string) => void): Rule[] | undefined {
+export function validateRules(input: unknown, problem: (message: string) => void, chaosTaskIds: ReadonlySet<string>): Rule[] | undefined {
   if (!Array.isArray(input) || input.length === 0) return void problem('"rules" must list at least one Rule')
   let valid = true
   const ids = new Set<string>()
@@ -420,12 +486,65 @@ export function validateRules(input: unknown, problem: (message: string) => void
     if (!Array.isArray(item.hints) || item.hints.length !== HINT_TIERS || !item.hints.every(isText)) {
       fail('"hints" must be three texts')
     }
-    checkPredicate(item.check, (message) => fail(`check: ${message}`))
+    checkPredicate(item.check, (message) => fail(`check: ${message}`), chaosTaskIds)
   })
   return valid ? (input as Rule[]) : undefined
 }
 
-function checkPredicate(value: unknown, fail: (message: string) => void): void {
+const CHAOS_TASK_FIELDS = new Set(['id', 'prompt', 'scenario'])
+
+/** The fields of each Chaos task scenario type; validation refuses others. */
+const CHAOS_SCENARIO_FIELDS: Record<ChaosType, ReadonlySet<string>> = {
+  'node-down': new Set(['type', 'nodes']),
+  'zone-down': new Set(['type', 'zonesOf']),
+  'cache-cold': new Set(['type', 'nodes']),
+  partition: new Set(['type', 'sides']),
+}
+
+/** Checks a Stage's authored Chaos tasks: unique ids, a prompt each and a known scenario of valid selectors. */
+export function validateChaosTasks(input: unknown, problem: (message: string) => void): ChaosTask[] | undefined {
+  if (!Array.isArray(input)) return void problem('"chaosTasks" must be a list of Chaos tasks')
+  let valid = true
+  const ids = new Set<string>()
+  input.forEach((item: unknown, i) => {
+    const name = isRecord(item) && isText(item.id) ? `Chaos task "${item.id}"` : `Chaos task #${i + 1}`
+    const fail = (message: string) => {
+      valid = false
+      problem(`${name}: ${message}`)
+    }
+    if (!isRecord(item)) return fail('must be an object')
+    for (const field of Object.keys(item)) if (!CHAOS_TASK_FIELDS.has(field)) fail(`unknown field "${field}"`)
+    if (!isText(item.id)) fail('"id" must be a non-empty string')
+    else if (ids.has(item.id)) fail('its id is already used in the Stage')
+    else ids.add(item.id)
+    if (!isText(item.prompt)) fail('"prompt" must be a non-empty string')
+    checkChaosScenario(item.scenario, (message) => fail(`scenario: ${message}`))
+  })
+  return valid ? (input as ChaosTask[]) : undefined
+}
+
+function checkChaosScenario(value: unknown, fail: (message: string) => void): void {
+  if (!isRecord(value)) return fail('must be an object')
+  const type = CHAOS_TYPES.find((known) => known === value.type)
+  if (!type) return fail(`"type" must be one of ${CHAOS_TYPES.join(', ')}`)
+  for (const field of Object.keys(value)) if (!CHAOS_SCENARIO_FIELDS[type].has(field)) fail(`unknown field "${field}" in a ${type} scenario`)
+  const checkSelectors = (field: string, selectors: unknown) => {
+    if (!Array.isArray(selectors) || selectors.length === 0) return fail(`"${field}" must list at least one node selector`)
+    for (const selector of selectors) checkSelector(selector, fail)
+  }
+  switch (type) {
+    case 'node-down':
+    case 'cache-cold':
+      return checkSelectors('nodes', value.nodes)
+    case 'zone-down':
+      return checkSelectors('zonesOf', value.zonesOf)
+    case 'partition':
+      if (!Array.isArray(value.sides) || value.sides.length !== 2) return fail('"sides" must be two lists of node selectors')
+      for (const side of value.sides) checkSelectors('sides', side)
+  }
+}
+
+function checkPredicate(value: unknown, fail: (message: string) => void, chaosTaskIds: ReadonlySet<string>): void {
   if (!isRecord(value)) return fail('a predicate must be an object')
   const type = Object.hasOwn(PREDICATE_FIELDS, String(value.type)) ? (value.type as Predicate['type']) : undefined
   if (!type) return fail(`unknown predicate type "${String(value.type)}"`)
@@ -460,21 +579,26 @@ function checkPredicate(value: unknown, fail: (message: string) => void): void {
     case 'all-of':
     case 'any-of':
       if (!Array.isArray(value.predicates) || value.predicates.length === 0) return fail('"predicates" must list at least one predicate')
-      for (const part of value.predicates) checkPredicate(part, fail)
+      for (const part of value.predicates) checkPredicate(part, fail, chaosTaskIds)
       return
     case 'not':
-      return checkPredicate(value.predicate, fail)
+      return checkPredicate(value.predicate, fail, chaosTaskIds)
     case 'custom':
       if (!isText(value.name) || !Object.hasOwn(CUSTOM_PREDICATES, value.name)) fail(`no custom predicate "${String(value.name)}" is registered`)
       return
     case 'simulation': {
-      const { maxLatencyMs, maxOverloadedNodes, maxErrorRate } = value
+      const { chaos, maxLatencyMs, maxOverloadedNodes, maxErrorRate } = value
+      if (chaos !== undefined && !(isText(chaos) && chaosTaskIds.has(chaos))) fail(`"chaos" names no Chaos task of the Stage: "${String(chaos)}"`)
       if ([maxLatencyMs, maxOverloadedNodes, maxErrorRate].every((target) => target === undefined)) return fail('a simulation predicate must set at least one target')
       const latencies = isRecord(maxLatencyMs) ? Object.entries(maxLatencyMs) : []
       const latenciesFit = latencies.length > 0 && latencies.every(([kind, ms]) => REQUEST_KINDS.includes(kind as RequestKind) && isPositive(ms))
       if (maxLatencyMs !== undefined && !latenciesFit) fail('"maxLatencyMs" must give positive numbers for "read" and "write" only')
       if (maxOverloadedNodes !== undefined && !isCount(maxOverloadedNodes)) fail('"maxOverloadedNodes" must be a whole number of at least 0')
-      if (maxErrorRate !== undefined && !(typeof maxErrorRate === 'number' && maxErrorRate >= 0 && maxErrorRate <= 1)) fail('"maxErrorRate" must be a number from 0 to 1')
+      const perKind = isRecord(maxErrorRate) ? Object.entries(maxErrorRate) : undefined
+      const ratesFit = perKind
+        ? perKind.length > 0 && perKind.every(([kind, rate]) => REQUEST_KINDS.includes(kind as RequestKind) && isShare(rate))
+        : isShare(maxErrorRate)
+      if (maxErrorRate !== undefined && !ratesFit) fail('"maxErrorRate" must be a number from 0 to 1, or such numbers for "read" and "write" only')
       return
     }
   }
@@ -515,6 +639,10 @@ function checkConfigValues(types: ComponentType[], key: string, values: unknown[
 
 function isCount(value: unknown): boolean {
   return Number.isInteger(value) && (value as number) >= 0
+}
+
+function isShare(value: unknown): boolean {
+  return typeof value === 'number' && value >= 0 && value <= 1
 }
 
 function isPositive(value: unknown): boolean {

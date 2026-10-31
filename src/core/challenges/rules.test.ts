@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { defaultConfig, type ComponentType } from '../design/components'
 import { connect, setNodeConfig, updateEdge, type Design, type DesignNode, type EdgeMode, type EdgeTraffic } from '../design/design'
-import type { LoadProfile } from '../simulation/simulate'
-import { evaluateDesign, levelZeroFeedback, openNextHint, problemHints, type Predicate, type Rule } from './rules'
+import type { ChaosScenario, LoadProfile } from '../simulation/simulate'
+import { chaosScenarioOf, evaluateDesign, levelZeroFeedback, openNextHint, problemHints, type ChaosTask, type Predicate, type Rule } from './rules'
 
 const HINTS: Rule['hints'] = ['Sual?', 'İşarə.', 'Tam izah.']
 
@@ -330,6 +330,80 @@ describe('evaluateDesign predicates', () => {
     it('throws a RangeError when the Stage has no Load Profile to simulate with', () => {
       expect(() => passes({ type: 'simulation', maxOverloadedNodes: 0 }, server)).toThrow(RangeError)
     })
+
+    it('can limit the error rate of one kind of request only', () => {
+      // Reads go to one web server; writes to another, which drops half of its 2,000: 1,000 of 2,500 requests fail.
+      const halfDropped = build(['client-1', 'web-server-1', 'web-server-2'], ['client-1->web-server-1:sync:read', 'client-1->web-server-2:sync:write'])
+
+      expect(meets({ type: 'simulation', maxErrorRate: { read: 0 } }, halfDropped, atLoad(500, 2_000))).toBe(true)
+      expect(meets({ type: 'simulation', maxErrorRate: { write: 0.4 } }, halfDropped, atLoad(500, 2_000))).toBe(false)
+      expect(meets({ type: 'simulation', maxErrorRate: 0.3 }, halfDropped, atLoad(500, 2_000))).toBe(false)
+    })
+  })
+
+  describe('simulation target met under a Chaos task', () => {
+    // The app service reads from the replica its primary replicates to, and writes to the primary.
+    const withReplica = setNodeConfig(
+      build(
+        ['client-1', 'app-service-1', 'sql-database-1', 'sql-database-2'],
+        ['client-1->app-service-1', 'app-service-1->sql-database-1', 'app-service-1->sql-database-2', 'sql-database-1->sql-database-2'],
+      ),
+      'sql-database-2',
+      'role',
+      'replica',
+    )
+    const withoutReplica = build(['client-1', 'app-service-1', 'sql-database-1'], ['client-1->app-service-1', 'app-service-1->sql-database-1'])
+    const primaryDown: ChaosTask = { id: 'primary-down', prompt: 'Primary baza sıradan çıxıb.', scenario: { type: 'node-down', nodes: [{ component: 'sql-database', config: { role: 'primary' } }] } }
+    const loadProfile: LoadProfile = { readQps: 200, writeQps: 20, requestBytes: 1_000 }
+    const meets = (check: Predicate, design: Design) => evaluateDesign({ rules: [rule('r', check)], loadProfile, chaosTasks: [primaryDown] }, design, {}).rules[0].passed
+
+    it('simulates the Design with the Nodes its selectors pick broken', () => {
+      const readsWork: Predicate = { type: 'simulation', chaos: 'primary-down', maxErrorRate: { read: 0 } }
+
+      expect(meets(readsWork, withReplica)).toBe(true)
+      expect(meets(readsWork, withoutReplica)).toBe(false)
+      // Writes need the primary, so they fail.
+      expect(meets({ type: 'simulation', chaos: 'primary-down', maxErrorRate: 0 }, withReplica)).toBe(false)
+    })
+
+    it('leaves the other simulation targets of the Stage unbroken', () => {
+      expect(meets({ type: 'simulation', maxErrorRate: 0 }, withoutReplica)).toBe(true)
+    })
+
+    it('fails when the writes the load sends reach only a primary whose primary copy is down, however fast', () => {
+      const configured = setNodeConfig(build(['client-1', 'sql-database-1'], ['client-1->sql-database-1']), 'sql-database-1', 'replicas', 1)
+
+      expect(meets({ type: 'simulation', maxLatencyMs: { write: 100 } }, configured)).toBe(true)
+      expect(meets({ type: 'simulation', chaos: 'primary-down', maxLatencyMs: { write: 100 } }, configured)).toBe(false)
+    })
+
+    it('throws a RangeError for a Chaos task the Stage does not have', () => {
+      expect(() => meets({ type: 'simulation', chaos: 'meteor', maxErrorRate: 0 }, withReplica)).toThrow(RangeError)
+    })
+  })
+})
+
+describe('chaosScenarioOf', () => {
+  const design: Design = {
+    ...build(
+      ['client-1', 'load-balancer-1', 'web-server-1', 'web-server-2', 'cache-1', 'sql-database-1'],
+      ['client-1->load-balancer-1', 'load-balancer-1->web-server-1', 'load-balancer-1->web-server-2'],
+    ),
+    zones: [],
+  }
+  const zoned: Design = { ...design, nodes: design.nodes.map((node) => (node.id === 'web-server-2' ? { ...node, zoneId: 'zone-2' } : node)) }
+
+  it.each<[string, ChaosTask['scenario'], ChaosScenario]>([
+    ['node down', { type: 'node-down', nodes: ['web-server', 'cache'] }, { type: 'node-down', nodeIds: ['web-server-1', 'web-server-2', 'cache-1'] }],
+    ['cache cold', { type: 'cache-cold', nodes: ['cache'] }, { type: 'cache-cold', nodeIds: ['cache-1'] }],
+    ['zone down', { type: 'zone-down', zonesOf: ['web-server'] }, { type: 'zone-down', zoneIds: ['zone-2'] }],
+    [
+      'partition',
+      { type: 'partition', sides: [['load-balancer'], ['web-server', 'sql-database']] },
+      { type: 'partition', sides: [['load-balancer-1'], ['web-server-1', 'web-server-2', 'sql-database-1']] },
+    ],
+  ])('picks the Nodes of the Design for %s', (_, scenario, expected) => {
+    expect(chaosScenarioOf(scenario, zoned)).toEqual(expected)
   })
 })
 

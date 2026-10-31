@@ -113,6 +113,61 @@ describe('Load Profiles and simulation targets', () => {
   })
 })
 
+describe('Chaos tasks', () => {
+  const appDown = { id: 'app-down', prompt: 'Tətbiq servisi sıradan çıxıb.', scenario: { type: 'node-down', nodes: ['app-service'] } }
+  const keepsWorking = rule('keeps-working', { type: 'simulation', chaos: 'app-down', maxErrorRate: 0 })
+  /** The reference with a second, bigger application service behind a load balancer, so that the first can go down. */
+  const redundant = {
+    nodes: [
+      node('client-1', 'client'),
+      node('load-balancer-1', 'load-balancer'),
+      node('app-service-1', 'app-service'),
+      node('app-service-2', 'app-service', { instances: 2 }),
+      node('sql-database-1', 'sql-database'),
+    ],
+    edges: [
+      edge('client-1', 'load-balancer-1'),
+      edge('load-balancer-1', 'app-service-1'),
+      edge('load-balancer-1', 'app-service-2'),
+      edge('app-service-1', 'sql-database-1'),
+      edge('app-service-2', 'sql-database-1'),
+    ],
+  }
+  const oneAppDown = { ...appDown, scenario: { type: 'node-down', nodes: [{ component: 'app-service', config: { instances: 1 } }] } }
+
+  it('belong to their design Stage, and Rules check simulation targets under them: a Reference Solution that fails over passes', () => {
+    const [challenge] = catalogWith(withStage({ referenceSolution: redundant, chaosTasks: [oneAppDown], rules: [...stage.rules, keepsWorking] })).challenges
+    const designStage = challenge.stages[0] as DesignStage
+
+    expect(designStage.chaosTasks).toEqual([oneAppDown])
+    expect(evaluateDesign(designStage, designStage.referenceSolution, {}).rules.map((result) => result.passed)).toEqual([true, true, true])
+  })
+
+  it('fail the build when the Reference Solution fails a Rule under its Chaos task', () => {
+    const failing = withStage({ chaosTasks: [appDown], rules: [...stage.rules, keepsWorking] })
+
+    expect(problemsOf(failing)).toEqual(['Challenge "pastebin" Stage "high-level-design": the Reference Solution fails Rule "keeps-working"'])
+  })
+
+  it.each([
+    ['a list that is not one', withStage({ chaosTasks: {} }), '"chaosTasks" must be a list of Chaos tasks'],
+    ['a repeated id', withStage({ chaosTasks: [appDown, appDown] }), 'Chaos task "app-down": its id is already used in the Stage'],
+    ['no prompt', withStage({ chaosTasks: [{ ...appDown, prompt: '' }] }), 'Chaos task "app-down": "prompt" must be a non-empty string'],
+    ['an unknown field', withStage({ chaosTasks: [{ ...appDown, severity: 3 }] }), 'Chaos task "app-down": unknown field "severity"'],
+    ['an unknown scenario type', withStage({ chaosTasks: [{ ...appDown, scenario: { type: 'meteor' } }] }), 'scenario: "type" must be one of node-down, zone-down, cache-cold, partition'],
+    ['a field of another scenario type', withStage({ chaosTasks: [{ ...appDown, scenario: { type: 'node-down', nodes: ['app-service'], zonesOf: ['cache'] } }] }), 'scenario: unknown field "zonesOf" in a node-down scenario'],
+    ['no node selectors', withStage({ chaosTasks: [{ ...appDown, scenario: { type: 'cache-cold', nodes: [] } }] }), 'scenario: "nodes" must list at least one node selector'],
+    ['an unknown component type', withStage({ chaosTasks: [{ ...appDown, scenario: { type: 'node-down', nodes: ['mainframe'] } }] }), 'scenario: unknown component type "mainframe"'],
+    ['one side of a partition', withStage({ chaosTasks: [{ ...appDown, scenario: { type: 'partition', sides: [['client']] } }] }), 'scenario: "sides" must be two lists of node selectors'],
+    ['a scenario breaking nothing in the Reference Solution', withStage({ chaosTasks: [{ ...appDown, scenario: { type: 'cache-cold', nodes: ['cache'] } }] }), 'Chaos task "app-down": breaks nothing in the Reference Solution'],
+    ['a zone down where the Reference Solution has none', withStage({ chaosTasks: [{ ...appDown, scenario: { type: 'zone-down', zonesOf: ['app-service'] } }] }), 'Chaos task "app-down": breaks nothing in the Reference Solution'],
+    ['a Rule naming another Chaos task', withRule({ type: 'simulation', chaos: 'meteor', maxErrorRate: 0 }), 'check: "chaos" names no Chaos task of the Stage: "meteor"'],
+    ['a per-kind error-rate target for an unknown kind', withRule({ type: 'simulation', maxErrorRate: { delete: 0 } }), 'check: "maxErrorRate" must be a number from 0 to 1, or such numbers for "read" and "write" only'],
+  ])('fail the build with %s', (_, challenges, problem) => {
+    expect(problemsOf(challenges).some((reported) => reported.endsWith(problem))).toBe(true)
+  })
+})
+
 describe('authored Challenges', () => {
   it('become part of the catalog, with their Reference Solution read as a Design', () => {
     const [challenge] = catalogWith([pastebin]).challenges
@@ -166,7 +221,7 @@ describe('authored Challenges', () => {
     ['a latency target that is not positive', withRule({ type: 'simulation', maxLatencyMs: { read: 0 } }), 'check: "maxLatencyMs" must give positive numbers for "read" and "write" only'],
     ['a latency target for an unknown kind', withRule({ type: 'simulation', maxLatencyMs: { delete: 5 } }), 'check: "maxLatencyMs" must give positive numbers for "read" and "write" only'],
     ['an overload target that is not a count', withRule({ type: 'simulation', maxOverloadedNodes: 1.5 }), 'check: "maxOverloadedNodes" must be a whole number of at least 0'],
-    ['an error-rate target above 1', withRule({ type: 'simulation', maxErrorRate: 2 }), 'check: "maxErrorRate" must be a number from 0 to 1'],
+    ['an error-rate target above 1', withRule({ type: 'simulation', maxErrorRate: 2 }), 'check: "maxErrorRate" must be a number from 0 to 1, or such numbers for "read" and "write" only'],
     ['no default Load Profile', [{ ...pastebin, loadProfile: undefined }], 'loadProfile: must be an object'],
     ['a Load Profile with a negative rate', [{ ...pastebin, loadProfile: { ...pastebin.loadProfile, writeQps: -1 } }], 'loadProfile: "writeQps" must be a number of at least 0'],
     ['a Load Profile without a request size', [{ ...pastebin, loadProfile: { readQps: 40, writeQps: 4 } }], 'loadProfile: "requestBytes" must be a number of at least 0'],

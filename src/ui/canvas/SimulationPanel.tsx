@@ -1,6 +1,6 @@
 import { useId, useMemo, useState, type ReactElement } from 'react'
 import type { Design } from '../../core/design/design'
-import { simulate, type LoadProfile, type SimulationResult } from '../../core/simulation/simulate'
+import { simulate, type ChaosScenario, type LoadProfile, type RequestPath, type SimulationResult } from '../../core/simulation/simulate'
 import { parseDecimal } from '../EstimationSteps'
 import { formatDecimal, formatInteger, formatNumber, t } from '../i18n'
 
@@ -36,9 +36,17 @@ export function useLoadControls(initial: LoadDraft): { profile: LoadProfile | un
   return { profile, controls }
 }
 
-/** The Traffic Simulation of a Design under a Load Profile, computed again only when either changes; none without both. */
-export function useSimulation(design: Design | undefined, profile: LoadProfile | undefined): SimulationResult | undefined {
-  return useMemo(() => (design && profile ? simulate(design, profile) : undefined), [design, profile?.readQps, profile?.writeQps, profile?.requestBytes])
+/**
+ * The Traffic Simulation of a Design under a Load Profile, and a Chaos Scenario if any, computed again only
+ * when one of them changes; none without a Design and a Load Profile.
+ */
+export function useSimulation(design: Design | undefined, profile: LoadProfile | undefined, scenario?: ChaosScenario): SimulationResult | undefined {
+  // Scenarios are built anew on every render, so they are compared by content.
+  const scenarioKey = JSON.stringify(scenario ?? null)
+  return useMemo(
+    () => (design && profile ? simulate(design, profile, scenario) : undefined),
+    [design, profile?.readQps, profile?.writeQps, profile?.requestBytes, scenarioKey],
+  )
 }
 
 /** The slider's range of total load, 100 to 100,000 requests per second, on a log scale. */
@@ -124,25 +132,53 @@ export function LoadControls(props: { draft: LoadDraft; simulating: boolean; onC
   )
 }
 
-/** End-to-end latency, error rate, cost, the bottlenecks and each request path. `label` tells summaries on one page apart. */
+/**
+ * End-to-end latency, error rates, cost, the bottlenecks and each request path; under a Chaos Scenario,
+ * what it broke and the paths that fail. `label` tells summaries on one page apart.
+ */
 export function SimulationSummary({ design, result, label = t('trafficSummary') }: { design: Design; result: SimulationResult; label?: string }) {
   const nodeLabel = (nodeId: string) => design.nodes.find((node) => node.id === nodeId)?.label || nodeId
   const hasClient = design.nodes.some((node) => node.componentType === 'client')
   const { read, write } = result.meanLatencyMs
+  const errorStat = (name: string, rate: number) => ({ name, value: t('trafficPercent', { percent: formatPercent(rate) }), bad: rate > 0 })
+  const { read: readErrors, write: writeErrors } = result.errorRateByKind
   const stats: { name: string; value: string; bad?: boolean }[] = [
     ...(read !== undefined ? [{ name: t('trafficMeanRead'), value: formatMs(read) }] : []),
     ...(write !== undefined ? [{ name: t('trafficMeanWrite'), value: formatMs(write) }] : []),
-    { name: t('trafficErrorRate'), value: t('trafficPercent', { percent: formatPercent(result.errorRate) }), bad: result.errorRate > 0 },
+    errorStat(t('trafficErrorRate'), result.errorRate),
+    // Per kind only when there are both, or it would repeat the overall rate.
+    ...(readErrors !== undefined && writeErrors !== undefined ? [errorStat(t('trafficReadErrors'), readErrors), errorStat(t('trafficWriteErrors'), writeErrors)] : []),
     { name: t('trafficDropped'), value: t('trafficQps', { qps: formatInteger(result.droppedQps) }), bad: result.droppedQps > 0 },
     { name: t('trafficCost'), value: t('trafficUsd', { usd: formatInteger(result.monthlyCostUsd) }) },
   ]
   const paths = [...result.paths].sort((a, b) => b.share - a.share)
+  // The paths failing the most requests first.
+  const failing = paths.filter((path) => path.errorRate > 0).sort((a, b) => b.share * b.errorRate - a.share * a.errorRate)
+  const broken = [
+    ...Object.entries(result.nodes).flatMap(([nodeId, metrics]) => {
+      const node = nodeLabel(nodeId)
+      if (metrics.down) return [t('trafficBrokenNode', { node })]
+      if (metrics.primaryDown) return [t('trafficBrokenPrimary', { node })]
+      return metrics.cold ? [t('trafficBrokenCold', { node })] : []
+    }),
+    ...result.cutEdgeIds.flatMap((edgeId) => {
+      const edge = design.edges.find((candidate) => candidate.id === edgeId)
+      return edge ? [t('trafficBrokenEdge', { source: nodeLabel(edge.source), target: nodeLabel(edge.target) })] : []
+    }),
+  ]
+  const pathItem = (path: RequestPath) => (
+    <li key={`${path.kind}:${path.nodeIds.join('>')}`}>
+      <span className="text-zinc-500">{t(path.kind === 'read' ? 'trafficPathRead' : 'trafficPathWrite')}:</span> {path.nodeIds.map(nodeLabel).join(' → ')} ·{' '}
+      {formatMs(path.latencyMs)} · {t('trafficPathShare', { percent: formatPercent(path.share) })}
+      {path.errorRate > 0 && <span className="text-rose-300"> · {t('trafficPathErrors', { percent: formatPercent(path.errorRate) })}</span>}
+    </li>
+  )
 
   return (
     <section aria-label={label} className="mt-3 rounded border border-zinc-800 p-3 text-sm">
       <h2 className="font-semibold text-zinc-100">{label}</h2>
       {!hasClient && <p className="mt-1 text-xs text-amber-300">{t('trafficNoClient')}</p>}
-      <dl className="mt-2 grid grid-cols-2 gap-x-6 gap-y-1 sm:grid-cols-3 lg:grid-cols-5">
+      <dl className="mt-2 grid grid-cols-2 gap-x-6 gap-y-1 sm:grid-cols-4 lg:grid-cols-7">
         {stats.map(({ name, value, bad }) => (
           <div key={name}>
             <dt className="text-xs text-zinc-500">{name}</dt>
@@ -150,6 +186,24 @@ export function SimulationSummary({ design, result, label = t('trafficSummary') 
           </div>
         ))}
       </dl>
+      {broken.length > 0 && (
+        <div className="mt-3 grid gap-4 lg:grid-cols-2">
+          <div>
+            <h3 className="text-xs font-semibold text-zinc-300">{t('trafficBroken')}</h3>
+            <ul className="mt-1 space-y-0.5 text-xs text-rose-300">
+              {broken.map((text) => (
+                <li key={text}>{text}</li>
+              ))}
+            </ul>
+          </div>
+          {failing.length > 0 && (
+            <div>
+              <h3 className="text-xs font-semibold text-zinc-300">{t('trafficFailingPaths')}</h3>
+              <ul className="mt-1 space-y-0.5 text-xs text-zinc-300">{failing.slice(0, 8).map(pathItem)}</ul>
+            </div>
+          )}
+        </div>
+      )}
       <div className="mt-3 grid gap-4 lg:grid-cols-2">
         <div>
           <h3 className="text-xs font-semibold text-zinc-300">{t('trafficBottlenecks')}</h3>
@@ -171,15 +225,7 @@ export function SimulationSummary({ design, result, label = t('trafficSummary') 
         </div>
         <div>
           <h3 className="text-xs font-semibold text-zinc-300">{t('trafficPaths')}</h3>
-          <ul className="mt-1 space-y-0.5 text-xs text-zinc-300">
-            {paths.slice(0, 8).map((path) => (
-              <li key={`${path.kind}:${path.nodeIds.join('>')}`}>
-                <span className="text-zinc-500">{t(path.kind === 'read' ? 'trafficPathRead' : 'trafficPathWrite')}:</span> {path.nodeIds.map(nodeLabel).join(' → ')} ·{' '}
-                {formatMs(path.latencyMs)} · {t('trafficPathShare', { percent: formatPercent(path.share) })}
-                {path.errorRate > 0 && <span className="text-rose-300"> · {t('trafficPathErrors', { percent: formatPercent(path.errorRate) })}</span>}
-              </li>
-            ))}
-          </ul>
+          <ul className="mt-1 space-y-0.5 text-xs text-zinc-300">{paths.slice(0, 8).map(pathItem)}</ul>
         </div>
       </div>
     </section>

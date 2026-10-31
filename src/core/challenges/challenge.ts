@@ -11,8 +11,8 @@ import {
   type QuizOption,
   type QuizOptionInput,
 } from '../quizzes/quiz'
-import type { LoadProfile } from '../simulation/simulate'
-import { evaluateDesign, validateRules, type Rule } from './rules'
+import { simulate, type LoadProfile, type SimulationResult } from '../simulation/simulate'
+import { chaosScenarioOf, evaluateDesign, validateChaosTasks, validateRules, type ChaosTask, type Rule } from './rules'
 
 // A Challenge is a system design question solved Stage by Stage, the way an interview runs. Its
 // definition is authored data, validated when the Content Pipeline builds the catalog.
@@ -74,8 +74,8 @@ export interface EstimationStage extends StageBase {
 }
 
 /**
- * A Stage solved on the Design Canvas and checked by Rules, simulation targets among them. A Scaling
- * Stage starts from the learner's high-level design.
+ * A Stage solved on the Design Canvas and checked by Rules, simulation targets among them, some of them
+ * under its Chaos tasks. A Scaling Stage starts from the learner's high-level design.
  */
 export interface DesignStage extends StageBase {
   type: 'high-level-design' | 'scaling'
@@ -84,6 +84,8 @@ export interface DesignStage extends StageBase {
   loadProfile: LoadProfile
   /** Mirrors the primer's diagram for the question. Hidden until the Stage is over. */
   referenceSolution: Design
+  /** Parts of the system broken on purpose that some Rules simulate under; each breaks something in the Reference Solution. */
+  chaosTasks?: ChaosTask[]
 }
 
 export type TradeOffQuestion = MultipleChoiceQuestion | MultiSelectQuestion
@@ -132,9 +134,9 @@ const COMMON_STAGE_FIELDS = ['id', 'type', 'prompt', 'weight', 'solutionAnchor']
 const STAGE_FIELDS: Record<StageType, Set<string>> = {
   requirements: new Set([...COMMON_STAGE_FIELDS, 'items']),
   estimation: new Set([...COMMON_STAGE_FIELDS, 'inputs', 'explanation', 'questions']),
-  'high-level-design': new Set([...COMMON_STAGE_FIELDS, 'rules', 'referenceSolution', 'loadProfile']),
+  'high-level-design': new Set([...COMMON_STAGE_FIELDS, 'rules', 'referenceSolution', 'loadProfile', 'chaosTasks']),
   'deep-dive': new Set([...COMMON_STAGE_FIELDS, 'questions']),
-  scaling: new Set([...COMMON_STAGE_FIELDS, 'rules', 'referenceSolution', 'loadProfile']),
+  scaling: new Set([...COMMON_STAGE_FIELDS, 'rules', 'referenceSolution', 'loadProfile', 'chaosTasks']),
 }
 const ITEM_FIELDS = new Set(['section', 'text', 'correct', 'explanation'])
 const ESTIMATION_QUESTION_FIELDS = new Set(['id', 'quantity', 'prompt'])
@@ -283,12 +285,17 @@ function validateStage(
     }
     case 'high-level-design':
     case 'scaling': {
-      const rules = validateRules(item.rules, fail)
+      const chaosTasks = item.chaosTasks === undefined ? [] : validateChaosTasks(item.chaosTasks, fail)
+      const rules = validateRules(item.rules, fail, new Set(chaosTasks?.map((task) => task.id)))
       const { design, problems } = readDesign(item.referenceSolution)
       for (const designProblem of problems) fail(`Reference Solution: ${designProblem}`)
       const loadProfile = item.loadProfile === undefined ? defaultLoad : validateLoadProfile(item.loadProfile, (message) => fail(`loadProfile: ${message}`))
-      if (!valid || !rules || !design || !loadProfile) return undefined
-      const stage: DesignStage = { type, ...base, rules, referenceSolution: design, loadProfile }
+      if (!valid || !rules || !design || !loadProfile || !chaosTasks) return undefined
+      // A Chaos task breaking nothing in the Reference Solution most likely picks its Nodes wrong.
+      for (const task of chaosTasks) {
+        if (breaksNothing(simulate(design, loadProfile, chaosScenarioOf(task.scenario, design)))) fail(`Chaos task "${task.id}": breaks nothing in the Reference Solution`)
+      }
+      const stage: DesignStage = { type, ...base, rules, referenceSolution: design, loadProfile, ...(item.chaosTasks !== undefined && { chaosTasks }) }
       // A Reference Solution that fails its own Rules means a Rule (or the solution) is wrong.
       for (const result of evaluateDesign(stage, design, {}).rules) {
         if (!result.passed) fail(`the Reference Solution fails Rule "${result.ruleId}"`)
@@ -296,6 +303,11 @@ function validateStage(
       return valid ? stage : undefined
     }
   }
+}
+
+/** No Node of the simulated Design is down or cold, and no Edge is cut. */
+function breaksNothing(result: SimulationResult): boolean {
+  return result.cutEdgeIds.length === 0 && Object.values(result.nodes).every((metrics) => !metrics.down && !metrics.primaryDown && !metrics.cold)
 }
 
 function validateRequirementItems(value: unknown, fail: (message: string) => void): RequirementItem[] | undefined {

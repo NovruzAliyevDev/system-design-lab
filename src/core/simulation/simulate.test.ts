@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { ComponentType } from '../design/components'
-import { addNode, connect, emptyDesign, setNodeConfig, setNodeSimulation, updateEdge, type Design, type EdgeMode, type EdgeTraffic } from '../design/design'
+import { addNode, addZone, connect, emptyDesign, moveNodes, setNodeConfig, setNodeSimulation, updateEdge, type Design, type EdgeMode, type EdgeTraffic } from '../design/design'
 import { simulate, type LoadProfile } from './simulate'
 
 /** Adds Nodes of the given types, numbered per type (`web-server-1`, `web-server-2`, …). */
@@ -336,6 +336,217 @@ describe('routing by traffic', () => {
     expect(result.paths).toEqual([])
     expect(result.meanLatencyMs).toEqual({})
     expect(result.errorRate).toBe(0)
+  })
+})
+
+describe('a Chaos Scenario', () => {
+  /** An app service reading from a primary and the replica it replicates to. */
+  function replicated(): Design {
+    let design = edges(
+      nodes('client', 'app-service', 'sql-database', 'sql-database'),
+      ['client-1', 'app-service-1'],
+      ['app-service-1', 'sql-database-1'],
+      ['app-service-1', 'sql-database-2'],
+      ['sql-database-1', 'sql-database-2'],
+    )
+    design = setNodeConfig(design, 'app-service-1', 'instances', 4)
+    return setNodeConfig(design, 'sql-database-2', 'role', 'replica')
+  }
+
+  const balanced = edges(
+    nodes('client', 'load-balancer', 'web-server', 'web-server'),
+    ['client-1', 'load-balancer-1'],
+    ['load-balancer-1', 'web-server-1'],
+    ['load-balancer-1', 'web-server-2'],
+  )
+
+  describe('a Node down', () => {
+    it('of a single-instance service drops all its traffic', () => {
+      const design = edges(nodes('client', 'web-server', 'sql-database'), ['client-1', 'web-server-1'], ['web-server-1', 'sql-database-1'])
+      const result = simulate(design, load(300, 200), { type: 'node-down', nodeIds: ['web-server-1'] })
+
+      expect(result.nodes['web-server-1']).toMatchObject({ down: true, loadQps: 500, utilisation: 0, overloaded: false, droppedQps: 500 })
+      expect(result.nodes['sql-database-1'].loadQps).toBe(0)
+      expect(result.errorRate).toBe(1)
+      expect(result.errorRateByKind).toEqual({ read: 1, write: 1 })
+      expect(result.droppedQps).toBe(500)
+      expect(result.paths.map((path) => [path.nodeIds, path.errorRate])).toEqual([
+        [['client-1', 'web-server-1'], 1],
+        [['client-1', 'web-server-1'], 1],
+      ])
+    })
+
+    it('still costs, but is no bottleneck', () => {
+      const design = edges(nodes('client', 'web-server'), ['client-1', 'web-server-1'])
+      const result = simulate(design, load(100, 0), { type: 'node-down', nodeIds: ['web-server-1'] })
+
+      expect(result.monthlyCostUsd).toBe(70)
+      expect(result.bottlenecks).toEqual([])
+    })
+
+    it('behind a load balancer: the other targets take its share', () => {
+      const result = simulate(balanced, load(800, 0), { type: 'node-down', nodeIds: ['web-server-2'] })
+
+      expect(result.nodes['web-server-1']).toMatchObject({ readQps: 800, utilisation: 0.8 })
+      expect(result.nodes['web-server-2']).toMatchObject({ down: true, loadQps: 0 })
+      expect(result.errorRate).toBe(0)
+    })
+
+    it('the primary database: its replica keeps the reads alive while writes fail', () => {
+      const result = simulate(replicated(), load(400, 100), { type: 'node-down', nodeIds: ['sql-database-1'] })
+
+      expect(result.nodes['sql-database-2']).toMatchObject({ readQps: 400, writeQps: 0 })
+      expect(result.errorRateByKind).toEqual({ read: 0, write: 1 })
+      expect(result.errorRate).toBeCloseTo(0.2, 9)
+    })
+
+    it('a primary with replicas configured: only its primary copy, so its replicas serve the reads alone', () => {
+      let design = edges(nodes('client', 'sql-database'), ['client-1', 'sql-database-1'])
+      design = setNodeConfig(design, 'sql-database-1', 'replicas', 2)
+      const result = simulate(design, load(1_000, 100), { type: 'node-down', nodeIds: ['sql-database-1'] })
+
+      // Each of the 2 replicas serves half the reads and no writes.
+      expect(result.nodes['sql-database-1']).toMatchObject({ down: false, primaryDown: true, capacityQps: 2_000, utilisation: 0.5, droppedQps: 100 })
+      expect(result.errorRateByKind).toEqual({ read: 0, write: 1 })
+      expect(result.monthlyCostUsd).toBe(750)
+    })
+
+    it('a primary with replicas configured, overloaded: its replicas drop the excess of the reads', () => {
+      let design = edges(nodes('client', 'sql-database'), ['client-1', 'sql-database-1'])
+      design = setNodeConfig(design, 'sql-database-1', 'replicas', 1)
+      const result = simulate(design, load(2_000, 100), { type: 'node-down', nodeIds: ['sql-database-1'] })
+
+      expect(result.nodes['sql-database-1']).toMatchObject({ utilisation: 2, overloaded: true, droppedQps: 1_100 })
+      expect(result.errorRateByKind).toEqual({ read: 0.5, write: 1 })
+    })
+
+    it('every replica: the reads go back to the primary', () => {
+      const result = simulate(replicated(), load(400, 100), { type: 'node-down', nodeIds: ['sql-database-2'] })
+
+      expect(result.nodes['sql-database-1']).toMatchObject({ readQps: 400, writeQps: 100 })
+      expect(result.errorRate).toBe(0)
+    })
+
+    it('never takes a client down: clients stand for the users', () => {
+      const design = edges(nodes('client', 'web-server'), ['client-1', 'web-server-1'])
+
+      expect(simulate(design, load(100, 0), { type: 'node-down', nodeIds: ['client-1'] }).nodes['web-server-1'].readQps).toBe(100)
+    })
+
+    it('behind a queue: its deferred work waits as backlog, and no request fails', () => {
+      const queued = edges(nodes('client', 'app-service', 'message-queue', 'task-queue'), ['client-1', 'app-service-1'], ['app-service-1', 'message-queue-1'], ['message-queue-1', 'task-queue-1'])
+      const result = simulate(queued, load(0, 100), { type: 'node-down', nodeIds: ['task-queue-1'] })
+
+      expect(result.nodes['task-queue-1']).toMatchObject({ down: true, deferred: true, droppedQps: 0, backlogQps: 100 })
+      expect(result.errorRate).toBe(0)
+    })
+
+    it('a cache beside the database (cache-aside): the reads fall back to the database', () => {
+      const design = edges(
+        nodes('client', 'app-service', 'cache', 'sql-database'),
+        ['client-1', 'app-service-1'],
+        ['app-service-1', 'cache-1'],
+        ['app-service-1', 'sql-database-1'],
+      )
+      const result = simulate(setNodeConfig(design, 'app-service-1', 'instances', 4), load(500, 50), { type: 'node-down', nodeIds: ['cache-1'] })
+
+      expect(result.nodes['sql-database-1']).toMatchObject({ readQps: 500, writeQps: 50 })
+      expect(result.nodes['cache-1'].loadQps).toBe(0)
+      expect(result.errorRate).toBe(0)
+    })
+
+    it('ignores ids the Design does not have', () => {
+      expect(simulate(balanced, load(800, 0), { type: 'node-down', nodeIds: ['web-server-9'] })).toEqual(simulate(balanced, load(800, 0)))
+    })
+  })
+
+  it('a zone down takes down every Node in it and in the zones inside it', () => {
+    let design = moveNodes(balanced, { 'web-server-2': { x: 520, y: 20 } })
+    design = addZone(design, { x: 400, y: -100 }, { width: 600, height: 400 }, 'Region').design
+    design = addZone(design, { x: 500, y: 0 }, { width: 300, height: 200 }, 'Zone').design
+    expect(design.nodes.find((node) => node.id === 'web-server-2')?.zoneId).toBe('zone-2')
+    const result = simulate(design, load(800, 0), { type: 'zone-down', zoneIds: ['zone-1'] })
+
+    expect(result.nodes['web-server-2'].down).toBe(true)
+    expect(result.nodes['web-server-1']).toMatchObject({ down: false, readQps: 800 })
+    expect(result.errorRate).toBe(0)
+  })
+
+  describe('a cold cache', () => {
+    const design = edges(
+      nodes('client', 'app-service', 'cache', 'sql-database'),
+      ['client-1', 'app-service-1'],
+      ['app-service-1', 'cache-1'],
+      ['app-service-1', 'sql-database-1'],
+    )
+    const sized = setNodeConfig(design, 'app-service-1', 'instances', 4)
+
+    it('answers no reads, shifting them all to the database beside it', () => {
+      expect(simulate(sized, load(500, 0)).nodes['sql-database-1'].readQps).toBeCloseTo(100, 9)
+      const result = simulate(sized, load(500, 0), { type: 'cache-cold', nodeIds: ['cache-1'] })
+
+      expect(result.nodes['sql-database-1']).toMatchObject({ readQps: 500, utilisation: 0.5 })
+      expect(result.nodes['cache-1']).toMatchObject({ readQps: 500, down: false, cold: true })
+      expect(result.nodes['sql-database-1'].cold).toBe(false)
+    })
+
+    it('in front of a database passes every read on', () => {
+      const chain = edges(nodes('client', 'cache', 'sql-database'), ['client-1', 'cache-1'], ['cache-1', 'sql-database-1'])
+      const result = simulate(chain, load(500, 0), { type: 'cache-cold', nodeIds: ['cache-1'] })
+
+      expect(result.nodes['sql-database-1'].readQps).toBe(500)
+      expect(result.paths.map((path) => [path.nodeIds.at(-1), path.share])).toEqual([['sql-database-1', 1]])
+    })
+  })
+
+  describe('a network partition', () => {
+    it('cuts the Edges between the two sides: requests along them fail', () => {
+      const design = edges(nodes('client', 'web-server', 'sql-database'), ['client-1', 'web-server-1'], ['web-server-1', 'sql-database-1'])
+      const result = simulate(design, load(300, 100), { type: 'partition', sides: [['sql-database-1'], ['client-1', 'web-server-1']] })
+
+      expect(result.cutEdgeIds).toEqual(['web-server-1->sql-database-1'])
+      // The requests sent along the cut Edge never arrive.
+      expect(result.edges['web-server-1->sql-database-1']).toEqual({ readQps: 300, writeQps: 100 })
+      expect(result.nodes['sql-database-1'].loadQps).toBe(0)
+      expect(result.nodes['web-server-1'].droppedQps).toBe(0)
+      expect(result.droppedQps).toBe(400)
+      expect(result.errorRate).toBe(1)
+      expect(result.paths.map((path) => [path.nodeIds, path.errorRate])).toEqual([
+        [['client-1', 'web-server-1'], 1],
+        [['client-1', 'web-server-1'], 1],
+      ])
+    })
+
+    it('across an asynchronous Edge: the work waits as the target’s backlog instead of failing requests', () => {
+      const async = edges(nodes('client', 'web-server', 'analytics'), ['client-1', 'web-server-1'], ['web-server-1', 'analytics-1', { mode: 'async' }])
+      const result = simulate(async, load(100, 0), { type: 'partition', sides: [['web-server-1'], ['analytics-1']] })
+
+      expect(result.nodes['analytics-1']).toMatchObject({ loadQps: 0, backlogQps: 100 })
+      expect(result.droppedQps).toBe(0)
+      expect(result.errorRate).toBe(0)
+    })
+
+    it('behind a load balancer: the targets it still reaches take the traffic', () => {
+      const result = simulate(balanced, load(800, 0), { type: 'partition', sides: [['load-balancer-1'], ['web-server-2']] })
+
+      expect(result.cutEdgeIds).toEqual(['load-balancer-1->web-server-2'])
+      expect(result.nodes['web-server-1'].readQps).toBe(800)
+      expect(result.errorRate).toBe(0)
+    })
+
+    it('from a replica: its reads go back to the primary', () => {
+      const result = simulate(replicated(), load(400, 100), { type: 'partition', sides: [['app-service-1'], ['sql-database-2']] })
+
+      expect(result.nodes['sql-database-1']).toMatchObject({ readQps: 400, writeQps: 100 })
+      // Replication from the primary still reaches the replica.
+      expect(result.nodes['sql-database-2']).toMatchObject({ readQps: 0, writeQps: 100 })
+      expect(result.errorRate).toBe(0)
+    })
+  })
+
+  it('leaves the result as it was without one', () => {
+    expect(simulate(balanced, load(800, 0))).toMatchObject({ cutEdgeIds: [], errorRateByKind: { read: 0 } })
+    expect(simulate(balanced, load(800, 0)).nodes['web-server-1'].down).toBe(false)
   })
 })
 

@@ -728,11 +728,18 @@ test('solves the Pastebin high-level design Stage by drag and drop, then simulat
   await expect(page.getByText('Bu mərhələ yüksək səviyyəli dizaynınızla başlayır.')).toBeVisible()
   await expect(page.getByTestId('rf__wrapper').locator('.react-flow__node')).toHaveCount(place.length)
   await page.getByRole('button', { name: 'Yoxla' }).click()
-  // The structural Rules it misses, and the peak-load target: the single Web Server cannot take 1,100 requests a second.
-  await expect(page.getByRole('status')).toContainText('Qalan problem: 8')
+  // The structural Rules it misses, the peak-load target (the single Web Server cannot take 1,100 requests a
+  // second) and the Chaos task (it reads the shortlinks from the primary database).
+  await expect(page.getByRole('status')).toContainText('Qalan problem: 9')
   await expect(page.getByRole('textbox', { name: 'Oxuma (sorğu/san)' })).toHaveValue('1000')
   await page.getByRole('button', { name: 'Simulyasiya et' }).click()
   await expect(page.getByTestId('node-web-server-1')).toHaveAttribute('data-overloaded', 'true')
+
+  // Under the Stage's Chaos task, the primary database is down, and with it every read of this Design.
+  const primaryDown = 'Tapşırıq: Link bazasının primary-si sıradan çıxıb: oxumalar xətasız işləməyə davam etməlidir.'
+  await page.getByLabel('Ssenari', { exact: true }).selectOption({ label: primaryDown })
+  await expect(page.getByTestId('node-sql-database-1')).toHaveAttribute('data-down', 'true')
+  await expect(page.getByRole('region', { name: 'Nəticə' })).toContainText('Oxuma xətası100%')
 
   // Once the Stage is over, the Reference Solution is simulated beside the learner's Design under the same load.
   await page.getByRole('button', { name: 'Təslim ol' }).click()
@@ -744,6 +751,13 @@ test('solves the Pastebin high-level design Stage by drag and drop, then simulat
   await expect(reference).toBeVisible()
   await expect(reference).not.toContainText('Həddən artıq yüklənib')
   await expect(page.getByRole('application', { name: 'Referans həll' }).getByTestId('node-web-server-1')).toHaveAttribute('data-overloaded', 'false')
+
+  // ...and under the Chaos task too: the Reference keeps reading from its replicas.
+  await page.getByLabel('Ssenari', { exact: true }).selectOption({ label: primaryDown })
+  await expect(yours).toContainText('Oxuma xətası100%')
+  await expect(reference).toContainText('Oxuma xətası0%')
+  await expect(reference).toContainText('Yazma xətası100%')
+  await expect(reference).toContainText('SQL Write Master-Slave: sıradan çıxıb')
 })
 
 test('runs the Pastebin Challenge Stage by Stage, scores the Attempt and retries from it', async ({ page }) => {
@@ -934,4 +948,55 @@ test('simulates traffic on an undersized sandbox Design, flags the overloaded No
   await page.getByRole('button', { name: 'Simulyasiyanı dayandır' }).click()
   await expect(summary).toHaveCount(0)
   await expect(webServer).not.toHaveAttribute('data-overloaded')
+})
+
+test('breaks a sandbox Design with Chaos Scenarios: a load balancer fails over, and the failing requests show', async ({ page }) => {
+  await page.setViewportSize({ width: 1366, height: 1000 })
+  await page.goto('/sandbox')
+  const palette = page.getByRole('navigation', { name: 'Komponentlər' })
+  const canvas = page.getByTestId('rf__wrapper')
+  await palette.getByRole('button', { name: 'Client: kətana əlavə et' }).dragTo(canvas, { targetPosition: { x: 100, y: 200 } })
+  await palette.getByRole('button', { name: 'Load balancer: kətana əlavə et' }).dragTo(canvas, { targetPosition: { x: 330, y: 200 } })
+  await palette.getByRole('button', { name: 'Web server: kətana əlavə et' }).dragTo(canvas, { targetPosition: { x: 580, y: 100 } })
+  await palette.getByRole('button', { name: 'Web server: kətana əlavə et' }).dragTo(canvas, { targetPosition: { x: 580, y: 320 } })
+  const connect = (source: string, target: string) =>
+    page.getByTestId(`node-${source}`).locator('.react-flow__handle.source').dragTo(page.getByTestId(`node-${target}`).locator('.react-flow__handle.target'))
+  await connect('client-1', 'load-balancer-1')
+  await connect('load-balancer-1', 'web-server-1')
+  await connect('load-balancer-1', 'web-server-2')
+  await expect(page.locator('.react-flow__edge')).toHaveCount(3)
+
+  await page.getByLabel('Oxuma (sorğu/san)').fill('800')
+  await page.getByLabel('Yazma (sorğu/san)').fill('0')
+  await page.getByRole('button', { name: 'Simulyasiya et' }).click()
+  const summary = page.getByRole('region', { name: 'Nəticə' })
+  const chaos = page.getByRole('region', { name: 'Xaos ssenarisi' })
+
+  // One web server down: the load balancer sends all 800 reads to the other, which carries them.
+  await chaos.getByLabel('Ssenari', { exact: true }).selectOption({ label: 'Node sıradan çıxır' })
+  await chaos.getByLabel('Web server 2').check()
+  await expect(page.getByTestId('node-web-server-2')).toHaveAttribute('data-down', 'true')
+  await expect(page.getByTestId('node-web-server-2')).toContainText('Sıradan çıxıb')
+  await expect(page.getByTestId('node-web-server-1')).toContainText('800 / 1 000 sorğu/san · 80%')
+  await expect(summary).toContainText('Sınan hissələrWeb server 2: sıradan çıxıb')
+  await expect(summary).toContainText('Xəta nisbəti0%')
+
+  // Both down: every request fails, along the paths listed as failing.
+  await chaos.getByLabel('Web server', { exact: true }).check()
+  await expect(summary).toContainText('Xəta nisbəti100%')
+  await expect(summary).toContainText('Xəta verən yollar')
+  await expect(page.locator('.react-flow__edge.animated')).toHaveCount(1)
+
+  // A partition between the load balancer and one web server: the load balancer reaches only the other.
+  await chaos.getByLabel('Ssenari', { exact: true }).selectOption({ label: 'Şəbəkə bölünür (partition)' })
+  await chaos.getByLabel('Load balancer: tərəf').selectOption({ label: 'A tərəfi' })
+  await chaos.getByLabel('Web server: tərəf').selectOption({ label: 'B tərəfi' })
+  await expect(summary).toContainText('Load balancer → Web server: kəsilib')
+  await expect(page.getByTestId('node-web-server-2')).toContainText('800 / 1 000 sorğu/san · 80%')
+  await expect(summary).toContainText('Xəta nisbəti0%')
+
+  // No scenario: everything works again.
+  await chaos.getByLabel('Ssenari', { exact: true }).selectOption({ label: 'Yoxdur: hər şey işləyir' })
+  await expect(summary).not.toContainText('Sınan hissələr')
+  await expect(page.getByTestId('node-web-server-1')).toContainText('400 / 1 000 sorğu/san · 40%')
 })

@@ -64,6 +64,9 @@ const TRAFFIC_COLORS: Record<EdgeTraffic, string> = {
   both: 'var(--canvas-both)',
 }
 
+/** Edges whose requests a Chaos Scenario fails. */
+const FAILED_COLOR = 'var(--color-rose-500)'
+
 interface Selection {
   nodeIds: string[]
   edgeIds: string[]
@@ -192,20 +195,28 @@ function Editor({ history, onChange, readOnly, compact = false, label = t('canva
         const trafficLabel = t(TRAFFIC_LABELS[edge.traffic])
         // Under simulation, requests flow along the Edge as moving dashes, the thicker the more there are.
         const width = (selected ? 3 : 2) + (qps > 0 ? Math.min(4, Math.log10(qps)) : 0)
+        // Under a Chaos Scenario, the Edge turns red and broken when it is cut, or when the requests it carries
+        // reach a Node that drops them for being down: all of them, or the writes to a primary that lost its primary copy.
+        const cut = simulation?.cutEdgeIds.includes(edge.id) ?? false
+        const target = simulation?.nodes[edge.target]
+        const refused = target && target.droppedQps > 0 && (target.down ? qps > 0 : target.primaryDown && (flow?.writeQps ?? 0) > 0)
+        const failed = cut || (refused ?? false)
+        const stroke = failed ? FAILED_COLOR : color
+        const label = cut ? t('edgeCut', { label: trafficLabel }) : flow ? t('edgeFlow', { label: trafficLabel, qps: formatInteger(qps) }) : trafficLabel
         return {
           id: edge.id,
           type: 'design',
           source: edge.source,
           target: edge.target,
           selected,
-          label: flow ? t('edgeFlow', { label: trafficLabel, qps: formatInteger(qps) }) : trafficLabel,
-          animated: qps > 0,
-          labelStyle: { fill: color, fontSize: 11 },
+          label,
+          animated: qps > 0 && !failed,
+          labelStyle: { fill: stroke, fontSize: 11 },
           labelBgStyle: { fill: 'var(--color-zinc-950)' },
-          markerEnd: { type: MarkerType.ArrowClosed, color },
-          style: { stroke: color, strokeWidth: width, strokeDasharray: edge.mode === 'async' ? '6 4' : undefined },
+          markerEnd: { type: MarkerType.ArrowClosed, color: stroke },
+          style: { stroke, strokeWidth: width, strokeDasharray: failed ? '2 6' : edge.mode === 'async' ? '6 4' : undefined },
           ariaLabel: `${edge.source} → ${edge.target}`,
-          data: { mode: edge.mode, traffic: edge.traffic, sketch },
+          data: { mode: edge.mode, traffic: edge.traffic, sketch, failed },
         }
       }),
     [design.edges, selection.edgeIds, sketch, simulation],

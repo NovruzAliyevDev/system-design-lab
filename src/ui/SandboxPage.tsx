@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { emptyDesign, readDesign, type Design } from '../core/design/design'
 import { createHistory, type History } from '../core/design/history'
 import { SANDBOX_DRAFT_ID } from '../core/progress/progress'
+import { useChaosControls } from './canvas/ChaosPanel'
 import { DesignEditor } from './canvas/DesignEditor'
 import { DEFAULT_LOAD, SimulationSummary, useLoadControls, useSimulation } from './canvas/SimulationPanel'
 import { t } from './i18n'
@@ -15,8 +16,9 @@ export function SandboxPage() {
   const editable = useMediaQuery(TABLET_QUERY)
   const [history, setHistory] = useState<History<Design>>()
   const load = useLoadControls(DEFAULT_LOAD)
-  // Once started, the results follow every change to the Design or the load.
-  const result = useSimulation(history?.present, load.profile)
+  const chaos = useChaosControls([], history?.present)
+  // Once started, the results follow every change to the Design, the load or the Chaos Scenario.
+  const result = useSimulation(history?.present, load.profile, history && chaos.scenarioFor(history.present))
 
   useEffect(() => {
     if (!loaded || history) return
@@ -44,6 +46,7 @@ export function SandboxPage() {
         {history ? (
           <>
             {load.controls}
+            {chaos.controls}
             <DesignEditor history={history} onChange={change} readOnly={!editable} simulation={result} />
             {result && <SimulationSummary design={history.present} result={result} />}
           </>
