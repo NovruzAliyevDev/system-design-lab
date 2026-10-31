@@ -172,6 +172,12 @@ export function attemptScore(challenge: Challenge, attempt: Attempt): number {
   return challengeScore(challenge, Object.fromEntries(scores))
 }
 
+/** The best Challenge score of the finished Attempts; undefined while none is finished. */
+export function bestAttemptScore(attempts: readonly Attempt[]): number | undefined {
+  const scores = attempts.flatMap((attempt) => (attempt.score === undefined ? [] : [attempt.score]))
+  return scores.length > 0 ? Math.max(...scores) : undefined
+}
+
 /** A stored Attempt checked against its schema, or undefined when it does not fit. Stage ids are not checked against a Challenge. */
 export function readAttempt(value: unknown): Attempt | undefined {
   if (!isRecord(value) || !ATTEMPT_MODES.includes(value.mode as AttemptMode) || !isTimestamp(value.startedAt) || !isRecord(value.stages)) return undefined

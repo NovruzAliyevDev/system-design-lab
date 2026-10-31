@@ -9,6 +9,7 @@ import { flashcardFormerRepoUrls, flashcardLinkFixes, flashcardPlaceholderLinks 
 import { flashcards } from '../content/flashcards'
 import { imageMirrors } from '../content/image-mirrors'
 import { quizzes } from '../content/quizzes'
+import { skillTree } from '../content/skill-tree'
 import { buildContentCatalog, type Catalog } from '../src/core/content/catalog'
 import { findUnresolvedLinks, isImagePath, referencedAssets } from '../src/core/content/links'
 import { paletteGlossaryProblems } from '../src/core/design/components'
@@ -84,7 +85,7 @@ export function loadPrimerCatalog() {
     solutions: readSolutions(),
     decks: readDecks(),
     primerImages: primerImages(),
-    authored: { glossary, imageMirrors, flashcardLinkFixes, flashcardPlaceholderLinks, flashcardFormerRepoUrls, flashcards, quizzes, challenges },
+    authored: { glossary, imageMirrors, flashcardLinkFixes, flashcardPlaceholderLinks, flashcardFormerRepoUrls, flashcards, quizzes, challenges, skillTree },
   })
 }
 
@@ -136,6 +137,6 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   writeFileSync(CATALOG_OUTPUT, JSON.stringify(catalog))
   writeFileSync(SEARCH_OUTPUT, JSON.stringify(buildSearchIndex(searchDocuments(catalog))))
   console.log(
-    `Content catalog: ${catalog.lessons.length} Lessons in ${catalog.groups.length} groups, ${catalog.solutions.length} Solutions, ${catalog.glossary.length} Glossary Terms, ${catalog.decks.reduce((count, deck) => count + deck.cards.length, 0)} Flashcards, ${catalog.quizzes.length} Quizzes, ${catalog.challenges.length} Challenges, ${assetCount} images (${catalog.source.commit.slice(0, 7)})`,
+    `Content catalog: ${catalog.lessons.length} Lessons in ${catalog.groups.length} groups, ${catalog.solutions.length} Solutions, ${catalog.glossary.length} Glossary Terms, ${catalog.decks.reduce((count, deck) => count + deck.cards.length, 0)} Flashcards, ${catalog.quizzes.length} Quizzes, ${catalog.challenges.length} Challenges, ${catalog.skillTree.length} Skill Tree topics, ${assetCount} images (${catalog.source.commit.slice(0, 7)})`,
   )
 }

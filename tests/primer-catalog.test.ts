@@ -12,6 +12,7 @@ import { compareLatencies } from '../src/core/estimation/latency'
 import { htmlLinkUrls } from '../src/core/flashcards/deck'
 import { simulate } from '../src/core/simulation/simulate'
 import { findLessonQuiz } from '../src/core/quizzes/quiz'
+import { findTopic, skillTreeLayers, topicItems } from '../src/core/skill-tree/skill-tree'
 
 /** The Stage interface of a Stage type, e.g. `DesignStage` for `'scaling'`. */
 type StageOf<T extends StageType, S = Stage> = S extends Stage ? (T extends S['type'] ? S : never) : never
@@ -528,6 +529,43 @@ describe('catalog of the pinned primer commit', () => {
       expect(evaluateDesign(stage, updateEdge(logs, 'web-server-1->analytics-1', { mode: 'async' }), {}).failingCount).toBe(0)
       // Called synchronously, analytics sits on the request path.
       expect(evaluateDesign(stage, logs, {}).rules.find((result) => result.ruleId === 'offline-analytics')?.passed).toBe(false)
+    })
+  })
+
+  describe('Skill Tree', () => {
+    /** Groups of the primer that are its introduction or about the repo, not system design topics. */
+    const META_GROUPS = ['the-system-design-primer', 'motivation', 'anki-flashcards', 'contributing', 'index-of-system-design-topics', 'study-guide', 'under-development', 'credits', 'contact-info', 'license']
+
+    it('puts every Lesson of a system design topic in a topic of the Skill Tree', () => {
+      const inTopics = new Set(catalog.skillTree.flatMap((topic) => topic.lessonIds))
+      const outside = catalog.lessons.filter((lesson) => !META_GROUPS.includes(lesson.groupId) && !inTopics.has(lesson.id))
+
+      expect(outside.map((lesson) => lesson.id)).toEqual([])
+    })
+
+    it('requires the Challenges only in the design questions, so every topic before them can be mastered without one', () => {
+      const requiring = catalog.skillTree.filter((topic) => topicItems(catalog, topic).challenges.some(({ required }) => required))
+
+      expect(requiring.map((topic) => topic.id)).toEqual(['design-questions'])
+    })
+
+    it('starts from the scalability basics and ends with the design questions and real world architectures', () => {
+      const layers = skillTreeLayers(catalog.skillTree)
+
+      expect(layers[0]).toEqual(['scalability-basics'])
+      expect(layers.at(-1)).toEqual(['real-world-architectures'])
+      expect(findTopic(catalog.skillTree, 'design-questions')?.prerequisiteIds).toContain('interview-approach')
+    })
+
+    it('gives every quiz, card and Challenge a topic, so each counts toward some Mastery', () => {
+      const items = catalog.skillTree.map((topic) => topicItems(catalog, topic))
+      const quizzes = new Set(items.flatMap((each) => each.quizzes.map((quiz) => quiz.id)))
+      const cards = new Set(items.flatMap((each) => each.cards.map((card) => card.id)))
+      const challenges = new Set(items.flatMap((each) => each.challenges.map(({ challenge }) => challenge.id)))
+
+      expect(catalog.quizzes.filter((quiz) => !quizzes.has(quiz.id)).map((quiz) => quiz.id)).toEqual([])
+      expect(catalog.decks.flatMap((deck) => deck.cards).filter((card) => !cards.has(card.id)).map((card) => card.id)).toEqual([])
+      expect(catalog.challenges.filter((challenge) => !challenges.has(challenge.id)).map((challenge) => challenge.id)).toEqual([])
     })
   })
 

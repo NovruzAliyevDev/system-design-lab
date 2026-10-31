@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { BrowserRouter, Link, Route, Routes, useLocation, useMatch } from 'react-router-dom'
+import { BrowserRouter, Link, matchPath, Route, Routes, useLocation, useMatch } from 'react-router-dom'
 import { Attribution } from './Attribution'
 import { CalculatorsPage } from './CalculatorsPage'
 import { ChallengePage } from './ChallengePage'
@@ -12,6 +12,7 @@ import { SandboxPage } from './SandboxPage'
 import { SolutionPage, SolutionsPage } from './SolutionPages'
 import { Search } from './Search'
 import { SettingsPage } from './SettingsPage'
+import { SkillTreePage } from './SkillTreePage'
 import { StudyGuidePage } from './StudyGuidePage'
 import { TableOfContents } from './TableOfContents'
 import { UpdatePrompt } from './UpdatePrompt'
@@ -26,19 +27,21 @@ import {
   HEADER_PAGES,
   SANDBOX_ROUTE,
   SETTINGS_ROUTE,
+  SKILL_TREE_ROUTE,
   SOLUTION_ROUTE,
   SOLUTIONS_ROUTE,
   STUDY_GUIDE_ROUTE,
 } from './routes'
 
+/** Pages whose canvas takes the whole width. */
+const CANVAS_ROUTES = [SANDBOX_ROUTE, CHALLENGE_ROUTE, SKILL_TREE_ROUTE]
+
 function Layout() {
   const lessonMatch = useMatch(LESSON_ROUTE)
   const currentLessonId = lessonMatch?.params.lessonId
-  // The canvas needs the whole width: the table of contents is only a drawer there.
-  const sandboxMatch = useMatch(SANDBOX_ROUTE)
-  const challengeMatch = useMatch(CHALLENGE_ROUTE)
-  const isCanvasPage = sandboxMatch !== null || challengeMatch !== null
   const { pathname } = useLocation()
+  // A canvas (a Design, or the Skill Tree map) needs the whole width: the table of contents is only a drawer there.
+  const isCanvasPage = CANVAS_ROUTES.some((route) => matchPath(route, pathname) !== null)
   const [tocOpen, setTocOpen] = useState(false)
 
   // The mobile table of contents closes once the reader picks a Lesson.
@@ -98,6 +101,7 @@ function Layout() {
               <Route path={CALCULATORS_ROUTE} element={<CalculatorsPage />} />
               <Route path={CHALLENGES_ROUTE} element={<ChallengesPage />} />
               <Route path={CHALLENGE_ROUTE} element={<ChallengePage />} />
+              <Route path={SKILL_TREE_ROUTE} element={<SkillTreePage />} />
               <Route path={SETTINGS_ROUTE} element={<SettingsPage />} />
             </Routes>
           </main>

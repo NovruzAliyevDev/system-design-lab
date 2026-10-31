@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { addNode, emptyDesign } from '../design/design'
 import {
   attemptScore,
+  bestAttemptScore,
   challengeScore,
   finishStage,
   newAttempt,
@@ -124,6 +125,21 @@ describe('challengeScore', () => {
     const all = Object.fromEntries(challenge.stages.map((stage) => [stage.id, 1]))
 
     expect(challengeScore(challenge, all)).toBe(1)
+  })
+})
+
+describe('bestAttemptScore', () => {
+  const start = new Date('2026-10-26T10:00:00Z')
+  const finished = (score: number): Attempt => ({ ...newAttempt(start), finishedAt: start.toISOString(), score })
+
+  it('is the best score of the finished Attempts, ignoring the unfinished ones', () => {
+    expect(bestAttemptScore([finished(0.4), finished(0.9), newAttempt(start)])).toBe(0.9)
+    expect(bestAttemptScore([finished(0)])).toBe(0)
+  })
+
+  it('is undefined until an Attempt is finished', () => {
+    expect(bestAttemptScore([])).toBeUndefined()
+    expect(bestAttemptScore([newAttempt(start)])).toBeUndefined()
   })
 })
 

@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom'
+import { bestAttemptScore } from '../core/challenges/attempt'
 import { percent } from './challenge/shared'
 import { catalog } from './catalog'
 import { t } from './i18n'
@@ -15,7 +16,7 @@ export function ChallengesPage() {
       <ol className="mt-6 divide-y divide-zinc-800 rounded-lg border border-zinc-800">
         {catalog.challenges.map((challenge) => {
           const tried = attempts?.[challenge.id] ?? []
-          const scores = tried.flatMap((attempt) => (attempt.score === undefined ? [] : [attempt.score]))
+          const best = bestAttemptScore(tried)
           return (
             <li key={challenge.id}>
               <Link to={challengePath(challenge.id)} className="block px-4 py-3 hover:bg-zinc-900 focus-visible:bg-zinc-900 focus-visible:outline-none">
@@ -28,7 +29,7 @@ export function ChallengesPage() {
                   ) : (
                     <span>{t('challengeAttemptCount', { count: tried.length })}</span>
                   )}
-                  {scores.length > 0 && <span className="text-zinc-300">{t('challengeBestScore', { percent: percent(Math.max(...scores)) })}</span>}
+                  {best !== undefined && <span className="text-zinc-300">{t('challengeBestScore', { percent: percent(best) })}</span>}
                 </span>
               </Link>
             </li>

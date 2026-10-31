@@ -3,6 +3,7 @@ import { gradeQuestion, gradeQuiz, scrambledOrder, type QuestionAnswer, type Que
 import { COMPONENT_BLANK, type ComponentFitQuestion, type OrderingQuestion, type Question, type Quiz, type QuizOption } from '../core/quizzes/quiz'
 import { formatDate, formatDecimal, t, type StringKey } from './i18n'
 import { useProgress } from './progress/store'
+import { LESSON_QUIZ_ANCHOR } from './routes'
 
 export const QUESTION_HINTS: Record<Question['type'], StringKey> = {
   'multiple-choice': 'quizMultipleChoiceHint',
@@ -26,7 +27,7 @@ export function LessonQuiz({ quiz }: { quiz: Quiz }) {
   const headingId = useId()
 
   return (
-    <section aria-labelledby={headingId} className="mt-12 border-t border-zinc-800 pt-6">
+    <section id={LESSON_QUIZ_ANCHOR} aria-labelledby={headingId} className="mt-12 border-t border-zinc-800 pt-6">
       <h2 id={headingId} className="text-2xl font-semibold text-zinc-50">
         {t('quizTitle')}
       </h2>

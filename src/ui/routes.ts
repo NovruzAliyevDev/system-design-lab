@@ -50,6 +50,16 @@ export function calculatorPath(calculatorId: CalculatorId): string {
 /** The free Design Canvas, outside any Challenge. */
 export const SANDBOX_ROUTE = '/sandbox'
 
+export const SKILL_TREE_ROUTE = '/skill-tree'
+
+/** App route of the Skill Tree, with a topic's details open. */
+export function skillTreePath(topicId?: string): string {
+  return topicId ? `${SKILL_TREE_ROUTE}?topic=${encodeURIComponent(topicId)}` : SKILL_TREE_ROUTE
+}
+
+/** The anchor of a Lesson's quiz. Primer headings never get it: their anchors are slugs of English titles. */
+export const LESSON_QUIZ_ANCHOR = 'lesson-quiz'
+
 /** The query of the Flashcard review's URL for a selection of cards: `?deck=<id>`, `?lesson=<id>`, or none for all. */
 export function flashcardsQuery(selection: CardSelection): Record<string, string> {
   if (selection.kind === 'deck') return { deck: selection.deckId }
@@ -74,6 +84,7 @@ export function flashcardsPath(selection: CardSelection): string {
 
 /** Pages besides the Lessons, linked from the header (from `lg` up) and the table of contents drawer. */
 export const HEADER_PAGES: { to: string; label: StringKey }[] = [
+  { to: SKILL_TREE_ROUTE, label: 'skillTreeTitle' },
   { to: CHALLENGES_ROUTE, label: 'challengesTitle' },
   { to: FLASHCARDS_ROUTE, label: 'flashcardsTitle' },
   { to: SANDBOX_ROUTE, label: 'sandboxTitle' },

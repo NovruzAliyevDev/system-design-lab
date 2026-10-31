@@ -147,6 +147,16 @@ describe('comparePrimerVersions', () => {
     expect(report.brokenReferences).toEqual([{ referrer: 'Challenge "pastebin"', lessonId: 'queues' }])
   })
 
+  it('lists Skill Tree topics that cover Lessons the new pin does not have', () => {
+    const before = version('old', ['## Queues', 'b', '## Cache', 'c'])
+    const after = version('new', ['## Cache', 'c'])
+    const skillTree = [{ id: 'asynchronism', title: 'Asynchronism', lessonIds: ['queues'], prerequisiteIds: [] }]
+
+    const report = comparePrimerVersions({ before, after, authored: { skillTree } })
+
+    expect(report.brokenReferences).toEqual([{ referrer: 'Skill Tree topic "asynchronism"', lessonId: 'queues' }])
+  })
+
   it('reports no broken references when every authored reference resolves', () => {
     const lines = ['## Cache', 'a']
     const glossary = [{ term: 'Cache', explanation: 'x', lessonIds: ['cache'] }]

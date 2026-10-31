@@ -31,7 +31,7 @@ export interface DeckStats {
 /** A learning card due this soon is shown once nothing else is left, as Anki's "learn ahead" does. */
 const LEARN_AHEAD_MS = 20 * 60 * 1000
 /** Anki calls a card mature from this interval on. */
-const MATURE_INTERVAL_DAYS = 21
+export const MATURE_INTERVAL_DAYS = 21
 const MINUTE_MS = 60 * 1000
 const DAY_MS = 24 * 60 * MINUTE_MS
 

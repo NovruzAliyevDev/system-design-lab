@@ -2,6 +2,7 @@ import { challengeLessonReferences } from '../challenges/challenge'
 import { flashcardLessonReferences } from '../flashcards/deck'
 import { glossaryLessonReferences } from '../glossary/glossary'
 import { quizLessonReferences } from '../quizzes/quiz'
+import { skillTreeLessonReferences } from '../skill-tree/skill-tree'
 import { readLessons, type AuthoredContent, type ContentSource, type LessonReference } from './catalog'
 
 /** The primer README at one commit. */
@@ -124,6 +125,7 @@ function authoredLessonReferences(authored: AuthoredContent): LessonReference[] 
     ...flashcardLessonReferences(authored.flashcards),
     ...quizLessonReferences(authored.quizzes),
     ...challengeLessonReferences(authored.challenges),
+    ...skillTreeLessonReferences(authored.skillTree),
   ]
 }
 

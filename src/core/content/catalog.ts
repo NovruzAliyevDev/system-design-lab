@@ -2,6 +2,7 @@ import { validateChallenges, type Challenge } from '../challenges/challenge'
 import { buildDeck, linkCards, validateFormerRepoUrls, validateLinkFixes, type Deck, type DeckSource } from '../flashcards/deck'
 import { validateGlossary, type GlossaryTerm } from '../glossary/glossary'
 import { validateQuizzes, type Quiz } from '../quizzes/quiz'
+import { validateSkillTree, type SkillTopic } from '../skill-tree/skill-tree'
 import { extractAppendix, type Appendix } from './appendix'
 import { validateImageMirrors } from './image-mirrors'
 import { quoteUnquotedLinkUrls, readHeadings } from './markdown'
@@ -68,6 +69,8 @@ export interface Catalog {
   quizzes: Quiz[]
   /** System design questions solved Stage by Stage, in authored order. */
   challenges: Challenge[]
+  /** The topics of the Skill Tree with their prerequisite edges, in authored order. */
+  skillTree: SkillTopic[]
 }
 
 /**
@@ -86,6 +89,8 @@ export interface AuthoredContent {
   quizzes?: unknown
   /** Challenges with their Rules, Hints and Reference Solutions. */
   challenges?: unknown
+  /** The Skill Tree's topics: their Lessons and prerequisites. */
+  skillTree?: unknown
 }
 
 /** A Lesson that an authored item references. */
@@ -160,6 +165,7 @@ export function buildContentCatalog(input: {
   const quizzes = validateQuizzes(authored.quizzes ?? [], lessonIds)
   const builtSolutions = buildSolutions(solutions, source, markdown)
   const challenges = validateChallenges(authored.challenges ?? [], lessonIds, builtSolutions)
+  const skillTree = validateSkillTree(authored.skillTree ?? [], lessonIds)
   const problems = [
     ...glossary.problems,
     ...imageMirrors.problems,
@@ -169,6 +175,7 @@ export function buildContentCatalog(input: {
     ...flashcards.problems,
     ...quizzes.problems,
     ...challenges.problems,
+    ...skillTree.problems,
   ]
   if (problems.length > 0) throw new ContentValidationError(problems)
 
@@ -184,6 +191,7 @@ export function buildContentCatalog(input: {
     decks: flashcards.decks,
     quizzes: quizzes.quizzes,
     challenges: challenges.challenges,
+    skillTree: skillTree.topics,
   }
   // The study guide's links resolve against the catalog itself.
   const studyGuide = extractStudyGuide(catalog)
