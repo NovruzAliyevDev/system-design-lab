@@ -326,6 +326,14 @@ describe('Challenges with all five Stages', () => {
     ])
   })
 
+  it('accept an Estimation Stage of a question without writes, asking only about its reads', () => {
+    const readsOnly = { ...estimation, inputs: { writesPerMonth: 0, readsPerMonth: 1_000_000_000, bytesPerWrite: 0 }, questions: [{ id: 'read-qps', quantity: 'readQps', prompt: 'Saniyədə neçə axtarış?' }] }
+    const read = catalogWith(withStages(readsOnly)).challenges[0].stages[0]
+    if (read.type !== 'estimation') throw new Error('expected the estimation Stage')
+
+    expect(read.questions.map((question) => question.referenceValue)).toEqual([400])
+  })
+
   it('read deep-dive questions as quiz questions with their explanations', () => {
     const read = catalogWith([fullPastebin]).challenges[0].stages[3]
     if (read.type !== 'deep-dive') throw new Error('expected the deep-dive Stage')
@@ -357,8 +365,13 @@ describe('Challenges with all five Stages', () => {
     ],
     ['a repeated estimation question id', withStages({ ...estimation, questions: [estimation.questions[0], estimation.questions[0]] }), 'question "write-qps": its id is already used in the Stage'],
     ['no estimation questions', withStages({ ...estimation, questions: [] }), '"questions" must list at least one question'],
-    ['an estimation input that is not a positive number', withStages({ ...estimation, inputs: { ...estimation.inputs, bytesPerWrite: -1 } }), 'inputs: "bytesPerWrite" must be a positive number'],
-    ['a missing estimation input', withStages({ ...estimation, inputs: { writesPerMonth: 1 } }), 'inputs: "readsPerMonth" must be a positive number'],
+    ['a negative estimation input', withStages({ ...estimation, inputs: { ...estimation.inputs, bytesPerWrite: -1 } }), 'inputs: "bytesPerWrite" must be a number of at least 0'],
+    ['a missing estimation input', withStages({ ...estimation, inputs: { writesPerMonth: 1 } }), 'inputs: "readsPerMonth" must be a number of at least 0'],
+    [
+      'an estimation question whose quantity the inputs make 0',
+      withStages({ ...estimation, inputs: { ...estimation.inputs, writesPerMonth: 0 } }),
+      'question "write-qps": its reference value must be positive, and the inputs make it 0',
+    ],
     ['an unknown estimation input', withStages({ ...estimation, inputs: { ...estimation.inputs, users: 5 } }), 'inputs: unknown field "users"'],
     ['a peak factor of zero', withStages({ ...estimation, inputs: { ...estimation.inputs, peakFactor: 0 } }), 'inputs: "peakFactor" must be a positive number'],
     ['no worked-solution explanation', withStages({ ...estimation, explanation: '' }), '"explanation" must be a non-empty string'],

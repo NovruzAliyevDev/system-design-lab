@@ -178,6 +178,13 @@ export const CUSTOM_PREDICATES: Readonly<Record<string, (design: Design) => bool
     }
     return reachable([design.nodes[0].id], (id) => neighbours.get(id) ?? []).size === design.nodes.length
   },
+  /** Some SQL or NoSQL database holds its data in shards: its shard key is set and it runs on more than one instance. */
+  'sharded-database': (design) =>
+    design.nodes.some((node) => {
+      if (node.componentType !== 'sql-database' && node.componentType !== 'nosql-store') return false
+      const { shardKey, instances } = node.config as Record<string, ConfigValue>
+      return typeof shardKey === 'string' && shardKey.trim() !== '' && typeof instances === 'number' && instances > 1
+    }),
 }
 
 export interface Rule {

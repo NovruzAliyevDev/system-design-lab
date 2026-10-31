@@ -319,6 +319,114 @@ describe('catalog of the pinned primer commit', () => {
     })
   })
 
+  describe('the Challenges of the first five primer questions', () => {
+    const PRIMER_LESSONS: Record<string, string> = {
+      pastebin: 'design-pastebincom-or-bitly',
+      twitter: 'design-the-twitter-timeline-and-search-or-facebook-feed-and-search',
+      'web-crawler': 'design-a-web-crawler',
+      mint: 'design-mintcom',
+      'social-graph': 'design-the-data-structures-for-a-social-network',
+    }
+    const primerChallenges = Object.keys(PRIMER_LESSONS).map((id) => findChallenge(catalog.challenges, id)!)
+    /** Estimation question id → reference value. */
+    const answersOf = (challenge: Challenge) => Object.fromEntries(stageOfType(challenge, 'estimation').questions.map((question) => [question.id, question.referenceValue]))
+    const ruleResult = (stage: DesignStage, design: Design, ruleId: string) => evaluateDesign(stage, design, {}).rules.find((result) => result.ruleId === ruleId)!
+
+    it('each run through all five Stages, link their Solution page and practise their primer question Lesson', () => {
+      expect(catalog.challenges.map((challenge) => challenge.id)).toEqual(Object.keys(PRIMER_LESSONS))
+      for (const challenge of primerChallenges) {
+        expect(challenge.stages.map((stage) => stage.type), challenge.id).toEqual(['requirements', 'estimation', 'high-level-design', 'deep-dive', 'scaling'])
+        expect(catalog.solutions.some((solution) => solution.id === challenge.solutionId), challenge.id).toBe(true)
+        expect(challenge.lessonIds[0]).toBe(PRIMER_LESSONS[challenge.id])
+      }
+    })
+
+    it('have Scaling targets that the high-level Reference Solutions miss, so that scaling is needed', () => {
+      for (const challenge of primerChallenges) {
+        const scaling = stageOfType(challenge, 'scaling')
+        const target = scaling.rules.find((rule) => rule.check.type === 'simulation' && rule.check.chaos === undefined)!
+        const highLevel = stageOfType(challenge, 'high-level-design').referenceSolution
+
+        expect(ruleResult(scaling, highLevel, target.id).passed, challenge.id).toBe(false)
+      }
+    })
+
+    it("estimate Twitter's usage as the primer does: 6,000 tweets and 100,000 reads a second, 150 TB a month, 5.4 PB in 3 years", () => {
+      const twitter = findChallenge(catalog.challenges, 'twitter')!
+
+      expect(answersOf(twitter)).toEqual({
+        'write-qps': 6_000,
+        'read-qps': 100_000,
+        'storage-per-month': 150e12,
+        'storage-3-years': 5.4e15,
+      })
+      expect(twitter.loadProfile).toEqual({ readQps: 100_000, writeQps: 6_000, requestBytes: 10_000 })
+      expect(stageOfType(twitter, 'scaling').loadProfile).toEqual(twitter.loadProfile)
+    })
+
+    it("estimate the web crawler's usage as the primer does: 1,600 pages and 40,000 searches a second, 2 PB a month, 72 PB in 3 years", () => {
+      const crawler = findChallenge(catalog.challenges, 'web-crawler')!
+
+      expect(answersOf(crawler)).toEqual({
+        'write-qps': 1_600,
+        'read-qps': 40_000,
+        'storage-per-month': 2e15,
+        'storage-3-years': 72e15,
+      })
+      // Only Clients send traffic, so the simulation carries the searches and not the crawling.
+      expect(crawler.loadProfile).toEqual({ readQps: 40_000, writeQps: 0, requestBytes: 1_000 })
+    })
+
+    it("estimate Mint's usage as the primer does: 2,000 transactions and 200 reads a second, 250 GB a month, 9 TB in 3 years", () => {
+      const mint = findChallenge(catalog.challenges, 'mint')!
+
+      expect(answersOf(mint)).toEqual({ 'write-qps': 2_000, 'read-qps': 200, 'storage-per-month': 250e9, 'storage-3-years': 9e12 })
+      expect(mint.loadProfile).toEqual({ readQps: 200, writeQps: 2_000, requestBytes: 50 })
+    })
+
+    it("estimate the social graph's 400 searches a second without writes, and check its Scaling Stage at the authored 10 times peak", () => {
+      const socialGraph = findChallenge(catalog.challenges, 'social-graph')!
+
+      expect(answersOf(socialGraph)).toEqual({ 'read-qps': 400, 'peak-read-qps': 4_000 })
+      expect(socialGraph.loadProfile).toEqual({ readQps: 400, writeQps: 0, requestBytes: 1_000 })
+      expect(stageOfType(socialGraph, 'scaling').loadProfile).toEqual({ readQps: 4_000, writeQps: 0, requestBytes: 1_000 })
+    })
+
+    it('accept federation in place of sharding for the Twitter and Mint SQL writes, but not an unsharded master beside some NoSQL store', () => {
+      for (const id of ['twitter', 'mint']) {
+        const scaling = stageOfType(findChallenge(catalog.challenges, id)!, 'scaling')
+        const unsharded = setNodeConfig(scaling.referenceSolution, 'sql-database-1', 'shardKey', '')
+        const master = unsharded.nodes.find((each) => each.id === 'sql-database-1')!
+        const federated = { ...unsharded, nodes: [...unsharded.nodes, { ...master, id: 'sql-database-3' }] }
+        const besideNoSql = { ...unsharded, nodes: [...unsharded.nodes, { ...master, id: 'nosql-store-9', componentType: 'nosql-store' as const, config: defaultConfig('nosql-store') }] }
+
+        expect(ruleResult(scaling, unsharded, 'write-scaling').passed, id).toBe(false)
+        expect(ruleResult(scaling, federated, 'write-scaling').passed, id).toBe(true)
+        expect(ruleResult(scaling, besideNoSql, 'write-scaling').passed, id).toBe(false)
+      }
+    })
+
+    it('count a web crawler search index as sharded only with a shard key over more than one instance', () => {
+      const scaling = stageOfType(findChallenge(catalog.challenges, 'web-crawler')!, 'scaling')
+
+      expect(ruleResult(scaling, setNodeConfig(scaling.referenceSolution, 'search-index-1', 'instances', 1), 'sharded-index').passed).toBe(false)
+      expect(ruleResult(scaling, setNodeConfig(scaling.referenceSolution, 'search-index-1', 'shardKey', ''), 'sharded-index').passed).toBe(false)
+    })
+
+    it('refuse a graph database for the social graph, which the primer rules out', () => {
+      const stage = stageOfType(findChallenge(catalog.challenges, 'social-graph')!, 'high-level-design')
+
+      expect(ruleResult(stage, setNodeConfig(stage.referenceSolution, 'nosql-store-1', 'kind', 'graph'), 'person-data').passed).toBe(false)
+    })
+
+    it('require the web crawler to index through a queue, never straight from the crawler', () => {
+      const stage = stageOfType(findChallenge(catalog.challenges, 'web-crawler')!, 'high-level-design')
+      const direct = updateEdge(connect(stage.referenceSolution, 'app-service-3', 'search-index-1'), 'app-service-3->search-index-1', { traffic: 'write' })
+
+      expect(ruleResult(stage, direct, 'reverse-index-queue').passed).toBe(false)
+    })
+  })
+
   describe('the Pastebin high-level design Stage', () => {
     const stage = stageOfType(findChallenge(catalog.challenges, 'pastebin')!, 'high-level-design')
 

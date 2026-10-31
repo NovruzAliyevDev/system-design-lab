@@ -266,6 +266,33 @@ describe('evaluateDesign predicates', () => {
       expect(passes(check, build([]))).toBe(false)
       expect(passes(check, build(['client-1']))).toBe(false)
     })
+
+    describe('"sharded-database"', () => {
+      const sharded: Predicate = { type: 'custom', name: 'sharded-database' }
+      /** One node of a type with a shard key and an instance count. */
+      const database = (componentType: ComponentType, shardKey: string, instances: number) =>
+        setNodeConfig(setNodeConfig(build([`${componentType}-1`]), `${componentType}-1`, 'shardKey', shardKey), `${componentType}-1`, 'instances', instances)
+
+      it('passes for a SQL or NoSQL database with a shard key set, spread over more than one instance', () => {
+        expect(passes(sharded, database('sql-database', 'user_id', 2))).toBe(true)
+        expect(passes(sharded, database('nosql-store', 'person_id', 8))).toBe(true)
+      })
+
+      it('fails without a shard key, or on a single instance, which holds every shard', () => {
+        expect(passes(sharded, database('sql-database', '', 4))).toBe(false)
+        expect(passes(sharded, database('sql-database', 'user_id', 1))).toBe(false)
+      })
+
+      it('fails for storage that is not a database, such as a sharded search index', () => {
+        expect(passes(sharded, database('search-index', 'term', 4))).toBe(false)
+      })
+
+      it('passes when any one database is sharded', () => {
+        const design = setNodeConfig(setNodeConfig(build(['sql-database-1', 'sql-database-2']), 'sql-database-2', 'shardKey', 'user_id'), 'sql-database-2', 'instances', 3)
+
+        expect(passes(sharded, design)).toBe(true)
+      })
+    })
   })
 
   describe('simulation target met', () => {

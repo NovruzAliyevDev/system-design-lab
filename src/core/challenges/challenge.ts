@@ -264,6 +264,11 @@ function validateStage(
       const questions = validateEstimationQuestions(item.questions, fail)
       if (!valid || !inputs || !questions) return undefined
       const { values } = estimate(inputs)
+      // Estimates are graded as a ratio of the reference, which a reference of 0 cannot give.
+      for (const question of questions) {
+        if (!(values[question.quantity] > 0)) fail(`question "${question.id}": its reference value must be positive, and the inputs make it 0`)
+      }
+      if (!valid) return undefined
       return {
         type,
         ...base,
@@ -344,7 +349,8 @@ function validateEstimationInputs(value: unknown, fail: (message: string) => voi
     fail(message)
   }
   for (const field of Object.keys(value)) if (!INPUT_FIELDS.has(field)) inputFail(`unknown field "${field}"`)
-  for (const field of REQUIRED_INPUTS) if (!isPositive(value[field])) inputFail(`"${field}" must be a positive number`)
+  // A question without writes (or reads) sets them to 0; questions about a quantity of 0 are refused.
+  for (const field of REQUIRED_INPUTS) if (!isAtLeastZero(value[field])) inputFail(`"${field}" must be a number of at least 0`)
   for (const field of OPTIONAL_INPUTS) if (value[field] !== undefined && !isPositive(value[field])) inputFail(`"${field}" must be a positive number`)
   return valid ? (value as unknown as EstimationInputs) : undefined
 }
@@ -389,6 +395,10 @@ function validateEstimationQuestions(value: unknown, fail: (message: string) => 
 
 function isPositive(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value) && value > 0
+}
+
+function isAtLeastZero(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0
 }
 
 /**

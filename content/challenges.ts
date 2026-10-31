@@ -9,62 +9,30 @@
 // the primer's diagram for the question, laid out left to right as the canvas connects nodes; config
 // fields left out take their defaults. Estimation reference values are computed from the Stage's
 // inputs, the primer's assumptions; requirement items and deep-dive options are each explained.
+//
+// Pastebin is authored here; the other primer questions each have a file in `primer-challenges/`,
+// sharing the building blocks of `primer-challenges/shared.ts`.
 import type { ChallengeInput } from '../src/core/challenges/challenge'
-import type { NodeSelector, Predicate, TrafficKind } from '../src/core/challenges/rules'
-import { MAX_REPLICAS, type ComponentType, type ConfigValue } from '../src/core/design/components'
-import type { EdgeTraffic } from '../src/core/design/design'
+import type { NodeSelector, Predicate } from '../src/core/challenges/rules'
+import { mint } from './primer-challenges/mint'
+import { anyNode, apiPath, edge, ENTRY, loadBalancerPath, node, readReplicas, scaledOut } from './primer-challenges/shared'
+import { socialGraph } from './primer-challenges/social-graph'
+import { twitter } from './primer-challenges/twitter'
+import { webCrawler } from './primer-challenges/web-crawler'
 
-/** Whatever sits in front of the application servers and forwards requests to them. */
-const ENTRY: NodeSelector = ['web-server', 'reverse-proxy', 'load-balancer']
 /** Where the shortlink → paste path mapping lives: the primer's SQL table, or a key-value store. */
 const METADATA_STORE: NodeSelector[] = ['sql-database', { component: 'nosql-store', config: { kind: 'key-value' } }]
 /** Where paste contents live: an object store, or a NoSQL document store. */
 const CONTENT_STORE: NodeSelector[] = ['object-store', { component: 'nosql-store', config: { kind: 'document' } }]
 
-/** Any number of read replicas a primary can have. */
-const SOME_REPLICAS = Array.from({ length: MAX_REPLICAS }, (_, i) => i + 1)
-
 /** A store holding the shortlink table that serves reads from replicas: a replica node, or a primary configured with replicas. */
-const READ_REPLICAS: Predicate = {
-  type: 'any-of',
-  predicates: [
-    { type: 'path', from: 'client', to: { component: 'sql-database', config: { role: 'replica' } }, traffic: 'read' },
-    { type: 'path', from: 'client', to: { component: 'nosql-store', config: { kind: 'key-value', role: 'replica' } }, traffic: 'read' },
-    { type: 'node', node: { component: 'sql-database', config: { role: 'primary', replicas: SOME_REPLICAS } } },
-    { type: 'node', node: { component: 'nosql-store', config: { kind: 'key-value', role: 'primary', replicas: SOME_REPLICAS } } },
-  ],
-}
+const READ_REPLICAS: Predicate = { type: 'any-of', predicates: [...readReplicas('sql-database'), ...readReplicas('nosql-store')] }
 
 /** The primary holding the shortlink table: the SQL master, or a key-value store's primary. */
 const METADATA_PRIMARY: NodeSelector[] = [
   { component: 'sql-database', config: { role: 'primary' } },
   { component: 'nosql-store', config: { kind: 'key-value', role: 'primary' } },
 ]
-
-/** Some node matches one of the selectors. */
-const anyNode = (selectors: NodeSelector[]): Predicate => ({ type: 'any-of', predicates: selectors.map((selector) => ({ type: 'node', node: selector })) })
-
-/** Client requests carrying `traffic` reach a node of one of the selectors, every path through an application service. */
-const apiPath = (selectors: NodeSelector[], traffic: TrafficKind): Predicate => ({
-  type: 'any-of',
-  predicates: selectors.map((selector) => ({ type: 'path', from: 'client', to: selector, through: 'app-service', traffic })),
-})
-
-const node = (id: string, componentType: ComponentType, label: string, x: number, y: number, config: Record<string, ConfigValue> = {}) => ({
-  id,
-  componentType,
-  label,
-  notes: '',
-  config,
-  position: { x, y },
-})
-const edge = (source: string, target: string, traffic: EdgeTraffic) => ({
-  id: `${source}->${target}`,
-  source,
-  target,
-  mode: 'sync',
-  traffic,
-})
 
 export const challenges: ChallengeInput[] = [
   {
@@ -542,7 +510,7 @@ export const challenges: ChallengeInput[] = [
               'Client ilə web server arasına load balancer qoyun ki, tətbiq serverlərinə gedən hər yol ondan keçsin.',
               'Primer-in miqyaslanmış diaqramında Client sorğuları Load Balancer-ə göndərir, o da onları bir neçə Web Server arasında paylayır. Bu, həm yükü bölür, həm də bir serverin sıradan çıxması servisi dayandırmır.',
             ],
-            check: { type: 'path', from: 'client', to: 'app-service', through: 'load-balancer' },
+            check: loadBalancerPath,
           },
           {
             id: 'scale-out',
@@ -553,13 +521,7 @@ export const challenges: ChallengeInput[] = [
               'Web server-in və hər application service-in tənzimləməsində "instances" sahəsini 2 və ya daha çox edin.',
               'Primer horizontal scaling-i seçir: eyni serverin bir neçə nüsxəsi load balancer arxasında işləyir. Write API və Read API ayrıca miqyaslanır: oxuma yükü artanda yalnız Read API nüsxələri artırılır.',
             ],
-            check: {
-              type: 'all-of',
-              predicates: [
-                { type: 'node', node: { component: 'app-service', config: { instances: 1 } }, max: 0 },
-                { type: 'node', node: { component: ['web-server', 'reverse-proxy'], config: { instances: 1 } }, max: 0 },
-              ],
-            },
+            check: scaledOut,
           },
           {
             id: 'memory-cache',
@@ -685,4 +647,8 @@ export const challenges: ChallengeInput[] = [
       },
     ],
   },
+  twitter,
+  webCrawler,
+  mint,
+  socialGraph,
 ]
