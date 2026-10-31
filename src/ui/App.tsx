@@ -60,16 +60,16 @@ function Layout() {
           >
             {tocOpen ? t('closeTableOfContents') : t('tableOfContents')}
           </button>
-          <Link to="/" className="font-semibold text-zinc-50">
+          <Link to="/" className="font-semibold whitespace-nowrap text-zinc-50">
             {t('appTitle')}
           </Link>
-          <span className="hidden text-sm text-zinc-500 xl:inline">{t('appTagline')}</span>
+          <span className="hidden text-sm text-zinc-500 2xl:inline">{t('appTagline')}</span>
           <div className="ml-auto self-center">
             <Search />
           </div>
           {/* A narrow header has no room for them; below `lg` the table of contents drawer links them. */}
           {HEADER_PAGES.map(({ to, label }) => (
-            <Link key={to} to={to} className="hidden text-sm text-zinc-400 hover:text-zinc-100 lg:inline">
+            <Link key={to} to={to} className="hidden text-sm whitespace-nowrap text-zinc-400 hover:text-zinc-100 lg:inline">
               {t(label)}
             </Link>
           ))}
