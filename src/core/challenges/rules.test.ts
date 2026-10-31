@@ -358,6 +358,29 @@ describe('evaluateDesign predicates', () => {
       expect(() => passes({ type: 'simulation', maxOverloadedNodes: 0 }, server)).toThrow(RangeError)
     })
 
+    it('checks a target that sets its own Load Profile under that load, with or without a Stage Load Profile', () => {
+      const atFiveThousand: Predicate = { type: 'simulation', load: atLoad(5_000), maxOverloadedNodes: 0 }
+      const atFiveHundred: Predicate = { type: 'simulation', load: atLoad(500), maxOverloadedNodes: 0 }
+
+      expect(meets(atFiveThousand, server, atLoad(500))).toBe(false)
+      expect(meets(atFiveHundred, server, atLoad(5_000))).toBe(true)
+      expect(passes(atFiveHundred, server)).toBe(true)
+    })
+
+    it('checks successive targets of one Stage each under its own load: a Design meets those up to the load it is scaled for', () => {
+      const stage = {
+        loadProfile: atLoad(100),
+        rules: [
+          rule('stage-load', { type: 'simulation', maxOverloadedNodes: 0 }),
+          ...[800, 1_600, 3_200].map((qps) => rule(`at-${qps}`, { type: 'simulation', load: atLoad(qps), maxOverloadedNodes: 0 })),
+        ],
+      }
+      const passing = (design: Design) => evaluateDesign(stage, design, {}).rules.filter((result) => result.passed).map((result) => result.ruleId)
+
+      expect(passing(server)).toEqual(['stage-load', 'at-800'])
+      expect(passing(setNodeConfig(server, 'web-server-1', 'instances', 2))).toEqual(['stage-load', 'at-800', 'at-1600'])
+    })
+
     it('can limit the error rate of one kind of request only', () => {
       // Reads go to one web server; writes to another, which drops half of its 2,000: 1,000 of 2,500 requests fail.
       const halfDropped = build(['client-1', 'web-server-1', 'web-server-2'], ['client-1->web-server-1:sync:read', 'client-1->web-server-2:sync:write'])
@@ -391,6 +414,13 @@ describe('evaluateDesign predicates', () => {
       expect(meets(readsWork, withoutReplica)).toBe(false)
       // Writes need the primary, so they fail.
       expect(meets({ type: 'simulation', chaos: 'primary-down', maxErrorRate: 0 }, withReplica)).toBe(false)
+    })
+
+    it('simulates a Chaos task under the Load Profile of the target, when it sets one', () => {
+      // The single app service takes 500 QPS: 2,000 reads overload it, Chaos task or not.
+      const atPeak: Predicate = { type: 'simulation', chaos: 'primary-down', load: { ...loadProfile, readQps: 2_000 }, maxErrorRate: { read: 0 } }
+
+      expect(meets({ type: 'all-of', predicates: [{ type: 'simulation', chaos: 'primary-down', maxErrorRate: { read: 0 } }, { type: 'not', predicate: atPeak }] }, withReplica)).toBe(true)
     })
 
     it('leaves the other simulation targets of the Stage unbroken', () => {

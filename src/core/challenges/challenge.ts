@@ -12,7 +12,7 @@ import {
   type QuizOptionInput,
 } from '../quizzes/quiz'
 import { simulate, type LoadProfile, type SimulationResult } from '../simulation/simulate'
-import { chaosScenarioOf, evaluateDesign, validateChaosTasks, validateRules, type ChaosTask, type Rule } from './rules'
+import { chaosScenarioOf, evaluateDesign, validateChaosTasks, validateLoadProfile, validateRules, type ChaosTask, type Rule } from './rules'
 
 // A Challenge is a system design question solved Stage by Stage, the way an interview runs. Its
 // definition is authored data, validated when the Content Pipeline builds the catalog.
@@ -143,7 +143,6 @@ const ESTIMATION_QUESTION_FIELDS = new Set(['id', 'quantity', 'prompt'])
 const REQUIRED_INPUTS = ['writesPerMonth', 'readsPerMonth', 'bytesPerWrite'] as const
 const OPTIONAL_INPUTS = ['bytesPerRead', 'peakFactor', 'years'] as const
 const INPUT_FIELDS = new Set<string>([...REQUIRED_INPUTS, ...OPTIONAL_INPUTS])
-const LOAD_FIELDS = new Set<string>(['readQps', 'writeQps', 'requestBytes'] satisfies (keyof LoadProfile)[])
 
 /**
  * Checks authored Challenges against their schema, the Lessons and Solution pages they reference, and
@@ -353,24 +352,6 @@ function validateEstimationInputs(value: unknown, fail: (message: string) => voi
   for (const field of REQUIRED_INPUTS) if (!isAtLeastZero(value[field])) inputFail(`"${field}" must be a number of at least 0`)
   for (const field of OPTIONAL_INPUTS) if (value[field] !== undefined && !isPositive(value[field])) inputFail(`"${field}" must be a positive number`)
   return valid ? (value as unknown as EstimationInputs) : undefined
-}
-
-function validateLoadProfile(value: unknown, fail: (message: string) => void): LoadProfile | undefined {
-  if (!isRecord(value)) return void fail('must be an object')
-  let valid = true
-  const loadFail = (message: string) => {
-    valid = false
-    fail(message)
-  }
-  for (const field of Object.keys(value)) if (!LOAD_FIELDS.has(field)) loadFail(`unknown field "${field}"`)
-  for (const field of LOAD_FIELDS) {
-    const rate = value[field]
-    if (typeof rate !== 'number' || !Number.isFinite(rate) || rate < 0) loadFail(`"${field}" must be a number of at least 0`)
-  }
-  if (!valid) return undefined
-  const { readQps, writeQps, requestBytes } = value as unknown as LoadProfile
-  if (readQps + writeQps === 0) return void fail('must send some reads or writes')
-  return { readQps, writeQps, requestBytes }
 }
 
 function validateEstimationQuestions(value: unknown, fail: (message: string) => void): Omit<EstimationQuestion, 'referenceValue'>[] | undefined {

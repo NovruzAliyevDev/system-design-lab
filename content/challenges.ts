@@ -15,6 +15,9 @@
 import type { ChallengeInput } from '../src/core/challenges/challenge'
 import type { NodeSelector, Predicate } from '../src/core/challenges/rules'
 import { mint } from './primer-challenges/mint'
+import { queryCache } from './primer-challenges/query-cache'
+import { salesRank } from './primer-challenges/sales-rank'
+import { scalingAws } from './primer-challenges/scaling-aws'
 import { anyNode, apiPath, edge, ENTRY, loadBalancerPath, node, readReplicas, scaledOut } from './primer-challenges/shared'
 import { socialGraph } from './primer-challenges/social-graph'
 import { twitter } from './primer-challenges/twitter'
@@ -651,4 +654,7 @@ export const challenges: ChallengeInput[] = [
   webCrawler,
   mint,
   socialGraph,
+  queryCache,
+  salesRank,
+  scalingAws,
 ]

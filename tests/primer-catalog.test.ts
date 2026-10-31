@@ -319,13 +319,16 @@ describe('catalog of the pinned primer commit', () => {
     })
   })
 
-  describe('the Challenges of the first five primer questions', () => {
+  describe('the Challenges of the eight primer questions', () => {
     const PRIMER_LESSONS: Record<string, string> = {
       pastebin: 'design-pastebincom-or-bitly',
       twitter: 'design-the-twitter-timeline-and-search-or-facebook-feed-and-search',
       'web-crawler': 'design-a-web-crawler',
       mint: 'design-mintcom',
       'social-graph': 'design-the-data-structures-for-a-social-network',
+      'query-cache': 'design-a-key-value-store-for-a-search-engine',
+      'sales-rank': 'design-amazons-sales-ranking-by-category-feature',
+      'scaling-aws': 'design-a-system-that-scales-to-millions-of-users-on-aws',
     }
     const primerChallenges = Object.keys(PRIMER_LESSONS).map((id) => findChallenge(catalog.challenges, id)!)
     /** Estimation question id → reference value. */
@@ -344,10 +347,10 @@ describe('catalog of the pinned primer commit', () => {
     it('have Scaling targets that the high-level Reference Solutions miss, so that scaling is needed', () => {
       for (const challenge of primerChallenges) {
         const scaling = stageOfType(challenge, 'scaling')
-        const target = scaling.rules.find((rule) => rule.check.type === 'simulation' && rule.check.chaos === undefined)!
+        const targets = scaling.rules.filter((rule) => rule.check.type === 'simulation' && rule.check.chaos === undefined)
         const highLevel = stageOfType(challenge, 'high-level-design').referenceSolution
 
-        expect(ruleResult(scaling, highLevel, target.id).passed, challenge.id).toBe(false)
+        expect(targets.some((target) => !ruleResult(scaling, highLevel, target.id).passed), challenge.id).toBe(true)
       }
     })
 
@@ -390,6 +393,72 @@ describe('catalog of the pinned primer commit', () => {
       expect(answersOf(socialGraph)).toEqual({ 'read-qps': 400, 'peak-read-qps': 4_000 })
       expect(socialGraph.loadProfile).toEqual({ readQps: 400, writeQps: 0, requestBytes: 1_000 })
       expect(stageOfType(socialGraph, 'scaling').loadProfile).toEqual({ readQps: 4_000, writeQps: 0, requestBytes: 1_000 })
+    })
+
+    it("estimate the query cache's usage as the primer does: 4,000 queries a second, and 2.7 TB a month if every query were stored", () => {
+      const queryCache = findChallenge(catalog.challenges, 'query-cache')!
+
+      expect(answersOf(queryCache)).toEqual({ 'read-qps': 4_000, 'storage-per-month': 2.7e12 })
+      expect(queryCache.loadProfile).toEqual({ readQps: 4_000, writeQps: 0, requestBytes: 270 })
+    })
+
+    it("estimate the sales rank's usage as the primer does: 400 sales and 40,000 reads a second, 40 GB a month, 1.44 TB in 3 years", () => {
+      const salesRank = findChallenge(catalog.challenges, 'sales-rank')!
+
+      expect(answersOf(salesRank)).toEqual({ 'write-qps': 400, 'read-qps': 40_000, 'storage-per-month': 40e9, 'storage-3-years': 1.44e12 })
+      expect(salesRank.loadProfile).toEqual({ readQps: 40_000, writeQps: 400, requestBytes: 40 })
+    })
+
+    it("estimate the AWS system's usage as the primer does: 400 writes and 40,000 reads a second, 1 TB a month, 36 TB in 3 years", () => {
+      const scalingAws = findChallenge(catalog.challenges, 'scaling-aws')!
+
+      expect(answersOf(scalingAws)).toEqual({ 'write-qps': 400, 'read-qps': 40_000, 'storage-per-month': 1e12, 'storage-3-years': 36e12 })
+      expect(scalingAws.loadProfile).toEqual({ readQps: 40_000, writeQps: 400, requestBytes: 1_000 })
+    })
+
+    describe('the AWS Scaling Stage', () => {
+      const scalingAws = findChallenge(catalog.challenges, 'scaling-aws')!
+      const highLevel = stageOfType(scalingAws, 'high-level-design')
+      const scaling = stageOfType(scalingAws, 'scaling')
+      /** The user-count targets of the Scaling Stage a Design meets. */
+      const targetsMet = (design: Design) =>
+        evaluateDesign(scaling, design, {}).rules.filter((result) => result.ruleId.startsWith('users-') && result.passed).map((result) => result.ruleId)
+
+      it('checks successive simulation targets at 100 thousand, 1 million and 10 million users, starting from the first', () => {
+        const loads = scaling.rules.flatMap((rule) => (rule.check.type === 'simulation' ? [[rule.id, rule.check.load]] : []))
+
+        expect(loads).toEqual([
+          ['users-100k', { readQps: 400, writeQps: 4, requestBytes: 1_000 }],
+          ['users-1m', { readQps: 4_000, writeQps: 40, requestBytes: 1_000 }],
+          ['users-10m', { readQps: 40_000, writeQps: 400, requestBytes: 1_000 }],
+        ])
+        expect(scaling.loadProfile).toEqual(loads[0][1])
+        expect(highLevel.loadProfile).toEqual({ readQps: 40, writeQps: 0.4, requestBytes: 1_000 })
+      })
+
+      it('is met up to 100 thousand users by the single box, whose Web Server and MySQL a million users overload', () => {
+        expect(targetsMet(highLevel.referenceSolution)).toEqual(['users-100k'])
+      })
+
+      it('is met up to a million users by a design with too few Web Servers for ten million', () => {
+        expect(targetsMet(setNodeConfig(scaling.referenceSolution, 'web-server-1', 'instances', 6))).toEqual(['users-100k', 'users-1m'])
+        expect(targetsMet(scaling.referenceSolution)).toEqual(['users-100k', 'users-1m', 'users-10m'])
+      })
+    })
+
+    it('require the query cache to run on a cluster of several machines', () => {
+      const scaling = stageOfType(findChallenge(catalog.challenges, 'query-cache')!, 'scaling')
+
+      expect(ruleResult(scaling, setNodeConfig(scaling.referenceSolution, 'cache-1', 'instances', 1), 'cache-cluster').passed).toBe(false)
+    })
+
+    it('accept a MapReduce job ranking the sales, but not one that never reads the sales logs', () => {
+      const stage = stageOfType(findChallenge(catalog.challenges, 'sales-rank')!, 'high-level-design')
+      const design = stage.referenceSolution
+      const mapReduce = { ...design, nodes: design.nodes.map((each) => (each.id === 'app-service-3' ? { ...each, componentType: 'analytics' as const, config: defaultConfig('analytics') } : each)) }
+
+      expect(evaluateDesign(stage, mapReduce, {}).failingCount).toBe(0)
+      expect(ruleResult(stage, removeElements(design, { edgeIds: ['app-service-3->object-store-1'] }), 'rank-job').passed).toBe(false)
     })
 
     it('accept federation in place of sharding for the Twitter and Mint SQL writes, but not an unsharded master beside some NoSQL store', () => {

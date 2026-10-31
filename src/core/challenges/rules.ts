@@ -115,15 +115,17 @@ export interface CustomPredicate {
 }
 
 /**
- * Simulated under its Stage's Load Profile, and under one of its Chaos tasks when `chaos` names it, the
- * Design meets every target given: each kind of request the load sends reaches some Node that is up, and
- * the mean latency per kind, the number of overloaded Nodes and the share of failing requests stay at
- * most their targets.
+ * Simulated under its Stage's Load Profile (or its own `load`), and under one of its Chaos tasks when
+ * `chaos` names it, the Design meets every target given: each kind of request the load sends reaches some
+ * Node that is up, and the mean latency per kind, the number of overloaded Nodes and the share of failing
+ * requests stay at most their targets.
  */
 export interface SimulationPredicate {
   type: 'simulation'
   /** The id of the Stage's Chaos task to simulate under. */
   chaos?: string
+  /** The load to simulate under in place of the Stage's, e.g. one of several successive targets a Design scales to. */
+  load?: LoadProfile
   maxLatencyMs?: Partial<Record<RequestKind, number>>
   maxOverloadedNodes?: number
   /** From 0 to 1: of all requests, or per kind. */
@@ -308,28 +310,30 @@ function tiersOpened(hintUsage: HintUsage, ruleId: string): number {
   return opened
 }
 
-/** What predicates check: the Design and its Traffic Simulation, simulated at most once per evaluation and Chaos task. */
+/** What predicates check: the Design and its Traffic Simulation, simulated at most once per evaluation, load and Chaos task. */
 interface CheckContext {
   design: Design
-  /** Under the Chaos task with this id, when given. */
-  simulation(chaos?: string): { load: LoadProfile; result: SimulationResult }
+  /** Under `load`, or else the Stage's Load Profile, and under the Chaos task with the id `chaos`, when given. */
+  simulation(load: LoadProfile | undefined, chaos: string | undefined): { load: LoadProfile; result: SimulationResult }
 }
 
 function checkContext(design: Design, { loadProfile, chaosTasks = [] }: RuledStage): CheckContext {
-  /** Chaos task id, or undefined for none → the simulation. */
-  const results = new Map<string | undefined, SimulationResult>()
+  /** The load and Chaos task id simulated under → the simulation. */
+  const results = new Map<string, SimulationResult>()
   return {
     design,
-    simulation(chaos) {
-      if (!loadProfile) throw new RangeError('A simulation predicate needs its Stage to have a Load Profile.')
+    simulation(targetLoad, chaos) {
+      const load = targetLoad ?? loadProfile
+      if (!load) throw new RangeError('A simulation predicate needs its Stage, or itself, to have a Load Profile.')
       const task = chaos === undefined ? undefined : chaosTasks.find((candidate) => candidate.id === chaos)
       if (chaos !== undefined && !task) throw new RangeError(`No Chaos task ${chaos}.`)
-      let result = results.get(chaos)
+      const key = JSON.stringify([...[...LOAD_FIELDS].map((field) => load[field as keyof LoadProfile]), chaos ?? null])
+      let result = results.get(key)
       if (!result) {
-        result = simulate(design, loadProfile, task && chaosScenarioOf(task.scenario, design))
-        results.set(chaos, result)
+        result = simulate(design, load, task && chaosScenarioOf(task.scenario, design))
+        results.set(key, result)
       }
-      return { load: loadProfile, result }
+      return { load, result }
     },
   }
 }
@@ -374,7 +378,7 @@ function holds(predicate: Predicate, context: CheckContext): boolean {
       return check(design)
     }
     case 'simulation':
-      return meetsTargets(predicate, context.simulation(predicate.chaos))
+      return meetsTargets(predicate, context.simulation(predicate.load, predicate.chaos))
   }
 }
 
@@ -465,7 +469,7 @@ const PREDICATE_FIELDS: Record<Predicate['type'], ReadonlySet<string>> = {
   'any-of': new Set(['type', 'predicates']),
   not: new Set(['type', 'predicate']),
   custom: new Set(['type', 'name']),
-  simulation: new Set(['type', 'chaos', 'maxLatencyMs', 'maxOverloadedNodes', 'maxErrorRate']),
+  simulation: new Set(['type', 'chaos', 'load', 'maxLatencyMs', 'maxOverloadedNodes', 'maxErrorRate']),
 }
 
 /**
@@ -496,6 +500,27 @@ export function validateRules(input: unknown, problem: (message: string) => void
     checkPredicate(item.check, (message) => fail(`check: ${message}`), chaosTaskIds)
   })
   return valid ? (input as Rule[]) : undefined
+}
+
+const LOAD_FIELDS = new Set<string>(['readQps', 'writeQps', 'requestBytes'] satisfies (keyof LoadProfile)[])
+
+/** Checks an authored Load Profile: read and write QPS and request bytes, each at least 0, sending some traffic. */
+export function validateLoadProfile(value: unknown, fail: (message: string) => void): LoadProfile | undefined {
+  if (!isRecord(value)) return void fail('must be an object')
+  let valid = true
+  const loadFail = (message: string) => {
+    valid = false
+    fail(message)
+  }
+  for (const field of Object.keys(value)) if (!LOAD_FIELDS.has(field)) loadFail(`unknown field "${field}"`)
+  for (const field of LOAD_FIELDS) {
+    const rate = value[field]
+    if (typeof rate !== 'number' || !Number.isFinite(rate) || rate < 0) loadFail(`"${field}" must be a number of at least 0`)
+  }
+  if (!valid) return undefined
+  const { readQps, writeQps, requestBytes } = value as unknown as LoadProfile
+  if (readQps + writeQps === 0) return void fail('must send some reads or writes')
+  return { readQps, writeQps, requestBytes }
 }
 
 const CHAOS_TASK_FIELDS = new Set(['id', 'prompt', 'scenario'])
@@ -594,8 +619,9 @@ function checkPredicate(value: unknown, fail: (message: string) => void, chaosTa
       if (!isText(value.name) || !Object.hasOwn(CUSTOM_PREDICATES, value.name)) fail(`no custom predicate "${String(value.name)}" is registered`)
       return
     case 'simulation': {
-      const { chaos, maxLatencyMs, maxOverloadedNodes, maxErrorRate } = value
+      const { chaos, load, maxLatencyMs, maxOverloadedNodes, maxErrorRate } = value
       if (chaos !== undefined && !(isText(chaos) && chaosTaskIds.has(chaos))) fail(`"chaos" names no Chaos task of the Stage: "${String(chaos)}"`)
+      if (load !== undefined) validateLoadProfile(load, (message) => fail(`load: ${message}`))
       if ([maxLatencyMs, maxOverloadedNodes, maxErrorRate].every((target) => target === undefined)) return fail('a simulation predicate must set at least one target')
       const latencies = isRecord(maxLatencyMs) ? Object.entries(maxLatencyMs) : []
       const latenciesFit = latencies.length > 0 && latencies.every(([kind, ms]) => REQUEST_KINDS.includes(kind as RequestKind) && isPositive(ms))

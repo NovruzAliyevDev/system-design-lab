@@ -37,6 +37,15 @@ export const scaledOut: Predicate = {
   ],
 }
 
+/** An application service puts jobs on a queue, which a service (a worker) pulls from. */
+export const queuedJobs: Predicate = {
+  type: 'all-of',
+  predicates: [
+    { type: 'path', from: 'client', to: QUEUES, through: 'app-service', traffic: 'write' },
+    { type: 'edge', from: QUEUES, to: 'app-service', traffic: 'write' },
+  ],
+}
+
 /** Client requests carrying writes and those carrying reads both reach a node of one of the selectors through an application service. */
 export const readAndWritePaths = (selectors: NodeSelector[]): Predicate => ({ type: 'all-of', predicates: [apiPath(selectors, 'write'), apiPath(selectors, 'read')] })
 

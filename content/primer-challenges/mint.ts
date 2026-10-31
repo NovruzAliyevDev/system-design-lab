@@ -7,20 +7,14 @@
 // primer's extraction is triggered by the user or by a daily job for active users.
 import type { ChallengeInput } from '../../src/core/challenges/challenge'
 import type { NodeSelector, Predicate } from '../../src/core/challenges/rules'
-import { allConnectedRule, apiPath, dnsRule, edge, entryPath, loadBalancerRule, node, QUEUES, readReplicas, scaleOutRule, writesSpread } from './shared'
+import { allConnectedRule, apiPath, dnsRule, edge, entryPath, loadBalancerRule, node, QUEUES, queuedJobs, readReplicas, scaleOutRule, writesSpread } from './shared'
 
 /** Where accounts, transactions and monthly spending live: the primer's SQL database, or NoSQL. */
 const DATABASE: NodeSelector[] = ['sql-database', 'nosql-store']
 
 const ACCOUNTS_TABLE: Predicate = apiPath(DATABASE, 'write')
 /** The Accounts API puts extraction jobs on a queue, which a service pulls from. */
-const EXTRACTION_QUEUE: Predicate = {
-  type: 'all-of',
-  predicates: [
-    { type: 'path', from: 'client', to: QUEUES, through: 'app-service', traffic: 'write' },
-    { type: 'edge', from: QUEUES, to: 'app-service', traffic: 'write' },
-  ],
-}
+const EXTRACTION_QUEUE: Predicate = queuedJobs
 /** Raw transaction logs reach the Object Store, only through the queue. */
 const RAW_LOGS: Predicate = { type: 'path', from: 'client', to: 'object-store', through: QUEUES, traffic: 'write' }
 /** What the extraction pulls from the queue ends up in the database. */
