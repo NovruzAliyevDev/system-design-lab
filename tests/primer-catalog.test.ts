@@ -255,6 +255,11 @@ describe('catalog of the pinned primer commit', () => {
     expect(parts[1].text.body).toMatch(/^#### Denormalization/)
   })
 
+  it('shows the cache simulation in the Cache Lesson and after the update strategies', () => {
+    expect(conceptSimulationsOfLesson(catalog.conceptSimulations, 'cache')).toEqual(['cache'])
+    expect(conceptSimulationsOfLesson(catalog.conceptSimulations, 'when-to-update-the-cache')).toEqual(['cache'])
+  })
+
   describe('the Pastebin Challenge', () => {
     const pastebin = findChallenge(catalog.challenges, 'pastebin')!
 

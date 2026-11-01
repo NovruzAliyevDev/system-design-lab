@@ -3,12 +3,14 @@ import { lessonParts, type ConceptSimulationId } from '../../core/concept-simula
 import type { Lesson } from '../../core/content/catalog'
 import { catalog } from '../catalog'
 import { PRIMER_PROSE_CLASS, PrimerMarkdown } from '../PrimerMarkdown'
+import { CacheSimulation } from './CacheSimulation'
 import { ConsistentHashingSimulation } from './ConsistentHashingSimulation'
 import { LoadBalancerSimulation } from './LoadBalancerSimulation'
 
 const SIMULATIONS: Record<ConceptSimulationId, ComponentType> = {
   'load-balancer': LoadBalancerSimulation,
   'consistent-hashing': ConsistentHashingSimulation,
+  cache: CacheSimulation,
 }
 
 /**
@@ -18,7 +20,8 @@ const SIMULATIONS: Record<ConceptSimulationId, ComponentType> = {
 export function LessonText({ lesson, codeBlocks }: { lesson: Lesson; codeBlocks?: ReadonlyMap<number, ReactNode> }) {
   const parts = useMemo(() => lessonParts(lesson, catalog.conceptSimulations), [lesson])
   return parts.map(({ start, text, simulations }) => (
-    <div key={start}>
+    // Keyed by Lesson too, so a simulation starts afresh in the next Lesson rather than keeping its settings.
+    <div key={`${lesson.id} ${start}`}>
       <div lang="en" className={`${PRIMER_PROSE_CLASS} mt-8`}>
         <PrimerMarkdown text={text} codeBlocks={codeBlocks && shift(codeBlocks, start, text.body.length)} />
       </div>

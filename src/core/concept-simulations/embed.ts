@@ -2,7 +2,7 @@ import type { Lesson, LessonReference, PrimerText } from '../content/catalog'
 import { isRecord, isText } from '../content/validation'
 
 /** The Concept Simulations the app has; each is a UI over its Core simulation. */
-export const CONCEPT_SIMULATION_IDS = ['load-balancer', 'consistent-hashing'] as const
+export const CONCEPT_SIMULATION_IDS = ['load-balancer', 'consistent-hashing', 'cache'] as const
 
 export type ConceptSimulationId = (typeof CONCEPT_SIMULATION_IDS)[number]
 

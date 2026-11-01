@@ -46,7 +46,7 @@ describe('Concept Simulation embeds', () => {
   it('fail the build on an unknown simulation or Lesson, a repeat in one Lesson, or a wrong shape', () => {
     expect(
       problemsOf([
-        { simulationId: 'cache', lessonId: 'database' },
+        { simulationId: 'paxos', lessonId: 'database' },
         { simulationId: 'load-balancer', lessonId: 'cache' },
         { simulationId: 'load-balancer', lessonId: 'load-balancer' },
         { simulationId: 'load-balancer', lessonId: 'load-balancer' },
@@ -54,7 +54,7 @@ describe('Concept Simulation embeds', () => {
         'sharding',
       ]),
     ).toEqual([
-      'Concept Simulation #1: unknown simulation "cache" (known: "load-balancer", "consistent-hashing")',
+      'Concept Simulation #1: unknown simulation "paxos" (known: "load-balancer", "consistent-hashing", "cache")',
       'Concept Simulation "load-balancer": unknown Lesson id "cache"',
       'Concept Simulation "load-balancer": already embedded in Lesson "load-balancer"',
       'Concept Simulation "consistent-hashing": unknown field "title"',
