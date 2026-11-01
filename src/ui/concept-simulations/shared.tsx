@@ -1,5 +1,9 @@
-import { useEffect, useId, useState, type ReactNode, type RefObject } from 'react'
+import { Fragment, useEffect, useId, useState, type ReactNode, type RefObject } from 'react'
+import { Link } from 'react-router-dom'
+import { findLesson } from '../../core/content/catalog'
+import { catalog } from '../catalog'
 import { formatInteger, t } from '../i18n'
+import { lessonPath } from '../routes'
 import { TABLET_QUERY, useMediaQuery } from '../useMediaQuery'
 
 const TICK_MS = 120
@@ -10,19 +14,57 @@ export function seriesColor(index: number): string {
   return `var(--series-${(index % 8) + 1})`
 }
 
+/** `part` as a whole percentage of `whole`, e.g. "42%". */
+export function percent(part: number, whole: number): string {
+  return `${formatInteger(whole > 0 ? (part / whole) * 100 : 0)}%`
+}
+
 /** A seed for a new random run; Core never reads randomness itself. */
 export function newSeed(): number {
   return Math.floor(Math.random() * 2 ** 31)
 }
 
-/** A Concept Simulation's box in a Lesson. Its text is Azerbaijani, unlike the primer text around it. */
-export function SimulationFrame({ title, description, children }: { title: string; description: string; children: ReactNode }) {
+/** A link to a Lesson, named by its primer title unless `children` name it. */
+export function LessonLink({ lessonId, children }: { lessonId: string; children?: ReactNode }) {
+  return (
+    <Link to={lessonPath(lessonId)} className="text-sky-400 hover:underline">
+      {children ?? <span lang="en">{findLesson(catalog, lessonId)?.title ?? lessonId}</span>}
+    </Link>
+  )
+}
+
+/**
+ * A Concept Simulation's box in a Lesson. Its text is Azerbaijani, unlike the primer text around it.
+ * `related` are Lessons that explain what the simulation shows, linked under the description.
+ */
+export function SimulationFrame({
+  title,
+  description,
+  related = [],
+  children,
+}: {
+  title: string
+  description: string
+  related?: readonly string[]
+  children: ReactNode
+}) {
   const wide = useMediaQuery(TABLET_QUERY)
   return (
     <section lang="az" className="my-10 rounded-lg border border-zinc-800 p-4 sm:p-5">
       <p className="text-xs font-medium tracking-wide text-sky-400 uppercase">{t('conceptSimulationLabel')}</p>
       <h2 className="mt-1 text-xl font-semibold text-zinc-50">{title}</h2>
       <p className="mt-1 text-sm text-zinc-400">{description}</p>
+      {related.length > 0 && (
+        <p className="mt-1 text-sm text-zinc-400">
+          {t('conceptSimulationRelated')}{' '}
+          {related.map((lessonId, i) => (
+            <Fragment key={lessonId}>
+              {i > 0 && ' · '}
+              <LessonLink lessonId={lessonId} />
+            </Fragment>
+          ))}
+        </p>
+      )}
       {!wide && (
         <p role="status" className="mt-3 rounded border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-zinc-200">
           {t('conceptSimulationDesktopBetter')}
@@ -34,7 +76,7 @@ export function SimulationFrame({ title, description, children }: { title: strin
 }
 
 /** A control with its Azerbaijani explanation beside it. */
-export function Control({ label, hint, labelId, children }: { label: string; hint: string; labelId?: string; children: ReactNode }) {
+export function Control({ label, hint, labelId, children }: { label: string; hint: ReactNode; labelId?: string; children: ReactNode }) {
   return (
     <div className="min-w-0 rounded border border-zinc-800 bg-zinc-900/40 p-3">
       <p id={labelId} className="text-sm font-medium text-zinc-200">
@@ -74,6 +116,17 @@ export function Choice<T extends string>({
           {name(option)}
         </button>
       ))}
+    </div>
+  )
+}
+
+/** A metric card: its value over the ticks played so far, and what it means. Inside a `<dl>`. */
+export function Metric({ label, value, children }: { label: string; value: string; children: ReactNode }) {
+  return (
+    <div className="rounded border border-zinc-800 bg-zinc-900/40 p-3">
+      <dt className="text-sm text-zinc-400">{label}</dt>
+      <dd className="mt-1 text-2xl font-semibold text-zinc-50 tabular-nums">{value}</dd>
+      <dd className="mt-1 text-xs text-zinc-400">{children}</dd>
     </div>
   )
 }
@@ -215,11 +268,19 @@ export interface TimelineSeries {
   values: number[]
 }
 
+/** Something that happened during the run: at a tick (from 0), or over the ticks up to `to`, shaded. */
+export interface TimelineEvent {
+  key: string
+  label: string
+  from: number
+  to?: number
+}
+
 const CHART = { width: 480, height: 200, left: 30, right: 8, top: 8, bottom: 20 }
 
 /**
  * A line per series over the `shown` ticks played so far of `total`, with a crosshair and the tick's values
- * on hover, and a legend.
+ * on hover, and a legend. Events are drawn once the playback reaches them.
  */
 export function TimelineChart({
   title,
@@ -227,6 +288,7 @@ export function TimelineChart({
   total,
   shown,
   series,
+  events = [],
   formatValue,
 }: {
   title: string
@@ -234,6 +296,7 @@ export function TimelineChart({
   total: number
   shown: number
   series: TimelineSeries[]
+  events?: TimelineEvent[]
   formatValue: (value: number) => string
 }) {
   const [hover, setHover] = useState<number>()
@@ -244,6 +307,8 @@ export function TimelineChart({
   const x = (index: number) => CHART.left + (index / Math.max(1, total - 1)) * plotWidth
   const y = (value: number) => CHART.top + plotHeight - (value / highest) * plotHeight
   const hovered = hover !== undefined && hover < shown ? hover : undefined
+  const reached = events.filter((event) => event.from < shown)
+  const halfTick = plotWidth / Math.max(1, total - 1) / 2
 
   return (
     <figure>
@@ -263,6 +328,30 @@ export function TimelineChart({
           }}
           onPointerLeave={() => setHover(undefined)}
         >
+          {reached.map((event) =>
+            event.to === undefined ? (
+              <line
+                key={event.key}
+                x1={x(event.from)}
+                x2={x(event.from)}
+                y1={CHART.top}
+                y2={CHART.top + plotHeight}
+                className="stroke-zinc-400"
+                strokeWidth={1}
+                strokeDasharray="4 3"
+              />
+            ) : (
+              <rect
+                key={event.key}
+                // Half a tick to either side, so a band of one tick still shows.
+                x={Math.max(CHART.left, x(event.from) - halfTick)}
+                width={Math.min(CHART.width - CHART.right, x(Math.min(event.to, shown - 1)) + halfTick) - Math.max(CHART.left, x(event.from) - halfTick)}
+                y={CHART.top}
+                height={plotHeight}
+                className="fill-zinc-500/15"
+              />
+            ),
+          )}
           {[0, highest / 2, highest].map((value) => (
             <g key={value}>
               <line x1={CHART.left} x2={CHART.width - CHART.right} y1={y(value)} y2={y(value)} className="stroke-zinc-800" strokeWidth={1} />
@@ -315,6 +404,13 @@ export function TimelineChart({
                 {line.label}: {formatValue(line.values[hovered])}
               </p>
             ))}
+            {reached
+              .filter((event) => event.from <= hovered && hovered <= (event.to ?? event.from))
+              .map((event) => (
+                <p key={event.key} className="text-zinc-400">
+                  {event.label}
+                </p>
+              ))}
           </div>
         )}
       </div>
@@ -323,6 +419,16 @@ export function TimelineChart({
           <li key={line.key} className="flex items-center gap-1.5">
             <span aria-hidden className="h-0.5 w-3" style={{ background: line.color }} />
             {line.label}
+          </li>
+        ))}
+        {reached.map((event) => (
+          <li key={event.key} className="flex items-center gap-1.5">
+            {event.to === undefined ? (
+              <span aria-hidden className="h-3 border-l border-dashed border-zinc-400" />
+            ) : (
+              <span aria-hidden className="h-2.5 w-3 bg-zinc-500/30" />
+            )}
+            {event.label}
           </li>
         ))}
       </ul>

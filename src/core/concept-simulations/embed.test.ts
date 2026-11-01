@@ -54,7 +54,7 @@ describe('Concept Simulation embeds', () => {
         'sharding',
       ]),
     ).toEqual([
-      'Concept Simulation #1: unknown simulation "paxos" (known: "load-balancer", "consistent-hashing", "cache")',
+      'Concept Simulation #1: unknown simulation "paxos" (known: "load-balancer", "consistent-hashing", "cache", "replication", "cap")',
       'Concept Simulation "load-balancer": unknown Lesson id "cache"',
       'Concept Simulation "load-balancer": already embedded in Lesson "load-balancer"',
       'Concept Simulation "consistent-hashing": unknown field "title"',

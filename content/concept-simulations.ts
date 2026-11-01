@@ -11,4 +11,9 @@ export const conceptSimulations: ConceptSimulationEmbed[] = [
   // Hit/miss and eviction where the cache is introduced; the write strategies after the Lesson that compares them.
   { simulationId: 'cache', lessonId: 'cache' },
   { simulationId: 'cache', lessonId: 'when-to-update-the-cache' },
+  // Replication where it is an availability pattern, and in the RDBMS Lesson after its disadvantages.
+  { simulationId: 'replication', lessonId: 'replication' },
+  { simulationId: 'replication', lessonId: 'relational-database-management-system-rdbms', afterSection: 'disadvantages-replication' },
+  // After CP and AP are described, before the further reading.
+  { simulationId: 'cap', lessonId: 'cap-theorem', afterSection: 'ap---availability-and-partition-tolerance' },
 ]

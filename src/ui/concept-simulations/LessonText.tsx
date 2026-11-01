@@ -4,13 +4,17 @@ import type { Lesson } from '../../core/content/catalog'
 import { catalog } from '../catalog'
 import { PRIMER_PROSE_CLASS, PrimerMarkdown } from '../PrimerMarkdown'
 import { CacheSimulation } from './CacheSimulation'
+import { CapSimulation } from './CapSimulation'
 import { ConsistentHashingSimulation } from './ConsistentHashingSimulation'
 import { LoadBalancerSimulation } from './LoadBalancerSimulation'
+import { ReplicationSimulation } from './ReplicationSimulation'
 
 const SIMULATIONS: Record<ConceptSimulationId, ComponentType> = {
   'load-balancer': LoadBalancerSimulation,
   'consistent-hashing': ConsistentHashingSimulation,
   cache: CacheSimulation,
+  replication: ReplicationSimulation,
+  cap: CapSimulation,
 }
 
 /**

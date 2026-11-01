@@ -1,4 +1,4 @@
-import { useId, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useId, useMemo, useRef, useState } from 'react'
 import {
   CACHE_STRATEGIES,
   EVICTION_POLICIES,
@@ -15,7 +15,7 @@ import {
   type WorkloadDistribution,
 } from '../../core/concept-simulations/cache'
 import { formatInteger, t, type StringKey } from '../i18n'
-import { Choice, Control, newSeed, PlaybackBar, seriesColor, SimulationFrame, TimelineChart, usePlayback } from './shared'
+import { Choice, Control, Metric, newSeed, percent, PlaybackBar, seriesColor, SimulationFrame, TimelineChart, usePlayback } from './shared'
 
 // The cache Concept Simulation: the Core run for the chosen settings, played back tick by tick, with the
 // metrics counted up to the tick shown and every strategy compared on the same workload.
@@ -61,9 +61,6 @@ const FLUSH_RANGE = { min: 5, max: 200 }
 
 /** The series' colour slots: reads on the left chart, the database on the right; none repeats. */
 const COLORS = { hits: seriesColor(2), misses: seriesColor(1), stale: seriesColor(3), dbReads: seriesColor(0), dbWrites: seriesColor(4), unflushed: seriesColor(6) }
-
-/** `part` as a whole percentage of `whole`, e.g. "42%". */
-const percent = (part: number, whole: number) => `${formatInteger(whole > 0 ? (part / whole) * 100 : 0)}%`
 
 export function CacheSimulation() {
   const [strategy, setStrategy] = useState<CacheStrategy>('cache-aside')
@@ -269,16 +266,6 @@ function Metrics({ strategy, ticks }: { strategy: CacheStrategy; ticks: CacheTic
         {strategy === 'write-behind' ? t('cacheMetricAtRiskNote', { most: mostUnflushedWrites }) : t('cacheMetricAtRiskNoneNote')}
       </Metric>
     </dl>
-  )
-}
-
-function Metric({ label, value, children }: { label: string; value: string; children: ReactNode }) {
-  return (
-    <div className="rounded border border-zinc-800 bg-zinc-900/40 p-3">
-      <dt className="text-sm text-zinc-400">{label}</dt>
-      <dd className="mt-1 text-2xl font-semibold text-zinc-50 tabular-nums">{value}</dd>
-      <dd className="mt-1 text-xs text-zinc-400">{children}</dd>
-    </div>
   )
 }
 

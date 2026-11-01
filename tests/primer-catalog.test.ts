@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { loadPrimerCatalog } from '../scripts/build-content'
 import { findChallenge, type Challenge, type DesignStage, type Stage, type StageType } from '../src/core/challenges/challenge'
 import { chaosScenarioOf, evaluateDesign, problemHints } from '../src/core/challenges/rules'
-import { conceptSimulationsOfLesson, lessonParts } from '../src/core/concept-simulations/embed'
+import { conceptSimulationsOfLesson, lessonParts, RELATED_LESSONS } from '../src/core/concept-simulations/embed'
 import { CALCULATOR_LESSONS } from '../src/core/content/calculator-lessons'
 import { findLesson } from '../src/core/content/catalog'
 import { findUnresolvedLinks, resolveLink } from '../src/core/content/links'
@@ -250,9 +250,27 @@ describe('catalog of the pinned primer commit', () => {
     const parts = lessonParts(rdbms, catalog.conceptSimulations)
 
     expect(conceptSimulationsOfLesson(catalog.conceptSimulations, 'load-balancer')).toEqual(['load-balancer'])
-    expect(parts.map((part) => part.simulations)).toEqual([['consistent-hashing'], []])
-    expect(parts[0].text.body).toContain('consistent hashing')
-    expect(parts[1].text.body).toMatch(/^#### Denormalization/)
+    expect(parts.map((part) => part.simulations)).toEqual([['replication'], ['consistent-hashing'], []])
+    expect(parts[1].text.body).toContain('consistent hashing')
+    expect(parts[2].text.body).toMatch(/^#### Denormalization/)
+  })
+
+  it('shows the replication simulation in its Lesson and after the RDBMS replication section, and CAP after AP', () => {
+    const [rdbmsReplication, afterReplication] = lessonParts(findLesson(catalog, 'relational-database-management-system-rdbms')!, catalog.conceptSimulations)
+    const [capTheorem, furtherReading] = lessonParts(findLesson(catalog, 'cap-theorem')!, catalog.conceptSimulations)
+
+    expect(conceptSimulationsOfLesson(catalog.conceptSimulations, 'replication')).toEqual(['replication'])
+    expect(rdbmsReplication.text.body).toContain('##### Disadvantage(s): replication')
+    expect(afterReplication.text.body).toMatch(/^##### Source\(s\) and further reading: replication/)
+    expect(capTheorem.simulations).toEqual(['cap'])
+    expect(capTheorem.text.body).toContain('#### AP - availability and partition tolerance')
+    expect(furtherReading.text.body).toMatch(/^### Source\(s\) and further reading/)
+  })
+
+  it('links the simulations to related Lessons that exist', () => {
+    const lessonIds = new Set(catalog.lessons.map((lesson) => lesson.id))
+
+    expect(Object.values(RELATED_LESSONS).flat().filter((lessonId) => !lessonIds.has(lessonId))).toEqual([])
   })
 
   it('shows the cache simulation in the Cache Lesson and after the update strategies', () => {

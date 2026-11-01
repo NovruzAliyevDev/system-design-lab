@@ -2,9 +2,19 @@ import type { Lesson, LessonReference, PrimerText } from '../content/catalog'
 import { isRecord, isText } from '../content/validation'
 
 /** The Concept Simulations the app has; each is a UI over its Core simulation. */
-export const CONCEPT_SIMULATION_IDS = ['load-balancer', 'consistent-hashing', 'cache'] as const
+export const CONCEPT_SIMULATION_IDS = ['load-balancer', 'consistent-hashing', 'cache', 'replication', 'cap'] as const
 
 export type ConceptSimulationId = (typeof CONCEPT_SIMULATION_IDS)[number]
+
+/**
+ * The Lessons a simulation's explanations link to, beyond the ones it is shown in: what it shows is
+ * explained there (replication lag is eventual consistency, say). Every Lesson linked inside an explanation
+ * is listed too, so the catalog test catches a Lesson the primer no longer has.
+ */
+export const RELATED_LESSONS: Partial<Record<ConceptSimulationId, readonly string[]>> = {
+  replication: ['availability-patterns', 'fail-over', 'consistency-patterns', 'eventual-consistency', 'strong-consistency'],
+  cap: ['consistency-patterns', 'weak-consistency', 'eventual-consistency', 'strong-consistency', 'availability-patterns'],
+}
 
 /** A Concept Simulation shown in a Lesson, as authored. */
 export interface ConceptSimulationEmbed {
