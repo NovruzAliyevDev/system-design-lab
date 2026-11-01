@@ -42,4 +42,4 @@
   - Seam B: a Dashboard smoke test; existing tests updated for the new home page.
 - **Known limits.**
   - The flashcard queue still splits days by the UTC offset in force now, while the streak uses the time zone. They can differ only on a daylight saving night.
-  - The header overflows a 375px phone by ~13px on every page. That predates this ticket.
+  - The header overflowed a 375px phone by ~13px on every page (from before this ticket). Fixed: below `sm` the Settings link is an icon, as Search already was.

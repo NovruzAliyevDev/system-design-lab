@@ -75,8 +75,19 @@ function Layout() {
               {t(label)}
             </Link>
           ))}
-          <Link to={SETTINGS_ROUTE} className="text-sm text-zinc-400 hover:text-zinc-100">
-            {t('settingsTitle')}
+          <Link
+            to={SETTINGS_ROUTE}
+            aria-label={t('settingsTitle')}
+            className="self-center text-sm text-zinc-400 hover:text-zinc-100 sm:self-auto"
+          >
+            {/* On a phone the header has room for the icon only, as for search. */}
+            <svg aria-hidden viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4 sm:hidden">
+              <path d="M3 5h14M3 10h14M3 15h14" strokeLinecap="round" />
+              <circle cx="7" cy="5" r="1.75" fill="currentColor" />
+              <circle cx="13" cy="10" r="1.75" fill="currentColor" />
+              <circle cx="9" cy="15" r="1.75" fill="currentColor" />
+            </svg>
+            <span className="hidden sm:inline">{t('settingsTitle')}</span>
           </Link>
         </div>
       </header>
