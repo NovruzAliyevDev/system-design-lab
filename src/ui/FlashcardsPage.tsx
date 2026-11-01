@@ -7,6 +7,7 @@ import { GRADES, scheduleReview, type Grade } from '../core/flashcards/scheduler
 import { Attribution } from './Attribution'
 import { catalog } from './catalog'
 import { t, tRich, type StringKey } from './i18n'
+import { dailyReviewSettings } from './localDay'
 import { PRIMER_PROSE_CLASS, PrimerHtml } from './PrimerMarkdown'
 import { useProgress } from './progress/store'
 import { flashcardsPath, flashcardsQuery, lessonPath, selectionFromQuery, SETTINGS_ROUTE } from './routes'
@@ -51,11 +52,6 @@ function formatWait(ms: number): string {
   if (ms < HOUR_MS) return t('intervalMinutes', { count: Math.max(1, Math.round(ms / MINUTE_MS)) })
   if (ms < DAY_MS) return t('intervalHours', { count: Math.round(ms / HOUR_MS) })
   return t('intervalDays', { count: Math.round(ms / DAY_MS) })
-}
-
-/** The learner's day starts at their local midnight (by the offset in force now). */
-function dailySettings(newCardsPerDay: number, now: Date): DailyReviewSettings {
-  return { newCardsPerDay, utcOffsetMinutes: -now.getTimezoneOffset() }
 }
 
 /** Lessons that cards link to, in primer order, with how many cards each has. */
@@ -165,7 +161,7 @@ function Review({ cards, states, newCardsPerDay }: { cards: Flashcard[]; states:
   const interacted = useRef(false)
   useClockTick()
   const now = new Date()
-  const settings = dailySettings(newCardsPerDay, now)
+  const settings = dailyReviewSettings(newCardsPerDay, now)
   const queue = buildDailyQueue(cards, states, settings, now)
   const card = queue.cards[0]
   const { counts } = queue
@@ -328,7 +324,7 @@ function ReviewDone({ cards, states, settings, now }: { cards: Flashcard[]; stat
 
 function DeckStatsList({ states, newCardsPerDay }: { states: CardStates; newCardsPerDay: number }) {
   const now = new Date()
-  const settings = dailySettings(newCardsPerDay, now)
+  const settings = dailyReviewSettings(newCardsPerDay, now)
   return (
     <section aria-labelledby="deck-stats" className="mt-10 border-t border-zinc-800 pt-6">
       <h2 id="deck-stats" className="text-lg font-medium text-zinc-100">

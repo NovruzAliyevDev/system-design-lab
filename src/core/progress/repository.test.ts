@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Attempt } from '../challenges/attempt'
 import type { Design } from '../design/design'
+import type { ActivityProgress } from './progress'
 import { createInMemoryProgressRepository, createProgressRepository } from './repository'
 
 const NOW = new Date('2026-10-25T12:00:00Z')
@@ -83,15 +84,27 @@ const finishedAttempt = {
 
 const challengeWork = { attempts: { pastebin: [finishedAttempt, attempt] } }
 
+/** A day of learning, and the Challenge it ended on. */
+const activityWork = {
+  log: [
+    { kind: 'lesson-read', at: '2026-10-25T08:00:00.000Z', lessonId: 'cache' },
+    { kind: 'quiz', at: '2026-10-25T08:20:00.000Z', quizId: 'cache-basics' },
+    { kind: 'daily-review', at: '2026-10-25T09:00:00.000Z' },
+    { kind: 'challenge-stage', at: '2026-10-25T10:10:00.000Z', challengeId: 'pastebin', stageId: 'requirements' },
+  ],
+  lastOpened: { kind: 'challenge', challengeId: 'pastebin' },
+} as const satisfies ActivityProgress
+
 describe('ProgressRepository', () => {
   it('round-trips all progress through export and import without loss', async () => {
     const source = createInMemoryProgressRepository()
     await source.put('reading', { readLessons: { cache: '2026-10-20T08:00:00.000Z', 'load-balancer': '2026-10-21T09:30:00.000Z' } })
-    await source.put('settings', { theme: 'light', newCardsPerDay: 5, canvasStyle: 'sketch' })
+    await source.put('settings', { theme: 'light', newCardsPerDay: 5, canvasStyle: 'sketch', streakMinActivities: 3 })
     await source.put('flashcards', { cards: { 'system-design/1482325088071': cardState } })
     await source.put('quizzes', { results: { 'cache-basics': quizResult } })
     await source.put('designs', { drafts: { sandbox: sandboxDesign } })
     await source.put('challenges', challengeWork)
+    await source.put('activity', activityWork)
     const exported = await source.exportAll(NOW)
 
     const target = createInMemoryProgressRepository()
@@ -101,29 +114,32 @@ describe('ProgressRepository', () => {
     expect(await target.get('reading')).toEqual({
       readLessons: { cache: '2026-10-20T08:00:00.000Z', 'load-balancer': '2026-10-21T09:30:00.000Z' },
     })
-    expect(await target.get('settings')).toEqual({ theme: 'light', newCardsPerDay: 5, canvasStyle: 'sketch' })
+    expect(await target.get('settings')).toEqual({ theme: 'light', newCardsPerDay: 5, canvasStyle: 'sketch', streakMinActivities: 3 })
     expect(await target.get('flashcards')).toEqual({ cards: { 'system-design/1482325088071': cardState } })
     expect(await target.get('quizzes')).toEqual({ results: { 'cache-basics': quizResult } })
     expect(await target.get('designs')).toEqual({ drafts: { sandbox: sandboxDesign } })
     expect(await target.get('challenges')).toEqual(challengeWork)
+    expect(await target.get('activity')).toEqual(activityWork)
   })
 
   it('starts empty, with the dark theme and 20 new cards a day', async () => {
     const repository = createInMemoryProgressRepository()
 
     expect(await repository.get('reading')).toEqual({ readLessons: {} })
-    expect(await repository.get('settings')).toEqual({ theme: 'dark', newCardsPerDay: 20, canvasStyle: 'clean' })
+    expect(await repository.get('settings')).toEqual({ theme: 'dark', newCardsPerDay: 20, canvasStyle: 'clean', streakMinActivities: 2 })
     expect(await repository.get('flashcards')).toEqual({ cards: {} })
     expect(await repository.get('quizzes')).toEqual({ results: {} })
     expect(await repository.get('designs')).toEqual({ drafts: {} })
     expect(await repository.get('challenges')).toEqual({ attempts: {} })
+    expect(await repository.get('activity')).toEqual({ log: [] })
     expect(await repository.getAll()).toEqual({
       reading: { readLessons: {} },
-      settings: { theme: 'dark', newCardsPerDay: 20, canvasStyle: 'clean' },
+      settings: { theme: 'dark', newCardsPerDay: 20, canvasStyle: 'clean', streakMinActivities: 2 },
       flashcards: { cards: {} },
       quizzes: { results: {} },
       designs: { drafts: {} },
       challenges: { attempts: {} },
+      activity: { log: [] },
     })
   })
 
@@ -133,37 +149,39 @@ describe('ProgressRepository', () => {
       putAll: async () => {},
     })
 
-    expect(await repository.get('settings')).toEqual({ theme: 'light', newCardsPerDay: 20, canvasStyle: 'clean' })
+    expect(await repository.get('settings')).toEqual({ theme: 'light', newCardsPerDay: 20, canvasStyle: 'clean', streakMinActivities: 2 })
   })
 
   it('resets one area and keeps the others', async () => {
     const repository = createInMemoryProgressRepository()
     await repository.put('reading', { readLessons: { dns: '2026-10-22T10:00:00.000Z' } })
-    await repository.put('settings', { theme: 'light', newCardsPerDay: 20, canvasStyle: 'clean' })
+    await repository.put('settings', { theme: 'light', newCardsPerDay: 20, canvasStyle: 'clean', streakMinActivities: 2 })
 
     await repository.reset('reading')
 
     expect(await repository.get('reading')).toEqual({ readLessons: {} })
-    expect(await repository.get('settings')).toEqual({ theme: 'light', newCardsPerDay: 20, canvasStyle: 'clean' })
+    expect(await repository.get('settings')).toEqual({ theme: 'light', newCardsPerDay: 20, canvasStyle: 'clean', streakMinActivities: 2 })
   })
 
   it('resets every area at once', async () => {
     const repository = createInMemoryProgressRepository()
     await repository.put('reading', { readLessons: { dns: '2026-10-22T10:00:00.000Z' } })
-    await repository.put('settings', { theme: 'light', newCardsPerDay: 20, canvasStyle: 'clean' })
+    await repository.put('settings', { theme: 'light', newCardsPerDay: 20, canvasStyle: 'clean', streakMinActivities: 2 })
     await repository.put('flashcards', { cards: { 'system-design/1': cardState } })
     await repository.put('quizzes', { results: { 'cache-basics': quizResult } })
     await repository.put('designs', { drafts: { sandbox: sandboxDesign } })
     await repository.put('challenges', challengeWork)
+    await repository.put('activity', activityWork)
 
     await repository.reset()
 
     expect(await repository.get('reading')).toEqual({ readLessons: {} })
-    expect(await repository.get('settings')).toEqual({ theme: 'dark', newCardsPerDay: 20, canvasStyle: 'clean' })
+    expect(await repository.get('settings')).toEqual({ theme: 'dark', newCardsPerDay: 20, canvasStyle: 'clean', streakMinActivities: 2 })
     expect(await repository.get('flashcards')).toEqual({ cards: {} })
     expect(await repository.get('quizzes')).toEqual({ results: {} })
     expect(await repository.get('designs')).toEqual({ drafts: {} })
     expect(await repository.get('challenges')).toEqual({ attempts: {} })
+    expect(await repository.get('activity')).toEqual({ log: [] })
   })
 
   it('backs up the current progress before a valid import replaces it', async () => {
@@ -186,16 +204,17 @@ describe('ProgressRepository', () => {
     await repository.importAll(JSON.stringify(v0Export), NOW)
 
     expect(await repository.exportAll(NOW)).toEqual({
-      schemaVersion: 9,
+      schemaVersion: 10,
       exportedAt: NOW.toISOString(),
       progress: {
         // v0 did not record when a Lesson was read; the export time is the latest it can have been.
         reading: { readLessons: { cache: '2026-01-15T18:00:00.000Z', dns: '2026-01-15T18:00:00.000Z' } },
-        settings: { theme: 'dark', newCardsPerDay: 20, canvasStyle: 'clean' },
+        settings: { theme: 'dark', newCardsPerDay: 20, canvasStyle: 'clean', streakMinActivities: 2 },
         flashcards: { cards: {} },
         quizzes: { results: {} },
         designs: { drafts: {} },
         challenges: { attempts: {} },
+        activity: { log: [] },
       },
     })
   })
@@ -212,11 +231,12 @@ describe('ProgressRepository', () => {
 
     expect(await repository.getAll()).toEqual({
       reading: v1Export.progress.reading,
-      settings: { theme: 'light', newCardsPerDay: 20, canvasStyle: 'clean' },
+      settings: { theme: 'light', newCardsPerDay: 20, canvasStyle: 'clean', streakMinActivities: 2 },
       flashcards: { cards: {} },
       quizzes: { results: {} },
       designs: { drafts: {} },
       challenges: { attempts: {} },
+      activity: { log: [] },
     })
   })
 
@@ -232,10 +252,11 @@ describe('ProgressRepository', () => {
 
     expect(await repository.getAll()).toEqual({
       ...v2Export.progress,
-      settings: { theme: 'light', newCardsPerDay: 20, canvasStyle: 'clean' },
+      settings: { theme: 'light', newCardsPerDay: 20, canvasStyle: 'clean', streakMinActivities: 2 },
       quizzes: { results: {} },
       designs: { drafts: {} },
       challenges: { attempts: {} },
+      activity: { log: [] },
     })
   })
 
@@ -255,10 +276,11 @@ describe('ProgressRepository', () => {
 
     expect(await repository.getAll()).toEqual({
       ...v3Export.progress,
-      settings: { ...v3Export.progress.settings, canvasStyle: 'clean' },
+      settings: { ...v3Export.progress.settings, canvasStyle: 'clean', streakMinActivities: 2 },
       quizzes: { results: {} },
       designs: { drafts: {} },
       challenges: { attempts: {} },
+      activity: { log: [] },
     })
   })
 
@@ -279,9 +301,10 @@ describe('ProgressRepository', () => {
 
     expect(await repository.getAll()).toEqual({
       ...v4Export.progress,
-      settings: { ...v4Export.progress.settings, canvasStyle: 'clean' },
+      settings: { ...v4Export.progress.settings, canvasStyle: 'clean', streakMinActivities: 2 },
       designs: { drafts: {} },
       challenges: { attempts: {} },
+      activity: { log: [] },
     })
   })
 
@@ -292,7 +315,7 @@ describe('ProgressRepository', () => {
 
     await repository.importAll(JSON.stringify(v5Export), NOW)
 
-    expect(await repository.getAll()).toEqual({ ...v5Export.progress, challenges: { attempts: {} } })
+    expect(await repository.getAll()).toEqual({ ...v5Export.progress, ...v10Additions, challenges: { attempts: {} } })
   })
 
   it('migrates a v6 export, which had no canvas style, to the clean one', async () => {
@@ -305,7 +328,7 @@ describe('ProgressRepository', () => {
 
     await repository.importAll(JSON.stringify(v6Export), NOW)
 
-    expect(await repository.get('settings')).toEqual({ theme: 'light', newCardsPerDay: 7, canvasStyle: 'clean' })
+    expect(await repository.get('settings')).toEqual({ theme: 'light', newCardsPerDay: 7, canvasStyle: 'clean', streakMinActivities: 2 })
   })
 
   it('migrates a v7 export, whose high-level design work becomes an Attempt in progress started at the export', async () => {
@@ -335,7 +358,17 @@ describe('ProgressRepository', () => {
 
     await repository.importAll(JSON.stringify(v8Export), NOW)
 
-    expect(await repository.exportAll(NOW)).toEqual({ schemaVersion: 9, exportedAt: NOW.toISOString(), progress: v8Export.progress })
+    expect(await repository.exportAll(NOW)).toEqual({ schemaVersion: 10, exportedAt: NOW.toISOString(), progress: { ...v8Export.progress, ...v10Additions } })
+  })
+
+  it('migrates a v9 export, which had no activity log, with an empty one and the default streak minimum', async () => {
+    const v9Export = { schemaVersion: 9, exportedAt: '2026-10-31T09:00:00.000Z', progress: validProgress }
+    const repository = createInMemoryProgressRepository()
+
+    await repository.importAll(JSON.stringify(v9Export), NOW)
+
+    expect(await repository.get('activity')).toEqual({ log: [] })
+    expect(await repository.get('settings')).toEqual({ ...validProgress.settings, streakMinActivities: 2 })
   })
 
   it('reads Challenge work stored before Attempts as an Attempt in progress started when it is read', async () => {
@@ -392,12 +425,19 @@ describe('ProgressRepository', () => {
 
   const validProgress = {
     reading: { readLessons: { cache: '2026-10-20T08:00:00.000Z' } },
-    settings: { theme: 'dark', newCardsPerDay: 20, canvasStyle: 'clean' },
+    settings: { theme: 'dark', newCardsPerDay: 20, canvasStyle: 'clean', streakMinActivities: 2 },
     flashcards: { cards: { 'system-design/1': cardState } },
     quizzes: { results: { 'cache-basics': quizResult } },
     designs: { drafts: { sandbox: sandboxDesign } },
     challenges: challengeWork,
   }
+  /** What a v9 file becomes as a v10 one. */
+  const v10Additions = { settings: { ...validProgress.settings, streakMinActivities: 2 }, activity: { log: [] } }
+  const currentProgress = { ...validProgress, ...v10Additions }
+  const withActivity = (activity: unknown) =>
+    JSON.stringify({ schemaVersion: 10, exportedAt: NOW.toISOString(), progress: { ...currentProgress, activity } })
+  const withStreakMinimum = (streakMinActivities: unknown) =>
+    JSON.stringify({ schemaVersion: 10, exportedAt: NOW.toISOString(), progress: { ...currentProgress, settings: { ...currentProgress.settings, streakMinActivities } } })
   const v7Progress = { ...validProgress, challenges: { stages: { 'pastebin/high-level-design': legacyStageWork } } }
   const withStageWork = (work: unknown) =>
     JSON.stringify({ schemaVersion: 7, exportedAt: NOW.toISOString(), progress: { ...v7Progress, challenges: { stages: { 'pastebin/high-level-design': work } } } })
@@ -426,6 +466,16 @@ describe('ProgressRepository', () => {
     ['v7 Stage work with a fractional Hint count', withStageWork({ ...legacyStageWork, hintUsage: { 'separate-apis': 1.5 } }), 'malformed'],
     ['v7 Stage work that is not an object', withStageWork('done'), 'malformed'],
     ['v7 Challenge work keyed by something other than a Challenge and Stage', JSON.stringify({ schemaVersion: 7, exportedAt: NOW.toISOString(), progress: { ...v7Progress, challenges: { stages: { pastebin: legacyStageWork } } } }), 'malformed'],
+    ['no activity area', JSON.stringify({ schemaVersion: 10, exportedAt: NOW.toISOString(), progress: { ...currentProgress, activity: undefined } }), 'malformed'],
+    ['an activity log that is not a list', withActivity({ log: {} }), 'malformed'],
+    ['an activity of an unknown kind', withActivity({ log: [{ kind: 'nap', at: NOW.toISOString() }] }), 'malformed'],
+    ['an activity whose time is not a timestamp', withActivity({ log: [{ kind: 'daily-review', at: 'today' }] }), 'malformed'],
+    ['a Lesson read without its Lesson', withActivity({ log: [{ kind: 'lesson-read', at: NOW.toISOString() }] }), 'malformed'],
+    ['a Challenge Stage activity without its Stage', withActivity({ log: [{ kind: 'challenge-stage', at: NOW.toISOString(), challengeId: 'pastebin' }] }), 'malformed'],
+    ['a last opened item of an unknown kind', withActivity({ log: [], lastOpened: { kind: 'video', videoId: 'x' } }), 'malformed'],
+    ['a streak minimum of 0', withStreakMinimum(0), 'malformed'],
+    ['a streak minimum above 20', withStreakMinimum(21), 'malformed'],
+    ['a fractional streak minimum', withStreakMinimum(1.5), 'malformed'],
     ['no list of Attempts', JSON.stringify({ schemaVersion: 9, exportedAt: NOW.toISOString(), progress: { ...validProgress, challenges: { attempts: { pastebin: attempt } } } }), 'malformed'],
     ['an Attempt that is not one', withAttempt({ ...attempt, mode: 'exam' }), 'malformed'],
     ['an Attempt whose score is above 1', withAttempt({ ...finishedAttempt, score: 1.2 }), 'malformed'],
@@ -465,7 +515,7 @@ describe('ProgressRepository', () => {
   ])('rejects a file with %s and leaves progress unchanged', async (_, fileText, reason) => {
     const repository = createInMemoryProgressRepository()
     await repository.put('reading', { readLessons: { dns: '2026-10-22T10:00:00.000Z' } })
-    await repository.put('settings', { theme: 'light', newCardsPerDay: 20, canvasStyle: 'clean' })
+    await repository.put('settings', { theme: 'light', newCardsPerDay: 20, canvasStyle: 'clean', streakMinActivities: 2 })
     const before = await repository.exportAll(NOW)
 
     await expect(repository.importAll(fileText, NOW)).rejects.toMatchObject({ name: 'InvalidProgressFileError', reason })

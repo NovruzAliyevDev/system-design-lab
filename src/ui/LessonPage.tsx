@@ -13,7 +13,7 @@ import { LessonQuiz } from './LessonQuiz'
 import { catalog } from './catalog'
 import { t } from './i18n'
 import { PRIMER_PROSE_CLASS, PrimerMarkdown } from './PrimerMarkdown'
-import { useProgress } from './progress/store'
+import { useOpened, useProgress } from './progress/store'
 import { ReadMarker } from './ReadMarker'
 import { flashcardsPath, lessonPath } from './routes'
 import { useScrollToHash } from './useScrollToHash'
@@ -31,6 +31,7 @@ export function LessonPage() {
   const quiz = findLessonQuiz(catalog.quizzes, lessonId)
 
   useScrollToHash()
+  useOpened(lesson && { kind: 'lesson', lessonId: lesson.id })
 
   if (!lesson) return <p className="text-zinc-400">{t('lessonNotFound')}</p>
 

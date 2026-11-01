@@ -30,7 +30,7 @@ test('opens and reloads deep links under the base path', async ({ page }) => {
 
 test('works offline after one visit', async ({ page, context }) => {
   await page.goto('')
-  await expect(page.getByRole('heading', { level: 1, name: 'Dərslər' })).toBeVisible()
+  await expect(page.getByRole('heading', { level: 1, name: 'Bu gün' })).toBeVisible()
   await serviceWorkerInstalled(page)
 
   await context.setOffline(true)
@@ -73,7 +73,7 @@ test('offers a newly deployed version on the next load and switches to it', asyn
   expect(await page.evaluate(() => 'beforeUpdate' in window)).toBe(false)
   await expect(prompt).toBeHidden()
   expect(await page.evaluate(async () => (await navigator.serviceWorker.getRegistration())?.waiting ?? null)).toBeNull()
-  await expect(page.getByRole('heading', { level: 1, name: 'Dərslər' })).toBeVisible()
+  await expect(page.getByRole('heading', { level: 1, name: 'Bu gün' })).toBeVisible()
 })
 
 test('offers a new version to a tab left open, which can put it off', async ({ page }) => {

@@ -4,6 +4,7 @@ import { Attribution } from './Attribution'
 import { CalculatorsPage } from './CalculatorsPage'
 import { ChallengePage } from './ChallengePage'
 import { ChallengesPage } from './ChallengesPage'
+import { DashboardPage } from './DashboardPage'
 import { FlashcardsPage } from './FlashcardsPage'
 import { GlossaryPage } from './GlossaryPage'
 import { LessonList } from './LessonList'
@@ -24,6 +25,7 @@ import {
   FLASHCARDS_ROUTE,
   GLOSSARY_ROUTE,
   LESSON_ROUTE,
+  LESSONS_ROUTE,
   HEADER_PAGES,
   SANDBOX_ROUTE,
   SETTINGS_ROUTE,
@@ -90,7 +92,8 @@ function Layout() {
         <div className="min-w-0 flex-1">
           <main className={isCanvasPage ? 'px-4 py-6' : 'mx-auto max-w-3xl px-4 py-8'}>
             <Routes>
-              <Route path="/" element={<LessonList />} />
+              <Route path="/" element={<DashboardPage />} />
+              <Route path={LESSONS_ROUTE} element={<LessonList />} />
               <Route path={LESSON_ROUTE} element={<LessonPage />} />
               <Route path={GLOSSARY_ROUTE} element={<GlossaryPage />} />
               <Route path={SOLUTIONS_ROUTE} element={<SolutionsPage />} />

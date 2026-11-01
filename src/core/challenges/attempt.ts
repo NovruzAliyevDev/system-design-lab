@@ -1,4 +1,4 @@
-import { isRecord } from '../content/validation'
+import { isRecord, isTimestamp } from '../content/validation'
 import { emptyDesign, readDesign, type Design } from '../design/design'
 import { gradeEstimate } from '../estimation/estimate'
 import { gradeQuestion } from '../quizzes/grading'
@@ -301,6 +301,3 @@ function isShare(value: unknown): value is number {
   return typeof value === 'number' && value >= 0 && value <= 1
 }
 
-function isTimestamp(value: unknown): value is string {
-  return typeof value === 'string' && !Number.isNaN(Date.parse(value))
-}

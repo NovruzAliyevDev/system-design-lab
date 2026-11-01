@@ -11,7 +11,7 @@ import { RequirementsStageView } from './challenge/RequirementsStageView'
 import { buttonClass, ConfirmButton, outcomeStatus, percent, primaryButtonClass, STAGE_NAMES } from './challenge/shared'
 import { catalog } from './catalog'
 import { formatDate, t, type StringKey } from './i18n'
-import { useProgress } from './progress/store'
+import { useOpened, useProgress } from './progress/store'
 import { solutionPath } from './routes'
 
 /**
@@ -23,6 +23,7 @@ export function ChallengePage() {
   const { challengeId = '' } = useParams()
   const challenge = findChallenge(catalog.challenges, challengeId)
   const loaded = useProgress((state) => state.progress !== undefined)
+  useOpened(challenge && { kind: 'challenge', challengeId: challenge.id })
 
   if (!challenge) return <p className="text-zinc-400">{t('challengeNotFound')}</p>
   return (

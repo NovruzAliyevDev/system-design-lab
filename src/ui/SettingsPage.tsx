@@ -1,8 +1,10 @@
 import { useEffect, useState, type ChangeEvent } from 'react'
+import { MAX_STREAK_MIN_ACTIVITIES } from '../core/activity/streak'
 import {
   CANVAS_STYLES,
   InvalidProgressFileError,
   isNewCardLimit,
+  isStreakMinimum,
   MAX_NEW_CARDS_PER_DAY,
   THEMES,
   type CanvasStyle,
@@ -35,6 +37,7 @@ const RESETS: { target: ResetTarget; label: StringKey }[] = [
   { target: 'quizzes', label: 'resetQuizzes' },
   { target: 'designs', label: 'resetDesigns' },
   { target: 'challenges', label: 'resetChallenges' },
+  { target: 'activity', label: 'resetActivity' },
   { target: 'settings', label: 'resetSettings' },
   { target: 'all', label: 'resetAll' },
 ]
@@ -47,7 +50,7 @@ const exportFileName = (kind: 'progress' | 'backup', file: ProgressExport) =>
   `system-design-lab-${kind}-${file.exportedAt.slice(0, 10)}.json`
 
 export function SettingsPage() {
-  const { progress, setTheme, setNewCardsPerDay, setCanvasStyle, importProgress, reset } = useProgress()
+  const { progress, setTheme, setNewCardsPerDay, setCanvasStyle, setStreakMinActivities, importProgress, reset } = useProgress()
   const [message, setMessage] = useState<{ text: string; isError: boolean }>()
   const [backup, setBackup] = useState<ProgressExport>()
   const [confirming, setConfirming] = useState<ResetTarget>()
@@ -122,9 +125,24 @@ export function SettingsPage() {
         <legend className="float-left text-lg font-medium text-zinc-100">{t('flashcardsSettingsTitle')}</legend>
         <label className="clear-left block pt-3 text-sm text-zinc-300">
           {t('newCardsPerDay')}
-          <NewCardLimitInput value={progress?.settings.newCardsPerDay} onChange={setNewCardsPerDay} />
+          <CountInput value={progress?.settings.newCardsPerDay} min={0} max={MAX_NEW_CARDS_PER_DAY} isValid={isNewCardLimit} onChange={setNewCardsPerDay} />
         </label>
         <p className="mt-2 text-xs text-zinc-500">{t('newCardsPerDayDescription')}</p>
+      </fieldset>
+
+      <fieldset className={sectionClass} disabled={!progress}>
+        <legend className="float-left text-lg font-medium text-zinc-100">{t('streakSettingsTitle')}</legend>
+        <label className="clear-left block pt-3 text-sm text-zinc-300">
+          {t('streakMinActivities')}
+          <CountInput
+            value={progress?.settings.streakMinActivities}
+            min={1}
+            max={MAX_STREAK_MIN_ACTIVITIES}
+            isValid={isStreakMinimum}
+            onChange={setStreakMinActivities}
+          />
+        </label>
+        <p className="mt-2 text-xs text-zinc-500">{t('streakMinActivitiesDescription')}</p>
       </fieldset>
 
       <div className={sectionClass}>
@@ -190,8 +208,16 @@ export function SettingsPage() {
 /** A number typed into a field; NaN when the field is empty. */
 const parseCount = (text: string) => (text.trim() === '' ? NaN : Number(text))
 
-/** The daily new-card limit; what is typed is stored once it is a valid limit. */
-function NewCardLimitInput({ value, onChange }: { value: number | undefined; onChange: (count: number) => Promise<void> }) {
+interface CountInputProps {
+  value: number | undefined
+  min: number
+  max: number
+  isValid: (count: number) => boolean
+  onChange: (count: number) => Promise<void>
+}
+
+/** A count setting, such as the daily new-card limit; what is typed is stored once it is valid. */
+function CountInput({ value, min, max, isValid, onChange }: CountInputProps) {
   const [text, setText] = useState(value === undefined ? '' : String(value))
   const [shownValue, setShownValue] = useState(value)
   // A value that changed elsewhere (loading, a reset or an import) replaces what was typed.
@@ -203,18 +229,18 @@ function NewCardLimitInput({ value, onChange }: { value: number | undefined; onC
     <input
       type="number"
       inputMode="numeric"
-      min={0}
-      max={MAX_NEW_CARDS_PER_DAY}
+      min={min}
+      max={max}
       step={1}
-      aria-invalid={!isNewCardLimit(parseCount(text))}
+      aria-invalid={!isValid(parseCount(text))}
       className="mt-1 block w-24 rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-zinc-100 aria-invalid:border-red-500"
       value={text}
       onChange={(event) => {
         setText(event.currentTarget.value)
         const count = parseCount(event.currentTarget.value)
-        if (isNewCardLimit(count) && count !== value) void onChange(count)
+        if (isValid(count) && count !== value) void onChange(count)
       }}
-      // What was typed reads back as stored (e.g. "05" as "5"), or as the stored value when it was not a limit.
+      // What was typed reads back as stored (e.g. "05" as "5"), or as the stored value when it was not valid.
       onBlur={() => setText(value === undefined ? '' : String(value))}
     />
   )

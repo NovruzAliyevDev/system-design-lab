@@ -3,7 +3,7 @@ import type { Catalog } from '../content/catalog'
 import { MATURE_INTERVAL_DAYS } from '../flashcards/queue'
 import type { CardState } from '../flashcards/scheduler'
 import type { Progress } from '../progress/progress'
-import { topicItems, type SkillTopic } from './skill-tree'
+import { findTopic, skillTreeLayers, topicItems, type SkillTopic } from './skill-tree'
 
 /**
  * How much each signal counts toward a topic's Mastery; they add up to 1. Reading counts least: it
@@ -83,4 +83,15 @@ function round(value: number): number {
 /** The prerequisites of a topic not yet mastered. A topic with any is "recommended later", but stays open. */
 export function unmetPrerequisites(topic: SkillTopic, mastery: Readonly<Record<string, TopicMastery>>): string[] {
   return topic.prerequisiteIds.filter((id) => !mastery[id]?.mastered)
+}
+
+/**
+ * The topic to study next: the first one not yet mastered, layer by layer down the Skill Tree, so its
+ * prerequisites are all mastered. Undefined once every topic is mastered.
+ */
+export function suggestNextTopic(topics: readonly SkillTopic[], mastery: Readonly<Record<string, TopicMastery>>): SkillTopic | undefined {
+  const next = skillTreeLayers(topics)
+    .flat()
+    .find((id) => !mastery[id]?.mastered)
+  return next === undefined ? undefined : findTopic(topics, next)
 }

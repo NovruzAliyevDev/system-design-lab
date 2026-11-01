@@ -117,7 +117,7 @@ function Legend() {
   )
 }
 
-function MasteryBar({ mastery }: { mastery: number }) {
+export function MasteryBar({ mastery }: { mastery: number }) {
   return (
     <div className="h-1.5 overflow-hidden rounded-full bg-zinc-800">
       <div className={`h-full ${levelOf(mastery).bar}`} style={{ width: `${percent(mastery)}%` }} />

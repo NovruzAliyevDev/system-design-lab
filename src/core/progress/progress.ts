@@ -1,3 +1,5 @@
+import { readActivity, readOpenedItem, type Activity, type OpenedItem } from '../activity/activity'
+import { DEFAULT_STREAK_MIN_ACTIVITIES, MAX_STREAK_MIN_ACTIVITIES } from '../activity/streak'
 import { readAttempt, type Attempt } from '../challenges/attempt'
 import { readDesign, type Design } from '../design/design'
 import type { CardStates } from '../flashcards/queue'
@@ -22,6 +24,8 @@ export interface Settings {
   /** How many new Flashcards the daily review may start each day. */
   newCardsPerDay: number
   canvasStyle: CanvasStyle
+  /** How many Lesson reads, quizzes and Challenge Stages make a day count toward the streak without the daily review. */
+  streakMinActivities: number
 }
 
 /** Anki's default. */
@@ -45,6 +49,13 @@ export interface QuizProgress {
   results: Record<string, QuizResult>
 }
 
+export interface ActivityProgress {
+  /** What the learner did, oldest first; the streak is counted from it. */
+  log: Activity[]
+  /** The Lesson or Challenge opened last, to continue from on the Dashboard. */
+  lastOpened?: OpenedItem
+}
+
 /** The id of the free sandbox Design among the drafts. */
 export const SANDBOX_DRAFT_ID = 'sandbox'
 
@@ -66,24 +77,26 @@ export interface Progress {
   quizzes: QuizProgress
   designs: DesignProgress
   challenges: ChallengeProgress
+  activity: ActivityProgress
 }
 
 export type ProgressArea = keyof Progress
 
-export const PROGRESS_AREAS: readonly ProgressArea[] = ['reading', 'settings', 'flashcards', 'quizzes', 'designs', 'challenges']
+export const PROGRESS_AREAS: readonly ProgressArea[] = ['reading', 'settings', 'flashcards', 'quizzes', 'designs', 'challenges', 'activity']
 
 export function emptyProgress(): Progress {
   return {
     reading: { readLessons: {} },
-    settings: { theme: 'dark', newCardsPerDay: DEFAULT_NEW_CARDS_PER_DAY, canvasStyle: 'clean' },
+    settings: { theme: 'dark', newCardsPerDay: DEFAULT_NEW_CARDS_PER_DAY, canvasStyle: 'clean', streakMinActivities: DEFAULT_STREAK_MIN_ACTIVITIES },
     flashcards: { cards: {} },
     quizzes: { results: {} },
     designs: { drafts: {} },
     challenges: { attempts: {} },
+    activity: { log: [] },
   }
 }
 
-export const PROGRESS_SCHEMA_VERSION = 9
+export const PROGRESS_SCHEMA_VERSION = 10
 
 /** The export file: all progress, versioned so that older files can be migrated on import. */
 export interface ProgressExport {
@@ -190,6 +203,12 @@ const UPGRADES: Record<number, (data: Record<string, unknown>) => Record<string,
   },
   // v8 had practice Attempts only; a v8 file is a valid v9 file. The version tells older apps not to read Mock Interviews.
   8: (file) => ({ ...file, schemaVersion: 9 }),
+  // v9 had no activity log, so no streak: it starts from the import.
+  9: ({ exportedAt, progress }) => {
+    if (!isRecord(progress) || !isRecord(progress.settings)) throw malformed('settings is missing')
+    const settings = { ...progress.settings, streakMinActivities: DEFAULT_STREAK_MIN_ACTIVITIES }
+    return { schemaVersion: 10, exportedAt, progress: { ...progress, settings, activity: { log: [] } } }
+  },
 }
 
 /**
@@ -229,7 +248,7 @@ function validateCurrent(data: Record<string, unknown>): ProgressExport {
 }
 
 function validateProgress(progress: Record<string, unknown>): Progress {
-  const { reading, settings, flashcards, quizzes, designs, challenges } = progress
+  const { reading, settings, flashcards, quizzes, designs, challenges, activity } = progress
   if (!isRecord(reading) || !isRecord(reading.readLessons)) throw malformed('reading is missing')
   const readLessons = Object.entries(reading.readLessons)
   for (const [lessonId, readAt] of readLessons) {
@@ -243,6 +262,8 @@ function validateProgress(progress: Record<string, unknown>): Progress {
   if (!isNewCardLimit(newCardsPerDay)) throw malformed('the daily new-card limit is not a whole number from 0 to 999')
   const canvasStyle = CANVAS_STYLES.find((known) => known === settings.canvasStyle)
   if (!canvasStyle) throw malformed('the canvas style is unknown')
+  const { streakMinActivities } = settings
+  if (!isStreakMinimum(streakMinActivities)) throw malformed(`the streak minimum is not a whole number from 1 to ${MAX_STREAK_MIN_ACTIVITIES}`)
 
   if (!isRecord(flashcards) || !isRecord(flashcards.cards)) throw malformed('flashcards is missing')
   const cards = Object.entries(flashcards.cards).map(([cardId, value]): [string, CardState] => {
@@ -279,14 +300,24 @@ function validateProgress(progress: Record<string, unknown>): Progress {
     ]
   })
 
+  if (!isRecord(activity) || !Array.isArray(activity.log)) throw malformed('activity is missing')
+  const log = activity.log.map((value, i) => {
+    const entry = readActivity(value)
+    if (!entry) throw malformed(`activity ${i + 1} is invalid`)
+    return entry
+  })
+  const lastOpened = activity.lastOpened === undefined ? undefined : readOpenedItem(activity.lastOpened)
+  if (activity.lastOpened !== undefined && !lastOpened) throw malformed('the item opened last is invalid')
+
   // Object.fromEntries defines keys as own properties, so an id such as `__proto__` stays data.
   return {
     reading: { readLessons: Object.fromEntries(readLessons) as Record<string, string> },
-    settings: { theme, newCardsPerDay, canvasStyle },
+    settings: { theme, newCardsPerDay, canvasStyle, streakMinActivities },
     flashcards: { cards: Object.fromEntries(cards) },
     quizzes: { results: Object.fromEntries(results) },
     designs: { drafts: Object.fromEntries(drafts) },
     challenges: { attempts: Object.fromEntries(attempts) },
+    activity: { log, ...(lastOpened && { lastOpened }) },
   }
 }
 
@@ -298,6 +329,11 @@ export function isQuizScore(value: unknown): value is number {
 /** A daily new-card limit: a whole number from 0 to `MAX_NEW_CARDS_PER_DAY`. */
 export function isNewCardLimit(value: unknown): value is number {
   return Number.isInteger(value) && (value as number) >= 0 && (value as number) <= MAX_NEW_CARDS_PER_DAY
+}
+
+/** A streak minimum: a whole number of activities from 1 to `MAX_STREAK_MIN_ACTIVITIES`. */
+export function isStreakMinimum(value: unknown): value is number {
+  return Number.isInteger(value) && (value as number) >= 1 && (value as number) <= MAX_STREAK_MIN_ACTIVITIES
 }
 
 function malformed(detail: string): InvalidProgressFileError {

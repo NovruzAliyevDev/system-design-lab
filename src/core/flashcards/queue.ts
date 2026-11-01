@@ -92,6 +92,20 @@ export function buildDailyQueue<Card extends { id: string }>(
   }
 }
 
+/**
+ * Whether a grade finishes today's review of `cards`: there was something to review with the states
+ * `before` it, and nothing is left `after` it. A day with nothing to review is not finished by a review.
+ */
+export function finishesDailyReview(
+  cards: readonly { id: string }[],
+  before: CardStates,
+  after: CardStates,
+  settings: DailyReviewSettings,
+  now: Date,
+): boolean {
+  return buildDailyQueue(cards, before, settings, now).cards.length > 0 && buildDailyQueue(cards, after, settings, now).cards.length === 0
+}
+
 /** How many of a Deck's cards are new, learning, young and mature, and how many are due today. */
 export function deckStats(
   cards: readonly { id: string }[],

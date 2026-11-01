@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildDailyQueue, deckStats, nextDueAt, type DailyReviewSettings } from './queue'
+import { buildDailyQueue, deckStats, finishesDailyReview, nextDueAt, type DailyReviewSettings } from './queue'
 import { scheduleReview, type CardState } from './scheduler'
 
 /** 13:00 in Baku (UTC+4), where the learner's day runs from 20:00Z to 20:00Z. */
@@ -112,5 +112,30 @@ describe('nextDueAt', () => {
 
   it('is undefined while no card has been reviewed', () => {
     expect(nextDueAt(cards, {})).toBeUndefined()
+  })
+})
+
+describe('finishesDailyReview', () => {
+  const twoCards = cards.slice(0, 2)
+  const graduated = (id: string) => ({ [id]: scheduleReview(undefined, 'easy', NOW) })
+
+  it('is true for the grade that leaves nothing to review today', () => {
+    const oneLeft = graduated('a')
+    const noneLeft = { ...oneLeft, ...graduated('b') }
+
+    expect(finishesDailyReview(twoCards, {}, oneLeft, settings, NOW)).toBe(false)
+    expect(finishesDailyReview(twoCards, oneLeft, noneLeft, settings, NOW)).toBe(true)
+  })
+
+  it('is false when there was nothing left to review before the grade', () => {
+    const noneLeft = { ...graduated('a'), ...graduated('b') }
+
+    expect(finishesDailyReview(twoCards, noneLeft, noneLeft, settings, NOW)).toBe(false)
+  })
+
+  it('looks at every card, not only the ones being reviewed', () => {
+    // Grading the last card of one Deck leaves the other Deck's card.
+    expect(finishesDailyReview(cards.slice(0, 2), graduated('a'), { ...graduated('a'), ...graduated('b') }, settings, NOW)).toBe(true)
+    expect(finishesDailyReview(cards.slice(0, 3), graduated('a'), { ...graduated('a'), ...graduated('b') }, settings, NOW)).toBe(false)
   })
 })

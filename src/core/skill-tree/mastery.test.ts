@@ -5,7 +5,7 @@ import type { Flashcard } from '../flashcards/deck'
 import type { CardState } from '../flashcards/scheduler'
 import { emptyProgress, type Progress } from '../progress/progress'
 import type { Quiz } from '../quizzes/quiz'
-import { computeMastery, unmetPrerequisites, type MasteryCatalog } from './mastery'
+import { computeMastery, suggestNextTopic, unmetPrerequisites, type MasteryCatalog, type TopicMastery } from './mastery'
 import type { SkillTopic } from './skill-tree'
 
 const NOW = '2026-11-01T10:00:00.000Z'
@@ -186,5 +186,31 @@ describe('unmetPrerequisites', () => {
     expect(unmetPrerequisites(cache, fresh)).toEqual(['database'])
     expect(unmetPrerequisites(cache, read)).toEqual([])
     expect(unmetPrerequisites(database, fresh)).toEqual([])
+  })
+})
+
+describe('suggestNextTopic', () => {
+  const dns: SkillTopic = { id: 'dns', title: 'DNS', lessonIds: ['dns'], prerequisiteIds: [] }
+  // Authored with Cache first; its prerequisite Database still comes before it.
+  const topics = [cache, database, dns]
+  const masteryOf = (...masteredIds: string[]): Record<string, TopicMastery> =>
+    Object.fromEntries(
+      topics.map(({ id }) => [id, { mastery: masteredIds.includes(id) ? 1 : 0, mastered: masteredIds.includes(id), signals: {}, weights: {} }]),
+    )
+
+  it('suggests the first topic not yet mastered, in the order of the Skill Tree layers', () => {
+    expect(suggestNextTopic(topics, masteryOf())).toBe(database)
+    expect(suggestNextTopic(topics, masteryOf('database'))).toBe(dns)
+    expect(suggestNextTopic(topics, masteryOf('database', 'dns'))).toBe(cache)
+  })
+
+  it('suggests a topic whose prerequisites are all mastered, so it is never recommended later', () => {
+    // Mastering Cache out of order does not skip its prerequisite.
+    expect(suggestNextTopic(topics, masteryOf('cache'))).toBe(database)
+    expect(unmetPrerequisites(suggestNextTopic(topics, masteryOf('dns'))!, masteryOf('dns'))).toEqual([])
+  })
+
+  it('suggests nothing once every topic is mastered', () => {
+    expect(suggestNextTopic(topics, masteryOf('cache', 'database', 'dns'))).toBeUndefined()
   })
 })

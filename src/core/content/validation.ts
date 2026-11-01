@@ -9,6 +9,11 @@ export function isText(value: unknown): value is string {
   return typeof value === 'string' && value.trim() !== '' && value.trim() === value
 }
 
+/** A string `Date.parse` reads, as stored timestamps are. */
+export function isTimestamp(value: unknown): value is string {
+  return typeof value === 'string' && !Number.isNaN(Date.parse(value))
+}
+
 export function isTextList(value: unknown): value is string[] {
   return Array.isArray(value) && value.every(isText)
 }

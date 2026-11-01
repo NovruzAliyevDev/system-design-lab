@@ -3,12 +3,39 @@ import { expect, test, type Locator, type Page } from '@playwright/test'
 
 test('opens the app and reads a Lesson', async ({ page }) => {
   await page.goto('/')
+  await expect(page.getByRole('heading', { level: 1, name: 'Bu gün' })).toBeVisible()
+  await page.getByRole('main').getByRole('link', { name: 'Bütün dərslər' }).click()
   await expect(page.getByRole('heading', { level: 1, name: 'Dərslər' })).toBeVisible()
 
   await page.getByRole('main').getByRole('link', { name: 'Load balancer', exact: true }).click()
 
   await expect(page.getByRole('heading', { level: 1, name: 'Load balancer' })).toBeVisible()
   await expect(page.getByText('Load balancers distribute incoming client requests')).toBeVisible()
+})
+
+test("shows today's review, the streak, where to continue and the next topic on the Dashboard", async ({ page }) => {
+  // A long Lesson, so its end is not in view and it stays unread until marked.
+  await page.goto('/lessons/nosql')
+  await page.getByRole('banner').getByRole('link', { name: 'System Design Lab' }).click()
+
+  await expect(page.getByRole('region', { name: 'Bugünkü təkrar' })).toContainText('20 kart')
+  const streak = page.getByRole('region', { name: 'Seriya' })
+  await expect(streak).toContainText('0 gün')
+  await expect(streak).toContainText('Bu gün: 0 / 2.')
+  const resume = page.getByRole('region', { name: 'Qaldığınız yerdən davam edin' })
+  await expect(resume).toContainText('NoSQL')
+  await expect(page.getByRole('region', { name: 'Növbəti mövzu' }).getByRole('link', { name: /Bacarıq ağacında aç/ })).toBeVisible()
+
+  // Reading the Lesson is one activity: with a minimum of one, today counts.
+  await resume.getByRole('link', { name: /Dərsə davam edin/ }).click()
+  await page.getByRole('button', { name: 'Oxunmuş kimi işarələ' }).click()
+  await page.getByRole('banner').getByRole('link', { name: 'Tənzimləmələr' }).click()
+  await page.getByRole('spinbutton', { name: 'Günün sayılması üçün ən az fəaliyyət' }).fill('1')
+  await page.getByRole('banner').getByRole('link', { name: 'System Design Lab' }).click()
+
+  await expect(streak).toContainText('1 gün')
+  await expect(streak).toContainText('Bu gün seriyaya sayılıb.')
+  await expect(resume.getByRole('link', { name: /Növbəti oxunmamış dərs/ })).toBeVisible()
 })
 
 test('moves through Lessons with the sidebar, primer links and next/previous', async ({ page }) => {
@@ -98,7 +125,7 @@ test('explains a Glossary Term in a Lesson and lists it on the Glossary page', a
 
 test('finds a Glossary Term through search', async ({ page }) => {
   await page.goto('/')
-  await expect(page.getByRole('heading', { level: 1, name: 'Dərslər' })).toBeVisible()
+  await expect(page.getByRole('heading', { level: 1, name: 'Bu gün' })).toBeVisible()
   await page.keyboard.press('Control+k')
   const dialog = page.getByRole('dialog', { name: 'Axtar' })
   await dialog.getByRole('combobox', { name: 'Axtar' }).fill('quorum')

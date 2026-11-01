@@ -7,6 +7,9 @@ export function lessonPath(lessonId: string, anchor?: string): string {
   return `/lessons/${lessonId}${anchor ? `#${anchor}` : ''}`
 }
 
+/** Every Lesson in primer order; the home page is the Dashboard. */
+export const LESSONS_ROUTE = '/lessons'
+
 export const LESSON_ROUTE = '/lessons/:lessonId'
 
 export const SETTINGS_ROUTE = '/settings'
