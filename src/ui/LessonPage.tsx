@@ -11,8 +11,8 @@ import { Attribution } from './Attribution'
 import { CalculatorLinks } from './CalculatorsPage'
 import { LessonQuiz } from './LessonQuiz'
 import { catalog } from './catalog'
+import { LessonText } from './concept-simulations/LessonText'
 import { t } from './i18n'
-import { PRIMER_PROSE_CLASS, PrimerMarkdown } from './PrimerMarkdown'
 import { useOpened, useProgress } from './progress/store'
 import { ReadMarker } from './ReadMarker'
 import { flashcardsPath, lessonPath } from './routes'
@@ -75,9 +75,7 @@ export function LessonPage() {
 
       <CalculatorLinks calculators={calculatorsOfLesson(lessonId)} />
 
-      <div lang="en" className={`${PRIMER_PROSE_CLASS} mt-8`}>
-        <PrimerMarkdown text={lesson} codeBlocks={appendixTables} />
-      </div>
+      <LessonText lesson={lesson} codeBlocks={appendixTables} />
       <div ref={endRef} aria-hidden />
 
       {quiz && progress && <LessonQuiz key={quiz.id} quiz={quiz} />}

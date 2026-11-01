@@ -6,6 +6,7 @@
 // <from> defaults to the pin committed in HEAD, <to> to the commit checked out in the submodule. Both
 // may be any revision the submodule knows. Exits with 1 when authored content needs fixing.
 import { challenges } from '../content/challenges'
+import { conceptSimulations } from '../content/concept-simulations'
 import { flashcards } from '../content/flashcards'
 import { glossary } from '../content/glossary'
 import { quizzes } from '../content/quizzes'
@@ -24,6 +25,6 @@ function primerVersion(revision: string): PrimerVersion {
 }
 
 const [from = git(['rev-parse', `HEAD:${PRIMER_PATH}`]), to = 'HEAD'] = process.argv.slice(2)
-const report = comparePrimerVersions({ before: primerVersion(from), after: primerVersion(to), authored: { glossary, flashcards, quizzes, challenges, skillTree } })
+const report = comparePrimerVersions({ before: primerVersion(from), after: primerVersion(to), authored: { glossary, flashcards, quizzes, challenges, skillTree, conceptSimulations } })
 console.log(formatPinChangeReport(report))
 if (report.brokenReferences.length > 0) process.exitCode = 1

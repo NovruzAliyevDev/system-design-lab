@@ -1,3 +1,4 @@
+import { mulberry32 } from '../random'
 import type { Question, Quiz } from './quiz'
 
 /**
@@ -80,16 +81,4 @@ export function scrambledOrder(count: number, seed: number): number[] {
 /** Distinct whole numbers from 0 to `count` − 1. */
 function isSelection(answer: QuestionAnswer, count: number): boolean {
   return answer.every((i) => Number.isInteger(i) && i >= 0 && i < count) && new Set(answer).size === answer.length
-}
-
-/** A small seeded PRNG giving numbers in [0, 1). */
-function mulberry32(seed: number): () => number {
-  let state = seed >>> 0
-  return () => {
-    state = (state + 0x6d2b79f5) >>> 0
-    let t = state
-    t = Math.imul(t ^ (t >>> 15), t | 1)
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61)
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
-  }
 }

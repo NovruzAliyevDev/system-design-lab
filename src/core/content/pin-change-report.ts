@@ -1,4 +1,5 @@
 import { challengeLessonReferences } from '../challenges/challenge'
+import { conceptSimulationLessonReferences } from '../concept-simulations/embed'
 import { flashcardLessonReferences } from '../flashcards/deck'
 import { glossaryLessonReferences } from '../glossary/glossary'
 import { quizLessonReferences } from '../quizzes/quiz'
@@ -126,6 +127,7 @@ function authoredLessonReferences(authored: AuthoredContent): LessonReference[] 
     ...quizLessonReferences(authored.quizzes),
     ...challengeLessonReferences(authored.challenges),
     ...skillTreeLessonReferences(authored.skillTree),
+    ...conceptSimulationLessonReferences(authored.conceptSimulations),
   ]
 }
 

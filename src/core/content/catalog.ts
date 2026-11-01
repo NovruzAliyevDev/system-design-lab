@@ -1,4 +1,5 @@
 import { validateChallenges, type Challenge } from '../challenges/challenge'
+import { validateConceptSimulations, type ConceptSimulationEmbed } from '../concept-simulations/embed'
 import { buildDeck, linkCards, validateFormerRepoUrls, validateLinkFixes, type Deck, type DeckSource } from '../flashcards/deck'
 import { validateGlossary, type GlossaryTerm } from '../glossary/glossary'
 import { validateQuizzes, type Quiz } from '../quizzes/quiz'
@@ -71,6 +72,8 @@ export interface Catalog {
   challenges: Challenge[]
   /** The topics of the Skill Tree with their prerequisite edges, in authored order. */
   skillTree: SkillTopic[]
+  /** Concept Simulations shown in Lessons, in authored order. */
+  conceptSimulations: ConceptSimulationEmbed[]
 }
 
 /**
@@ -91,6 +94,8 @@ export interface AuthoredContent {
   challenges?: unknown
   /** The Skill Tree's topics: their Lessons and prerequisites. */
   skillTree?: unknown
+  /** Which Concept Simulation each Lesson shows. */
+  conceptSimulations?: unknown
 }
 
 /** A Lesson that an authored item references. */
@@ -166,6 +171,7 @@ export function buildContentCatalog(input: {
   const builtSolutions = buildSolutions(solutions, source, markdown)
   const challenges = validateChallenges(authored.challenges ?? [], lessonIds, builtSolutions)
   const skillTree = validateSkillTree(authored.skillTree ?? [], lessonIds)
+  const conceptSimulations = validateConceptSimulations(authored.conceptSimulations ?? [], lessons)
   const problems = [
     ...glossary.problems,
     ...imageMirrors.problems,
@@ -176,6 +182,7 @@ export function buildContentCatalog(input: {
     ...quizzes.problems,
     ...challenges.problems,
     ...skillTree.problems,
+    ...conceptSimulations.problems,
   ]
   if (problems.length > 0) throw new ContentValidationError(problems)
 
@@ -192,6 +199,7 @@ export function buildContentCatalog(input: {
     quizzes: quizzes.quizzes,
     challenges: challenges.challenges,
     skillTree: skillTree.topics,
+    conceptSimulations: conceptSimulations.embeds,
   }
   // The study guide's links resolve against the catalog itself.
   const studyGuide = extractStudyGuide(catalog)

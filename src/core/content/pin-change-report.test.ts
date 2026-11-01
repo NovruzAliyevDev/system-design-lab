@@ -157,6 +157,16 @@ describe('comparePrimerVersions', () => {
     expect(report.brokenReferences).toEqual([{ referrer: 'Skill Tree topic "asynchronism"', lessonId: 'queues' }])
   })
 
+  it('lists Concept Simulations embedded in Lessons the new pin does not have', () => {
+    const before = version('old', ['## Database', 'a', '### Sharding', 'b'])
+    const after = version('new', ['## Database', 'a'])
+    const conceptSimulations = [{ simulationId: 'consistent-hashing', lessonId: 'sharding' }]
+
+    const report = comparePrimerVersions({ before, after, authored: { conceptSimulations } })
+
+    expect(report.brokenReferences).toEqual([{ referrer: 'Concept Simulation "consistent-hashing"', lessonId: 'sharding' }])
+  })
+
   it('reports no broken references when every authored reference resolves', () => {
     const lines = ['## Cache', 'a']
     const glossary = [{ term: 'Cache', explanation: 'x', lessonIds: ['cache'] }]

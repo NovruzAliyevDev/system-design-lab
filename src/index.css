@@ -25,6 +25,29 @@ html:not(.dark) {
   --canvas-both: oklch(44.2% 0.017 285.786);
 }
 
+/* Series colours of the Concept Simulations, in a fixed order: server or node i always wears slot i. */
+:root {
+  --series-1: #3987e5;
+  --series-2: #d95926;
+  --series-3: #199e70;
+  --series-4: #c98500;
+  --series-5: #d55181;
+  --series-6: #008300;
+  --series-7: #9085e9;
+  --series-8: #e66767;
+}
+
+html:not(.dark) {
+  --series-1: #2a78d6;
+  --series-2: #eb6834;
+  --series-3: #1baf7a;
+  --series-4: #eda100;
+  --series-5: #e87ba4;
+  --series-6: #008300;
+  --series-7: #6250d6;
+  --series-8: #e34948;
+}
+
 /*
  * The UI is styled dark-first with the zinc and sky scales. The light theme mirrors those scales
  * (zinc-950 becomes the lightest shade, zinc-50 the darkest), so components need no light variants.
