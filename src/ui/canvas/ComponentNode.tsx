@@ -62,6 +62,7 @@ function MetricsOverlay({ metrics }: { metrics: NodeMetrics }) {
         {metrics.backlogQps > 0 && ` · ${t('nodeBacklog', { qps: formatInteger(metrics.backlogQps) })}`}
       </div>
       {metrics.overloaded && <div className="font-semibold text-rose-300">{t('nodeOverloaded')}</div>}
+      {metrics.throttledQps > 0 && <div className="text-amber-300">{t('nodeThrottled', { qps: formatInteger(metrics.throttledQps) })}</div>}
       {dropped}
     </div>
   )

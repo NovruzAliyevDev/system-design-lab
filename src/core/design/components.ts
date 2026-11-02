@@ -99,6 +99,9 @@ export const MAX_REPLICAS = 15
 const replicas: IntegerField = { kind: 'integer', min: 0, max: MAX_REPLICAS, default: 0, onlyWhen: { role: 'primary' } }
 const shardKey: TextField = { kind: 'text', maxLength: 60, default: '' }
 
+/** The requests per second a rate limiter lets through, all its clients' allowances together. */
+const limitQps: IntegerField = { kind: 'integer', min: 1, max: 10_000_000, default: 1_000 }
+
 function simulation(capacityQps: number, terms: [PrimerOperation, number][], monthlyCostUsd: number, hitRatio?: number): SimulationDefaults {
   const latency = terms.map(([operation, times]) => ({ operation, nanoseconds: PRIMER_LATENCY_NS[operation], times }))
   const nanoseconds = latency.reduce((sum, term) => sum + term.nanoseconds * term.times, 0)
@@ -128,6 +131,17 @@ const COMPONENTS = {
       algorithm: choice(['round-robin', 'least-connections', 'hashing'], 'round-robin'),
       instances,
     },
+    simulation: simulation(20_000, [[ROUND_TRIP, 1]], 25),
+  },
+  'rate-limiter': {
+    glossaryTermId: 'rate-limiter',
+    config: {
+      algorithm: choice(['token-bucket', 'leaking-bucket', 'fixed-window', 'sliding-window-log', 'sliding-window-counter'], 'token-bucket'),
+      limitQps,
+      failMode: choice(['closed', 'open'], 'closed'),
+      instances,
+    },
+    // Middleware checking a counter: about a nearby round trip, like a load balancer.
     simulation: simulation(20_000, [[ROUND_TRIP, 1]], 25),
   },
   'reverse-proxy': {
@@ -179,6 +193,12 @@ const COMPONENTS = {
     glossaryTermId: 'task-queue',
     config: { instances },
     simulation: simulation(200, [[ROUND_TRIP, 1], ['Read 1 MB sequentially from memory', 4]], 70),
+  },
+  'coordination-service': {
+    glossaryTermId: 'coordination-service',
+    config: { instances },
+    // A write is agreed by a quorum and synced to disk: two round trips and an SSD write.
+    simulation: simulation(10_000, [[ROUND_TRIP, 2], ['Read 4 KB randomly from SSD*', 1]], 150),
   },
   'search-index': {
     glossaryTermId: 'search-index',

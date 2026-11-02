@@ -16,8 +16,15 @@
 //
 // Pastebin is authored here; the other primer questions each have a file in `primer-challenges/`,
 // sharing the building blocks of `primer-challenges/shared.ts`.
+//
+// Questions that are not the primer's follow them, each in a file of `authored-challenges/` with source
+// `authored`. Having no Solution page, they explain themselves: every requirement item, estimation and
+// deep-dive option carries its Azerbaijani explanation, and their Hints never point at a primer diagram.
 import type { ChallengeInput } from '../src/core/challenges/challenge'
 import type { NodeSelector, Predicate } from '../src/core/challenges/rules'
+import { idGenerator } from './authored-challenges/id-generator'
+import { rateLimiter } from './authored-challenges/rate-limiter'
+import { urlShortener } from './authored-challenges/url-shortener'
 import { callCenter } from './primer-challenges/call-center'
 import { deckOfCards } from './primer-challenges/deck-of-cards'
 import { hashMap } from './primer-challenges/hash-map'
@@ -673,4 +680,7 @@ export const challenges: ChallengeInput[] = [
   deckOfCards,
   parkingLot,
   onlineChat,
+  urlShortener,
+  rateLimiter,
+  idGenerator,
 ]

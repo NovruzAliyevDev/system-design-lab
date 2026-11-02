@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom'
 import { bestAttemptScore } from '../core/challenges/attempt'
 import type { ChallengeKind } from '../core/challenges/challenge'
-import { percent } from './challenge/shared'
+import { percent, SourceBadge } from './challenge/shared'
 import { catalog } from './catalog'
 import { t, type StringKey } from './i18n'
 import { useProgress } from './progress/store'
@@ -26,7 +26,7 @@ export function ChallengesPage() {
                 <span className="font-medium text-zinc-100">{challenge.title}</span>
                 <span className="mt-1 flex flex-wrap gap-x-3 text-xs text-zinc-500">
                   <span>{t(KIND_NAMES[challenge.kind])}</span>
-                  <span>{t(challenge.source === 'primer' ? 'challengeSourcePrimer' : 'challengeSourceAuthored')}</span>
+                  <SourceBadge source={challenge.source} />
                   <span>{t('challengeStageCount', { count: challenge.stages.length })}</span>
                   {tried.length === 0 ? (
                     <span>{t('challengeNotStarted')}</span>

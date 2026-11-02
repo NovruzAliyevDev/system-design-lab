@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type { StageOutcome } from '../../core/challenges/attempt'
-import type { StageType } from '../../core/challenges/challenge'
+import type { ChallengeSource, StageType } from '../../core/challenges/challenge'
 import { t, type StringKey } from '../i18n'
 
 // What the views of a Challenge's Stages share.
@@ -23,6 +23,12 @@ export const percent = (share: number) => Math.round(share * 100)
 /** How a Stage ended, in short: its score as a percentage, or that the learner gave up. */
 export function outcomeStatus(outcome: StageOutcome): string {
   return outcome.gaveUp ? t('stageStatusGaveUp') : `${percent(outcome.score)}%`
+}
+
+/** Where a Challenge comes from: plain for the primer's questions, a badge for those not from the primer. */
+export function SourceBadge({ source }: { source: ChallengeSource }) {
+  if (source === 'primer') return <span>{t('challengeSourcePrimer')}</span>
+  return <span className="rounded border border-sky-400 px-1.5 text-sky-300">{t('challengeSourceAuthored')}</span>
 }
 
 /** ✓ or ✗ with a label, coloured by the verdict. */

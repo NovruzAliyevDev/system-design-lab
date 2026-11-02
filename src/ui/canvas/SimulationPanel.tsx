@@ -149,6 +149,7 @@ export function SimulationSummary({ design, result, label = t('trafficSummary') 
     // Per kind only when there are both, or it would repeat the overall rate.
     ...(readErrors !== undefined && writeErrors !== undefined ? [errorStat(t('trafficReadErrors'), readErrors), errorStat(t('trafficWriteErrors'), writeErrors)] : []),
     { name: t('trafficDropped'), value: t('trafficQps', { qps: formatInteger(result.droppedQps) }), bad: result.droppedQps > 0 },
+    ...(result.throttledQps > 0 ? [{ name: t('trafficThrottled'), value: t('trafficQps', { qps: formatInteger(result.throttledQps) }) }] : []),
     { name: t('trafficCost'), value: t('trafficUsd', { usd: formatInteger(result.monthlyCostUsd) }) },
   ]
   const paths = [...result.paths].sort((a, b) => b.share - a.share)

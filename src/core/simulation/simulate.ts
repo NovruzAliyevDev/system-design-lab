@@ -24,7 +24,8 @@ export interface LoadProfile {
  *   Requests along a cut Edge fail; deferred work along it waits as the target's backlog.
  * A load balancer and a reader of replicas route around what is down or cut while some target is left
  * (failover); reads meant for a primary go back to it when none of its replicas is left; a cache-aside
- * cache that is down or cut off is skipped for the database beside it.
+ * cache that is down or cut off is skipped for the database beside it. A rate limiter that can reach none
+ * of its counter stores fails closed (rejects every request) or open (lets every request through unchecked).
  */
 export type ChaosScenario =
   | { type: 'node-down'; nodeIds: readonly string[] }
@@ -79,6 +80,8 @@ export interface NodeMetrics extends Traffic {
   droppedQps: number
   /** The excess of deferred work, which piles up. */
   backlogQps: number
+  /** For a rate limiter: the requests it rejects at once (HTTP 429), over its limit or with no counter to check. They fail. */
+  throttledQps: number
   bandwidthBytesPerSecond: number
 }
 
@@ -116,6 +119,8 @@ export interface SimulationResult {
   errorRateByKind: Partial<Record<RequestKind, number>>
   /** Requests dropped by Nodes, and those in the request path sent along cut Edges. */
   droppedQps: number
+  /** Requests rate limiters reject on purpose: they fail too, though no Node is short of capacity for them. */
+  throttledQps: number
   /** The Edges the Chaos Scenario's partition cuts. */
   cutEdgeIds: string[]
   monthlyCostUsd: number
@@ -134,6 +139,8 @@ const STORAGE: ReadonlySet<ComponentType> = new Set(['sql-database', 'nosql-stor
 /** Storage a cache beside it (cache-aside) takes reads off. */
 const DATABASES: ReadonlySet<ComponentType> = new Set(['sql-database', 'nosql-store'])
 const QUEUES: ReadonlySet<ComponentType> = new Set(['message-queue', 'task-queue'])
+/** Where a rate limiter keeps the counters it checks requests against, e.g. Redis. */
+const COUNTER_STORES: ReadonlySet<ComponentType> = new Set(['cache', 'nosql-store'])
 
 interface Route {
   edge: DesignEdge
@@ -166,7 +173,8 @@ export function simulate(design: Design, load: LoadProfile, scenario?: ChaosScen
 
   for (const node of graph.order) {
     const flow = inflow.get(node.id)!
-    const { metrics, served: shares } = nodeMetrics(node, flow, load.requestBytes, graph.down.has(node.id) ? 'down' : graph.primaryDown.has(node.id) ? 'primary-down' : 'up')
+    const state = graph.down.has(node.id) ? 'down' : graph.primaryDown.has(node.id) ? 'primary-down' : 'up'
+    const { metrics, served: shares, checked = shares } = nodeMetrics(node, flow, load.requestBytes, state, limitOf(node, graph))
     nodes[node.id] = {
       ...metrics,
       cold: graph.cold.has(node.id) && nodeSimulation(node)?.hitRatio !== undefined,
@@ -174,8 +182,9 @@ export function simulate(design: Design, load: LoadProfile, scenario?: ChaosScen
     }
     servedShare.set(node.id, shares)
     for (const kind of REQUEST_KINDS) {
-      const served = shares[kind]
       for (const { edge, fraction } of routesOf(node, kind)) {
+        // A rate limiter checks its counters for every request it serves, those it rejects too.
+        const served = isCounterEdge(edge, graph) ? checked[kind] : shares[kind]
         // Work handed to a queue, or along an asynchronous Edge, is deferred from then on.
         const sync = edge.mode === 'sync' && !QUEUES.has(node.componentType)
         add(edges[edge.id], kind, qpsOf(flow.all, kind) * served * fraction)
@@ -263,6 +272,7 @@ export function simulate(design: Design, load: LoadProfile, scenario?: ChaosScen
     errorRate: totalQps === 0 ? 0 : failed / totalQps,
     errorRateByKind,
     droppedQps: metrics.reduce((sum, [, node]) => sum + node.droppedQps, cutQps),
+    throttledQps: metrics.reduce((sum, [, node]) => sum + node.throttledQps, 0),
     cutEdgeIds: design.edges.filter((edge) => graph.cut.has(edge.id)).map((edge) => edge.id),
     monthlyCostUsd: metrics.reduce((sum, [, node]) => sum + node.monthlyCostUsd, 0),
     bottlenecks: metrics
@@ -288,15 +298,28 @@ function add(traffic: Traffic, kind: RequestKind, qps: number): void {
 /** Whether the Chaos Scenario took a Node down, or only the primary copy of a primary with replicas configured. */
 type NodeState = 'up' | 'down' | 'primary-down'
 
-/** A Node's metrics, and the share of the requests of each kind reaching it that it serves. */
-function nodeMetrics(node: DesignNode, flow: { all: Traffic; sync: Traffic }, requestBytes: number, state: NodeState): { metrics: NodeMetrics; served: Record<RequestKind, number> } {
+/**
+ * A Node's metrics, and the share of the requests of each kind reaching it that it serves. `limitQps` is
+ * the most requests a second it lets through, of all kinds together: a rate limiter's, or else Infinity.
+ * A rate limiter also gives the share it checks before rejecting what is over its limit (`checked`).
+ */
+function nodeMetrics(
+  node: DesignNode,
+  flow: { all: Traffic; sync: Traffic },
+  requestBytes: number,
+  state: NodeState,
+  limitQps: number,
+): { metrics: NodeMetrics; served: Record<RequestKind, number>; checked?: Record<RequestKind, number> } {
   const { readQps, writeQps } = flow.all
   const loadQps = readQps + writeQps
   const traffic = { readQps, writeQps, loadQps, bandwidthBytesPerSecond: loadQps * requestBytes }
   const healthy = { overloaded: false, down: false, primaryDown: false, cold: false }
   const settings = nodeSimulation(node)
   if (!settings) {
-    return { metrics: { ...traffic, ...healthy, utilisation: 0, latencyMs: 0, monthlyCostUsd: 0, deferred: false, droppedQps: 0, backlogQps: 0 }, served: { read: 1, write: 1 } }
+    return {
+      metrics: { ...traffic, ...healthy, utilisation: 0, latencyMs: 0, monthlyCostUsd: 0, deferred: false, droppedQps: 0, backlogQps: 0, throttledQps: 0 },
+      served: { read: 1, write: 1 },
+    }
   }
   const instances = instancesOf(node)
   const copies = copiesOf(node)
@@ -309,7 +332,19 @@ function nodeMetrics(node: DesignNode, flow: { all: Traffic; sync: Traffic }, re
   if (state === 'down') {
     // It still costs. The requests reaching it fail, and deferred work waits for it.
     return {
-      metrics: { ...traffic, ...healthy, down: true, capacityQps: 0, utilisation: 0, latencyMs: 0, monthlyCostUsd, deferred, droppedQps: syncQps, backlogQps: loadQps - syncQps },
+      metrics: {
+        ...traffic,
+        ...healthy,
+        down: true,
+        capacityQps: 0,
+        utilisation: 0,
+        latencyMs: 0,
+        monthlyCostUsd,
+        deferred,
+        droppedQps: syncQps,
+        backlogQps: loadQps - syncQps,
+        throttledQps: 0,
+      },
       served: { read: 0, write: 0 },
     }
   }
@@ -333,6 +368,7 @@ function nodeMetrics(node: DesignNode, flow: { all: Traffic; sync: Traffic }, re
         deferred,
         droppedQps,
         backlogQps: unserved(flow.all) - droppedQps,
+        throttledQps: 0,
       },
       served: { read, write: 0 },
     }
@@ -344,7 +380,11 @@ function nodeMetrics(node: DesignNode, flow: { all: Traffic; sync: Traffic }, re
   const excess = overloaded ? loadQps - loadQps / utilisation : 0
   // The excess falls on requests in the request path and on deferred work alike, by their shares.
   const droppedQps = loadQps === 0 ? 0 : (excess * syncQps) / loadQps
-  const served = overloaded ? 1 / utilisation : 1
+  // Of what it serves, a rate limiter lets through up to its limit and rejects the rest.
+  const allowedQps = loadQps - excess
+  const throttledQps = Math.max(0, allowedQps - limitQps)
+  const checked = overloaded ? 1 / utilisation : 1
+  const served = checked * (throttledQps > 0 ? limitQps / allowedQps : 1)
   return {
     metrics: {
       ...traffic,
@@ -357,8 +397,10 @@ function nodeMetrics(node: DesignNode, flow: { all: Traffic; sync: Traffic }, re
       deferred,
       droppedQps,
       backlogQps: excess - droppedQps,
+      throttledQps,
     },
     served: { read: served, write: served },
+    checked: { read: checked, write: checked },
   }
 }
 
@@ -372,8 +414,9 @@ function nodeMetrics(node: DesignNode, flow: { all: Traffic; sync: Traffic }, re
  *   database (cache-aside) leaves the database only its misses;
  * - a cache passes on only its misses;
  * - under a Chaos Scenario, a load balancer and a reader of replicas leave out what is down or cut while
- *   some target is left, a cache-aside cache that is down or cut off is skipped, and a primary does not
- *   replicate to a replica it cannot reach.
+ *   some target is left, a cache-aside cache that is down or cut off is skipped, a primary does not
+ *   replicate to a replica it cannot reach, and a rate limiter failing open skips the counter stores it
+ *   cannot reach.
  */
 function routes(node: DesignNode, kind: RequestKind, graph: Graph): Route[] {
   const targetOf = (edge: DesignEdge) => graph.byId.get(edge.target)!
@@ -387,6 +430,9 @@ function routes(node: DesignNode, kind: RequestKind, graph: Graph): Route[] {
     const replicates = (target: DesignNode) => roleOf(node) === 'primary' && STORAGE.has(node.componentType) && target.componentType === node.componentType
     // A replica that is down or cut off catches up later: replicating to it fails no write.
     eligible = eligible.filter((edge) => roleOf(targetOf(edge)) !== 'replica' || (replicates(targetOf(edge)) && available(edge)))
+  }
+  if (node.componentType === 'rate-limiter' && configOf(node).failMode === 'open') {
+    eligible = eligible.filter((edge) => !isCounterEdge(edge, graph) || writable(edge, graph))
   }
   // A cache beside a database (cache-aside) that is down or cut off is skipped: the database answers instead.
   if (eligible.some((edge) => DATABASES.has(targetOf(edge).componentType))) {
@@ -470,6 +516,29 @@ function replicaGroups(
   function claimedBy(primary: DesignNode): boolean {
     return (graph.outgoing.get(primary.id) ?? []).some((edge) => reached.has(edge.target) && roleOf(graph.byId.get(edge.target)!) === 'replica')
   }
+}
+
+/** Whether an Edge leads from a rate limiter to one of its counter stores. */
+function isCounterEdge(edge: DesignEdge, graph: Graph): boolean {
+  return graph.byId.get(edge.source)!.componentType === 'rate-limiter' && COUNTER_STORES.has(graph.byId.get(edge.target)!.componentType)
+}
+
+/** Whether writes can go along an Edge: it is not cut, and its target is up, its primary copy too. */
+function writable(edge: DesignEdge, graph: Graph): boolean {
+  return !graph.cut.has(edge.id) && !graph.down.has(edge.target) && !graph.primaryDown.has(edge.target)
+}
+
+/**
+ * The most requests a second a Node lets through: a rate limiter's limit, or else Infinity. A rate limiter
+ * that can update none of its counter stores cannot count: failing closed it lets nothing through, failing
+ * open everything. One without a counter store counts in its own memory.
+ */
+function limitOf(node: DesignNode, graph: Graph): number {
+  if (node.componentType !== 'rate-limiter') return Infinity
+  const counters = (graph.outgoing.get(node.id) ?? []).filter((edge) => isCounterEdge(edge, graph))
+  if (counters.length > 0 && !counters.some((edge) => writable(edge, graph))) return configOf(node).failMode === 'open' ? Infinity : 0
+  const { limitQps } = configOf(node)
+  return typeof limitQps === 'number' ? limitQps : Infinity
 }
 
 function configOf(node: DesignNode): Record<string, unknown> {

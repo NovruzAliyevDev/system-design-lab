@@ -303,6 +303,106 @@ describe('a queue', () => {
   })
 })
 
+describe('a rate limiter', () => {
+  // Lets 1,000 requests a second through unless told otherwise; an instance handles 20,000 in 0.5 ms.
+  const design = edges(nodes('client', 'rate-limiter', 'web-server'), ['client-1', 'rate-limiter-1'], ['rate-limiter-1', 'web-server-1'])
+  const withCounters = edges(
+    nodes('client', 'rate-limiter', 'web-server', 'cache'),
+    ['client-1', 'rate-limiter-1'],
+    ['rate-limiter-1', 'web-server-1'],
+    ['rate-limiter-1', 'cache-1'],
+  )
+
+  it('passes every request while the load is under its limit', () => {
+    const result = simulate(design, load(600, 200))
+
+    expect(result.nodes['rate-limiter-1']).toMatchObject({ loadQps: 800, throttledQps: 0, overloaded: false })
+    expect(result.nodes['web-server-1'].loadQps).toBe(800)
+    expect(result.errorRate).toBe(0)
+  })
+
+  it('rejects what is over its limit at once, reads and writes alike, sparing what is behind it', () => {
+    const result = simulate(setNodeConfig(design, 'web-server-1', 'instances', 2), load(1_500, 500))
+
+    expect(result.nodes['rate-limiter-1']).toMatchObject({ loadQps: 2_000, utilisation: 0.1, overloaded: false, throttledQps: 1_000, droppedQps: 0 })
+    expect(result.nodes['web-server-1']).toMatchObject({ readQps: 750, writeQps: 250, utilisation: 0.5 })
+    expect(result.errorRateByKind).toEqual({ read: 0.5, write: 0.5 })
+    expect(result.throttledQps).toBe(1_000)
+    expect(result.droppedQps).toBe(0)
+  })
+
+  it('uses the limit set on it', () => {
+    const result = simulate(setNodeConfig(design, 'rate-limiter-1', 'limitQps', 5_000), load(1_500, 500))
+
+    expect(result.nodes['rate-limiter-1'].throttledQps).toBe(0)
+    expect(result.nodes['web-server-1']).toMatchObject({ loadQps: 2_000, overloaded: true })
+  })
+
+  it('still has to take every request it rejects: past its capacity it is overloaded too', () => {
+    const result = simulate(design, load(30_000, 0))
+
+    expect(result.nodes['rate-limiter-1']).toMatchObject({ loadQps: 30_000, overloaded: true, droppedQps: 10_000, throttledQps: 19_000 })
+    expect(result.nodes['web-server-1'].loadQps).toBe(1_000)
+  })
+
+  it('checks every request against its counter store, those it rejects too, and passes on only those it lets through', () => {
+    const result = simulate(withCounters, load(1_500, 500))
+
+    expect(result.edges['rate-limiter-1->cache-1']).toEqual({ readQps: 1_500, writeQps: 500 })
+    expect(result.edges['rate-limiter-1->web-server-1']).toEqual({ readQps: 750, writeQps: 250 })
+    expect(result.nodes['web-server-1'].loadQps).toBe(1_000)
+    expect(result.errorRate).toBe(0.5)
+  })
+
+  describe('that loses its counter store', () => {
+    const counterDown = { type: 'node-down', nodeIds: ['cache-1'] } as const
+
+    it('fails closed unless told otherwise: it rejects every request it cannot count', () => {
+      const result = simulate(withCounters, load(600, 200), counterDown)
+
+      expect(result.nodes['rate-limiter-1']).toMatchObject({ throttledQps: 800, droppedQps: 0 })
+      expect(result.nodes['web-server-1'].loadQps).toBe(0)
+      expect(result.errorRate).toBe(1)
+    })
+
+    it('failing open, lets every request through unchecked, past its limit too', () => {
+      const open = setNodeConfig(withCounters, 'rate-limiter-1', 'failMode', 'open')
+      const underLimit = simulate(open, load(600, 200), counterDown)
+      const overLimit = simulate(open, load(1_500, 500), counterDown)
+
+      expect(underLimit.errorRate).toBe(0)
+      expect(underLimit.edges['rate-limiter-1->cache-1']).toEqual({ readQps: 0, writeQps: 0 })
+      expect(overLimit.nodes['rate-limiter-1'].throttledQps).toBe(0)
+      expect(overLimit.nodes['web-server-1']).toMatchObject({ loadQps: 2_000, overloaded: true })
+    })
+
+    it('cut off from it by a partition, the same', () => {
+      const partition = { type: 'partition', sides: [['rate-limiter-1'], ['cache-1']] } as const
+
+      expect(simulate(withCounters, load(600, 200), partition).errorRate).toBe(1)
+      expect(simulate(setNodeConfig(withCounters, 'rate-limiter-1', 'failMode', 'open'), load(600, 200), partition).errorRate).toBe(0)
+    })
+  })
+})
+
+describe('a coordination service', () => {
+  it('handing worker ids out to services, is reached by no request, so that losing it fails none', () => {
+    const design = edges(nodes('client', 'app-service', 'coordination-service'), ['client-1', 'app-service-1'], ['coordination-service-1', 'app-service-1'])
+    const result = simulate(design, load(0, 400), { type: 'node-down', nodeIds: ['coordination-service-1'] })
+
+    expect(result.nodes['coordination-service-1']).toMatchObject({ loadQps: 0, down: true })
+    expect(result.errorRate).toBe(0)
+  })
+
+  it('called on every request, takes them all', () => {
+    const design = edges(nodes('client', 'app-service', 'coordination-service'), ['client-1', 'app-service-1'], ['app-service-1', 'coordination-service-1'])
+    const result = simulate(design, load(0, 400), { type: 'node-down', nodeIds: ['coordination-service-1'] })
+
+    expect(result.nodes['coordination-service-1'].loadQps).toBe(400)
+    expect(result.errorRate).toBe(1)
+  })
+})
+
 describe('routing by traffic', () => {
   it('sends reads and writes only along the Edges that carry them', () => {
     const design = edges(

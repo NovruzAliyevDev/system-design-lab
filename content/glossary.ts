@@ -158,6 +158,13 @@ export const glossary: GlossaryTermInput[] = [
     lessonIds: ['load-balancer'],
   },
   {
+    term: 'Rate limiter',
+    aliases: ['rate limiting', 'throttling'],
+    explanation:
+      'Bir client-in müəyyən müddətdə göndərə biləcəyi sorğuların sayını məhdudlaşdıran komponent. Limiti keçən sorğular dərhal rədd edilir (HTTP 429 Too Many Requests), beləliklə servis sui-istifadədən və qəfil yükdən qorunur.',
+    lessonIds: ['additional-system-design-interview-questions'],
+  },
+  {
     term: 'Layer 4 load balancing',
     aliases: ['Layer 4'],
     explanation: 'Transport səviyyəsində (IP ünvanı, port) qərar verən load balancing. Paketin məzmununa baxmır.',
@@ -231,6 +238,13 @@ export const glossary: GlossaryTermInput[] = [
     term: 'Service discovery',
     explanation: 'Servislərin bir-birinin ünvanını mərkəzi reyestrdən (məsələn, Consul, Etcd, Zookeeper) tapması.',
     lessonIds: ['service-discovery'],
+  },
+  {
+    term: 'Coordination service',
+    aliases: ['ZooKeeper'],
+    explanation:
+      'Paylanmış sistemin node-larına ortaq, ardıcıl (consistent) vəziyyət verən kiçik klaster (məsələn, ZooKeeper, etcd): konfiqurasiya, leader election, lock və worker id kimi unikal nömrələrin paylanması. Hər sorğu üçün yox, nadir koordinasiya üçün istifadə olunur.',
+    lessonIds: ['service-discovery', 'additional-system-design-interview-questions'],
   },
 
   // Databases

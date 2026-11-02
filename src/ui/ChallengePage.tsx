@@ -9,7 +9,7 @@ import { DesignStageView, type DesignWork } from './challenge/DesignStageView'
 import { EstimationStageView } from './challenge/EstimationStageView'
 import { formatAverageRating, InterviewTimer, InterviewTimes, MockInterviewStart, SelfAssessmentPanel } from './challenge/MockInterview'
 import { RequirementsStageView } from './challenge/RequirementsStageView'
-import { buttonClass, ConfirmButton, outcomeStatus, percent, primaryButtonClass, STAGE_NAMES } from './challenge/shared'
+import { buttonClass, ConfirmButton, outcomeStatus, percent, primaryButtonClass, SourceBadge, STAGE_NAMES } from './challenge/shared'
 import { catalog } from './catalog'
 import { formatDate, t, type StringKey } from './i18n'
 import { useOpened, useProgress } from './progress/store'
@@ -29,7 +29,9 @@ export function ChallengePage() {
   if (!challenge) return <p className="text-zinc-400">{t('challengeNotFound')}</p>
   return (
     <>
-      <p className="text-sm text-zinc-500">{t(challenge.source === 'primer' ? 'challengeSourcePrimer' : 'challengeSourceAuthored')}</p>
+      <p className="text-sm text-zinc-500">
+        <SourceBadge source={challenge.source} />
+      </p>
       <h1 className="mt-1 text-2xl font-semibold text-zinc-50">{challenge.title}</h1>
       {loaded ? <Workspace key={challenge.id} challenge={challenge} /> : <p className="mt-4 text-sm text-zinc-500">{t('designLoading')}</p>}
     </>

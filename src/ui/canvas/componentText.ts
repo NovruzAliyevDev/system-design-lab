@@ -7,6 +7,7 @@ const COMPONENT_NAMES: Record<ComponentType, StringKey> = {
   dns: 'componentDns',
   cdn: 'componentCdn',
   'load-balancer': 'componentLoadBalancer',
+  'rate-limiter': 'componentRateLimiter',
   'reverse-proxy': 'componentReverseProxy',
   'web-server': 'componentWebServer',
   'app-service': 'componentAppService',
@@ -16,6 +17,7 @@ const COMPONENT_NAMES: Record<ComponentType, StringKey> = {
   'object-store': 'componentObjectStore',
   'message-queue': 'componentMessageQueue',
   'task-queue': 'componentTaskQueue',
+  'coordination-service': 'componentCoordinationService',
   'search-index': 'componentSearchIndex',
   analytics: 'componentAnalytics',
   'data-warehouse': 'componentDataWarehouse',
@@ -29,6 +31,7 @@ export const COMPONENT_TAGS: Record<ComponentType, string> = {
   dns: 'DNS',
   cdn: 'CDN',
   'load-balancer': 'LB',
+  'rate-limiter': 'RL',
   'reverse-proxy': 'GW',
   'web-server': 'WEB',
   'app-service': 'APP',
@@ -38,6 +41,7 @@ export const COMPONENT_TAGS: Record<ComponentType, string> = {
   'object-store': 'OBJ',
   'message-queue': 'MQ',
   'task-queue': 'WRK',
+  'coordination-service': 'ZK',
   'search-index': 'IDX',
   analytics: 'MR',
   'data-warehouse': 'DWH',
@@ -53,6 +57,8 @@ const FIELD_LABELS: Record<ConfigFieldKey, StringKey> = {
   role: 'fieldRole',
   replicas: 'fieldReplicas',
   shardKey: 'fieldShardKey',
+  limitQps: 'fieldLimitQps',
+  failMode: 'fieldFailMode',
   instances: 'fieldInstances',
 }
 
@@ -84,6 +90,13 @@ const OPTION_LABELS: Record<ConfigOption, StringKey> = {
   document: 'optionDocument',
   'wide-column': 'optionWideColumn',
   graph: 'optionGraph',
+  'token-bucket': 'optionTokenBucket',
+  'leaking-bucket': 'optionLeakingBucket',
+  'fixed-window': 'optionFixedWindow',
+  'sliding-window-log': 'optionSlidingWindowLog',
+  'sliding-window-counter': 'optionSlidingWindowCounter',
+  closed: 'optionFailClosed',
+  open: 'optionFailOpen',
 }
 
 /** A choice field's option label; options are listed by their schema, so every value has one. */

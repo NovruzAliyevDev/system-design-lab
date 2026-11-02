@@ -8,7 +8,7 @@ import { findCodeSolution, findLesson } from '../src/core/content/catalog'
 import { findUnresolvedLinks, resolveLink } from '../src/core/content/links'
 import { linkUrls } from '../src/core/content/markdown'
 import { defaultConfig, paletteGlossaryProblems, PRIMER_LATENCY_NS } from '../src/core/design/components'
-import { connect, emptyDesign, removeElements, setNodeConfig, updateEdge, type Design, type DesignClass, type DesignNode, type DesignRelation } from '../src/core/design/design'
+import { addNode, connect, emptyDesign, removeElements, setNodeConfig, updateEdge, type Design, type DesignClass, type DesignNode, type DesignRelation } from '../src/core/design/design'
 import { BYTE_UNITS, estimate, gradeEstimate, workedSteps } from '../src/core/estimation/estimate'
 import { compareLatencies } from '../src/core/estimation/latency'
 import { htmlLinkUrls } from '../src/core/flashcards/deck'
@@ -573,7 +573,8 @@ describe('catalog of the pinned primer commit', () => {
     const ruleResult = (stage: DesignStage, design: Design, ruleId: string) => evaluateDesign(stage, design, {}).rules.find((result) => result.ruleId === ruleId)!
 
     it('each run through all five Stages, link their Solution page and practise their primer question Lesson', () => {
-      expect(catalog.challenges.filter((challenge) => challenge.kind === 'architecture').map((challenge) => challenge.id)).toEqual(Object.keys(PRIMER_LESSONS))
+      const primerArchitecture = catalog.challenges.filter((challenge) => challenge.kind === 'architecture' && challenge.source === 'primer')
+      expect(primerArchitecture.map((challenge) => challenge.id)).toEqual(Object.keys(PRIMER_LESSONS))
       for (const challenge of primerChallenges) {
         expect(challenge.stages.map((stage) => stage.type), challenge.id).toEqual(['requirements', 'estimation', 'high-level-design', 'deep-dive', 'scaling'])
         expect(catalog.solutions.some((solution) => solution.id === challenge.solutionId), challenge.id).toBe(true)
@@ -730,6 +731,159 @@ describe('catalog of the pinned primer commit', () => {
       const direct = updateEdge(connect(stage.referenceSolution, 'app-service-3', 'search-index-1'), 'app-service-3->search-index-1', { traffic: 'write' })
 
       expect(ruleResult(stage, direct, 'reverse-index-queue').passed).toBe(false)
+    })
+  })
+
+  describe('the authored Challenges', () => {
+    const AUTHORED = ['url-shortener', 'rate-limiter', 'id-generator']
+    const authored = AUTHORED.map((id) => findChallenge(catalog.challenges, id)!)
+    const answersOf = (challenge: Challenge) => Object.fromEntries(stageOfType(challenge, 'estimation').questions.map((question) => [question.id, question.referenceValue]))
+    const ruleResult = (stage: DesignStage, design: Design, ruleId: string) => evaluateDesign(stage, design, {}).rules.find((result) => result.ruleId === ruleId)!
+    /** Letters Azerbaijani has and English does not. */
+    const AZERBAIJANI = /[əğıöşç]/i
+
+    it('follow the primer questions, marked as authored, each through all five Stages and without a Solution page', () => {
+      expect(catalog.challenges.filter((challenge) => challenge.source === 'authored').map((challenge) => challenge.id)).toEqual(AUTHORED)
+      expect(catalog.challenges.slice(-AUTHORED.length)).toEqual(authored)
+      for (const challenge of authored) {
+        expect(challenge.kind, challenge.id).toBe('architecture')
+        expect(challenge.stages.map((stage) => stage.type), challenge.id).toEqual(['requirements', 'estimation', 'high-level-design', 'deep-dive', 'scaling'])
+        expect(challenge.solutionId, challenge.id).toBeUndefined()
+        expect(challenge.stages.filter((stage) => stage.solutionAnchor !== undefined), challenge.id).toEqual([])
+      }
+    })
+
+    it('explain themselves in Azerbaijani: every requirement item, estimation, deep-dive option and Hint', () => {
+      for (const challenge of authored) {
+        const texts = challenge.stages.flatMap((stage) => {
+          switch (stage.type) {
+            case 'requirements':
+              return stage.items.map((item) => item.explanation)
+            case 'estimation':
+              return [stage.explanation]
+            case 'deep-dive':
+              return stage.questions.flatMap((question) => question.options.map((option) => option.explanation))
+            case 'high-level-design':
+            case 'scaling':
+              return stage.rules.flatMap((rule) => [rule.description, ...rule.hints])
+            default:
+              return []
+          }
+        })
+        for (const text of texts) expect(text, `${challenge.id}: ${text}`).toMatch(AZERBAIJANI)
+      }
+    })
+
+    it('have Scaling targets that the high-level Reference Solutions miss, so that scaling is needed', () => {
+      for (const challenge of authored) {
+        const scaling = stageOfType(challenge, 'scaling')
+        const targets = scaling.rules.filter((rule) => rule.check.type === 'simulation' && rule.check.chaos === undefined)
+        const highLevel = stageOfType(challenge, 'high-level-design').referenceSolution
+
+        expect(targets.some((target) => !ruleResult(scaling, highLevel, target.id).passed), challenge.id).toBe(true)
+      }
+    })
+
+    it('estimate the URL shortener: 1,200 links and 12,000 redirects a second, 3.6 TB a year, 36 TB in 10 years', () => {
+      expect(answersOf(findChallenge(catalog.challenges, 'url-shortener')!)).toEqual({
+        'write-qps': 1_200,
+        'read-qps': 12_000,
+        'peak-read-qps': 24_000,
+        'storage-per-year': 3.6e12,
+        'storage-10-years': 36e12,
+      })
+    })
+
+    it('estimate the rate limiter: 1,600 reads and 400 writes a second, five times as many at the peak', () => {
+      expect(answersOf(findChallenge(catalog.challenges, 'rate-limiter')!)).toEqual({ 'read-qps': 1_600, 'write-qps': 400, 'peak-read-qps': 8_000, 'peak-write-qps': 2_000 })
+    })
+
+    it('estimate the ID generator: 10,000 IDs a second, 30,000 at the peak, 2.4 TB of IDs a year', () => {
+      expect(answersOf(findChallenge(catalog.challenges, 'id-generator')!)).toEqual({ 'write-qps': 10_000, 'peak-write-qps': 30_000, 'storage-per-year': 2.4e12 })
+    })
+
+    describe('URL shortener', () => {
+      const challenge = findChallenge(catalog.challenges, 'url-shortener')!
+      const scaling = stageOfType(challenge, 'scaling')
+
+      it('survives a cold cache only with a URL store that takes every redirect itself', () => {
+        const withoutReplicas = setNodeConfig(scaling.referenceSolution, 'nosql-store-1', 'replicas', 0)
+
+        expect(ruleResult(scaling, withoutReplicas, 'peak-load').passed).toBe(true)
+        expect(ruleResult(scaling, withoutReplicas, 'cache-cold').passed).toBe(false)
+        expect(ruleResult(scaling, scaling.referenceSolution, 'cache-cold').passed).toBe(true)
+      })
+
+      it('takes its keys from a Key Generation Service', () => {
+        const stage = stageOfType(challenge, 'high-level-design')
+        const withoutKgs = removeElements(stage.referenceSolution, { nodeIds: ['app-service-3', 'nosql-store-2'] })
+
+        expect(ruleResult(stage, withoutKgs, 'key-generation').passed).toBe(false)
+      })
+    })
+
+    describe('rate limiter', () => {
+      const challenge = findChallenge(catalog.challenges, 'rate-limiter')!
+      const highLevel = stageOfType(challenge, 'high-level-design')
+      const scaling = stageOfType(challenge, 'scaling')
+      const withLimiter = (key: string, value: string | number) => setNodeConfig(scaling.referenceSolution, 'rate-limiter-1', key, value)
+
+      it('throttles nothing at the peak, and cuts an abusive burst down to its limit', () => {
+        const peak = simulate(scaling.referenceSolution, scaling.loadProfile)
+        const burst = simulate(scaling.referenceSolution, { readQps: 32_000, writeQps: 8_000, requestBytes: 1_000 })
+
+        expect(peak.throttledQps).toBe(0)
+        expect(burst.throttledQps).toBe(28_000)
+        expect(burst.nodes['app-service-1']).toMatchObject({ loadQps: 12_000, overloaded: false })
+        expect(burst.nodes['cache-1']).toMatchObject({ loadQps: 40_000, overloaded: false })
+      })
+
+      it('needs a limit over the peak, and under what the API servers take', () => {
+        expect(ruleResult(scaling, withLimiter('limitQps', 8_000), 'peak-load').passed).toBe(false)
+        expect(ruleResult(scaling, withLimiter('limitQps', 20_000), 'peak-load').passed).toBe(true)
+        expect(ruleResult(scaling, withLimiter('limitQps', 20_000), 'abusive-burst').passed).toBe(false)
+      })
+
+      it('needs limiter instances enough to see every request of the burst', () => {
+        expect(ruleResult(scaling, withLimiter('instances', 2), 'abusive-burst').passed).toBe(false)
+      })
+
+      it('keeps the API up without its counters only failing open', () => {
+        expect(ruleResult(scaling, withLimiter('failMode', 'closed'), 'counters-down').passed).toBe(false)
+      })
+
+      it('refuses counters in a SQL database, and a way to the API around the limiter', () => {
+        const design = highLevel.referenceSolution
+
+        expect(ruleResult(highLevel, connect(design, 'rate-limiter-1', 'sql-database-1'), 'counters-in-memory').passed).toBe(false)
+        expect(ruleResult(highLevel, connect(design, 'client-1', 'app-service-1'), 'limiter-in-path').passed).toBe(false)
+      })
+    })
+
+    describe('ID generator', () => {
+      const challenge = findChallenge(catalog.challenges, 'id-generator')!
+      const highLevel = stageOfType(challenge, 'high-level-design')
+      const scaling = stageOfType(challenge, 'scaling')
+
+      it('refuses a ticket server: a database counting the IDs', () => {
+        const { design, nodeId } = addNode(highLevel.referenceSolution, 'sql-database', { x: 720, y: 120 }, 'Ticket Server')
+
+        expect(ruleResult(highLevel, connect(design, 'app-service-1', nodeId), 'no-shared-counter').passed).toBe(false)
+      })
+
+      it('refuses generators calling the coordination service for every ID, which then fail when it is down', () => {
+        const perId = connect(removeElements(scaling.referenceSolution, { edgeIds: ['coordination-service-1->app-service-1'] }), 'app-service-1', 'coordination-service-1')
+
+        expect(ruleResult(scaling, perId, 'no-shared-counter').passed).toBe(false)
+        expect(ruleResult(scaling, perId, 'worker-ids').passed).toBe(true)
+        expect(ruleResult(scaling, perId, 'coordination-down').passed).toBe(false)
+      })
+
+      it('needs an odd ensemble of at least three coordination nodes', () => {
+        const ensemble = (instances: number) => ruleResult(scaling, setNodeConfig(scaling.referenceSolution, 'coordination-service-1', 'instances', instances), 'coordination-quorum').passed
+
+        expect([1, 3, 4, 5].map(ensemble)).toEqual([false, true, false, true])
+      })
     })
   })
 
