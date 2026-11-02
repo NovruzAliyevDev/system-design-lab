@@ -14,7 +14,7 @@ export function copyElements(design: Design, { nodeIds = [], zoneIds = [] }: Omi
   const nodes = design.nodes.filter((node) => nodeIds.includes(node.id) || (node.zoneId !== undefined && copiedZoneIds.has(node.zoneId)))
   const copiedNodeIds = new Set(nodes.map((node) => node.id))
   const edges = design.edges.filter((edge) => copiedNodeIds.has(edge.source) && copiedNodeIds.has(edge.target))
-  return { nodes, edges, zones }
+  return { nodes, edges, zones, classes: [], relations: [] }
 }
 
 /**
@@ -50,7 +50,7 @@ export function pasteElements(
 
   return {
     design: placeInZones(
-      { nodes: [...design.nodes, ...nodes], edges: [...design.edges, ...edges], zones: [...design.zones, ...zones] },
+      { ...design, nodes: [...design.nodes, ...nodes], edges: [...design.edges, ...edges], zones: [...design.zones, ...zones] },
       new Set(nodes.map((node) => node.id)),
     ),
     nodeIds: nodes.map((node) => node.id),

@@ -1,10 +1,11 @@
 import { useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { finishStage, newAttempt, openStageCount, stageWork, updateStage, type Attempt, type AttemptMode, type StageWork } from '../core/challenges/attempt'
-import { findChallenge, isDesignStageType, type Challenge, type DesignStage, type Stage } from '../core/challenges/challenge'
+import { findChallenge, isRuledStageType, type Challenge, type Stage } from '../core/challenges/challenge'
 import { assessInterview, startMockInterview, type InterviewPlan, type SelfAssessmentInput } from '../core/challenges/mock-interview'
+import { ClassDesignStageView } from './challenge/ClassDesignStageView'
 import { DeepDiveStageView } from './challenge/DeepDiveStageView'
-import { DesignStageView } from './challenge/DesignStageView'
+import { DesignStageView, type DesignWork } from './challenge/DesignStageView'
 import { EstimationStageView } from './challenge/EstimationStageView'
 import { formatAverageRating, InterviewTimer, InterviewTimes, MockInterviewStart, SelfAssessmentPanel } from './challenge/MockInterview'
 import { RequirementsStageView } from './challenge/RequirementsStageView'
@@ -98,7 +99,7 @@ function Workspace({ challenge }: { challenge: Challenge }) {
     <div key={stage.id} className="mt-4 flex flex-wrap items-center gap-3">
       <ConfirmButton
         label={t('stageFinish')}
-        confirm={t(isDesignStageType(stage.type) ? 'stageFinishConfirm' : 'stageFinishConfirmAnswers')}
+        confirm={t(isRuledStageType(stage.type) ? 'stageFinishConfirm' : 'stageFinishConfirmAnswers')}
         yes={t('stageFinishYes')}
         onConfirm={() => finish(false)}
       />
@@ -148,6 +149,7 @@ function Workspace({ challenge }: { challenge: Challenge }) {
           key={`${attempt.startedAt}/${stage.id}`}
           stage={stage}
           work={work}
+          codeSolutionId={challenge.codeSolutionId}
           editable={isCurrent && !work.outcome}
           hints={!isInterview}
           onChange={(input) => void saveCurrentAttempt(challenge.id, updateStage(challenge, attempt, stage.id, input))}
@@ -179,8 +181,8 @@ function Workspace({ challenge }: { challenge: Challenge }) {
   )
 }
 
-function StageView(props: { stage: Stage; work: StageWork; editable: boolean; hints: boolean; onChange(input: StageWork): void }) {
-  const { stage, work, editable, hints, onChange } = props
+function StageView(props: { stage: Stage; work: StageWork; codeSolutionId?: string; editable: boolean; hints: boolean; onChange(input: StageWork): void }) {
+  const { stage, work, codeSolutionId, editable, hints, onChange } = props
   // `stageWork` gives each Stage work of its own type.
   switch (stage.type) {
     case 'requirements':
@@ -191,9 +193,9 @@ function StageView(props: { stage: Stage; work: StageWork; editable: boolean; hi
       return <DeepDiveStageView stage={stage} work={work as Extract<StageWork, { type: 'deep-dive' }>} editable={editable} onChange={onChange} />
     case 'high-level-design':
     case 'scaling':
-      return (
-        <DesignStageView stage={stage} work={work as Extract<StageWork, { type: DesignStage['type'] }>} editable={editable} hints={hints} onChange={onChange} />
-      )
+      return <DesignStageView stage={stage} work={work as DesignWork} editable={editable} hints={hints} onChange={onChange} />
+    case 'class-design':
+      return <ClassDesignStageView stage={stage} work={work as DesignWork} codeSolutionId={codeSolutionId} editable={editable} hints={hints} onChange={onChange} />
   }
 }
 

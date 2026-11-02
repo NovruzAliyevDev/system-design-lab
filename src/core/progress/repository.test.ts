@@ -32,6 +32,8 @@ const sandboxDesign = {
   ],
   edges: [{ id: 'client-1->cache-1', source: 'client-1', target: 'cache-1', mode: 'sync', traffic: 'read' }],
   zones: [],
+  classes: [],
+  relations: [],
 } as const satisfies Design
 
 /** A v7 finished high-level design Stage, after two Hint tiers of one Rule. */

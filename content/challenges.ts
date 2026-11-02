@@ -10,10 +10,15 @@
 // fields left out take their defaults. Estimation reference values are computed from the Stage's
 // inputs, the primer's assumptions; requirement items and deep-dive options are each explained.
 //
+// The primer's object-oriented design questions are ood Challenges, solved on the UML Class Builder:
+// their Rules check classes and relations, and their reference UML mirrors the primer's Python solution,
+// shown beside it once the Stage is over.
+//
 // Pastebin is authored here; the other primer questions each have a file in `primer-challenges/`,
 // sharing the building blocks of `primer-challenges/shared.ts`.
 import type { ChallengeInput } from '../src/core/challenges/challenge'
 import type { NodeSelector, Predicate } from '../src/core/challenges/rules'
+import { lruCache } from './primer-challenges/lru-cache'
 import { mint } from './primer-challenges/mint'
 import { queryCache } from './primer-challenges/query-cache'
 import { salesRank } from './primer-challenges/sales-rank'
@@ -657,4 +662,5 @@ export const challenges: ChallengeInput[] = [
   queryCache,
   salesRank,
   scalingAws,
+  lruCache,
 ]

@@ -13,7 +13,7 @@ function ExternalLink({ href, children }: { href: string; children: ReactNode })
 }
 
 /** CC BY 4.0 credit for primer content, as a sentence with links to the primer and the license. */
-export function Attribution({ textKey }: { textKey: Extract<StringKey, 'lessonAttribution' | 'siteAttribution'> }) {
+export function Attribution({ textKey }: { textKey: Extract<StringKey, 'lessonAttribution' | 'siteAttribution' | 'codeAttribution'> }) {
   // The project and license names are proper names, the same in every UI language.
   return (
     <>

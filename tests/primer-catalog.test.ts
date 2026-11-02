@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { loadPrimerCatalog } from '../scripts/build-content'
-import { findChallenge, type Challenge, type DesignStage, type Stage, type StageType } from '../src/core/challenges/challenge'
+import { findChallenge, isRuledStageType, type Challenge, type ClassDesignStage, type DesignStage, type Stage, type StageType } from '../src/core/challenges/challenge'
 import { chaosScenarioOf, evaluateDesign, problemHints } from '../src/core/challenges/rules'
 import { conceptSimulationsOfLesson, lessonParts, RELATED_LESSONS } from '../src/core/concept-simulations/embed'
 import { CALCULATOR_LESSONS } from '../src/core/content/calculator-lessons'
-import { findLesson } from '../src/core/content/catalog'
+import { findCodeSolution, findLesson } from '../src/core/content/catalog'
 import { findUnresolvedLinks, resolveLink } from '../src/core/content/links'
 import { linkUrls } from '../src/core/content/markdown'
 import { defaultConfig, paletteGlossaryProblems, PRIMER_LATENCY_NS } from '../src/core/design/components'
@@ -187,8 +187,8 @@ describe('catalog of the pinned primer commit', () => {
   it('has Challenges whose Reference Solutions score 100% on their own Rules, every Rule with three Hint tiers', () => {
     expect(catalog.challenges.map((challenge) => challenge.id)).toContain('pastebin')
     for (const challenge of catalog.challenges) {
-      const designStages = challenge.stages.filter((stage): stage is DesignStage => stage.type === 'high-level-design' || stage.type === 'scaling')
-      for (const stage of designStages) {
+      const ruledStages = challenge.stages.filter((stage): stage is DesignStage | ClassDesignStage => isRuledStageType(stage.type))
+      for (const stage of ruledStages) {
         const evaluation = evaluateDesign(stage, stage.referenceSolution, {})
 
         expect(evaluation.score, `${challenge.id}/${stage.id}`).toBe(evaluation.totalWeight)
@@ -200,9 +200,10 @@ describe('catalog of the pinned primer commit', () => {
     }
   })
 
-  it('has Challenges with a default Load Profile, whose Reference Solutions meet their own simulation targets, under their Chaos tasks too', () => {
-    for (const challenge of catalog.challenges) {
-      expect(challenge.loadProfile.readQps + challenge.loadProfile.writeQps, challenge.id).toBeGreaterThan(0)
+  it('has architecture Challenges with a default Load Profile, whose Reference Solutions meet their own simulation targets, under their Chaos tasks too', () => {
+    for (const challenge of catalog.challenges.filter((each) => each.kind === 'architecture')) {
+      const { readQps, writeQps } = challenge.loadProfile!
+      expect(readQps + writeQps, challenge.id).toBeGreaterThan(0)
       const designStages = challenge.stages.filter((stage): stage is DesignStage => stage.type === 'high-level-design' || stage.type === 'scaling')
       for (const stage of designStages) {
         const targets = stage.rules.filter((rule) => rule.check.type === 'simulation')
@@ -276,6 +277,67 @@ describe('catalog of the pinned primer commit', () => {
   it('shows the cache simulation in the Cache Lesson and after the update strategies', () => {
     expect(conceptSimulationsOfLesson(catalog.conceptSimulations, 'cache')).toEqual(['cache'])
     expect(conceptSimulationsOfLesson(catalog.conceptSimulations, 'when-to-update-the-cache')).toEqual(['cache'])
+  })
+
+  describe('the LRU cache Challenge', () => {
+    const lruCache = findChallenge(catalog.challenges, 'lru-cache')!
+    const classDesign = lruCache.stages[0] as ClassDesignStage
+
+    it('is an ood Challenge with a class-design Stage beside the primer Python solution', () => {
+      expect(lruCache).toMatchObject({ kind: 'ood', codeSolutionId: 'lru_cache' })
+      expect(lruCache.stages.map((stage) => stage.type)).toEqual(['class-design'])
+      expect(findCodeSolution(catalog, 'lru_cache')?.code).toContain('class LinkedList(object):')
+      expect(catalog.codeSolutions.map((solution) => solution.id)).toEqual(['call_center', 'deck_of_cards', 'hash_table', 'lru_cache', 'online_chat', 'parking_lot'])
+    })
+
+    it('has a reference UML of the Python solution\'s classes, scoring 100%', () => {
+      const evaluation = evaluateDesign(classDesign, classDesign.referenceSolution, {})
+
+      expect(classDesign.referenceSolution.classes.map((each) => each.name)).toEqual(['Cache', 'LinkedList', 'Node'])
+      expect(evaluation.score).toBe(evaluation.totalWeight)
+    })
+
+    it('needs two list operations, not one method matching both', () => {
+      const list = classDesign.referenceSolution.classes[1]
+      const withMethods = (methods: string[]) => ({
+        ...classDesign.referenceSolution,
+        classes: classDesign.referenceSolution.classes.map((each) => (each === list ? { ...each, methods } : each)),
+      })
+      const failing = (methods: string[]) => evaluateDesign(classDesign, withMethods(methods), {}).rules.filter((result) => !result.passed).map((result) => result.ruleId)
+
+      expect(failing(['pop_front()'])).toEqual(['list-operations'])
+      expect(failing(['move_to_front(node)'])).toEqual(['list-operations'])
+      expect(failing(['touch(node)', 'evict()'])).toEqual([])
+    })
+
+    it('accepts the lookup of Nodes drawn as composition, but not at least one Node in an empty cache', () => {
+      const withLookup = (change: Record<string, unknown>) => ({
+        ...classDesign.referenceSolution,
+        relations: classDesign.referenceSolution.relations.map((relation) => (relation.id === 'class-1->class-3' ? { ...relation, ...change } : relation)),
+      })
+      const passes = (change: Record<string, unknown>) => evaluateDesign(classDesign, withLookup(change), {}).rules.find((result) => result.ruleId === 'lookup-nodes')?.passed
+
+      expect(passes({ kind: 'composition' })).toBe(true)
+      expect(passes({ targetMultiplicity: '1..*' })).toBe(false)
+    })
+
+    it('accepts the classes under other names, found by the role their members give them', () => {
+      const renamed = { ...classDesign.referenceSolution, classes: classDesign.referenceSolution.classes.map((each, i) => ({ ...each, name: ['QueryStore', 'Recency', 'Slot'][i] })) }
+
+      expect(evaluateDesign(classDesign, renamed, {}).failingCount).toBe(0)
+    })
+
+    it('fails the relations drawn the wrong way round or of the wrong kind', () => {
+      const reversed = {
+        ...classDesign.referenceSolution,
+        relations: classDesign.referenceSolution.relations.map((relation) =>
+          relation.kind === 'composition' ? { ...relation, kind: 'association' as const } : { ...relation, source: relation.target, target: relation.source },
+        ),
+      }
+      const failing = evaluateDesign(classDesign, reversed, {}).rules.filter((result) => !result.passed).map((result) => result.ruleId)
+
+      expect(failing).toEqual(['cache-owns-list', 'list-holds-nodes', 'lookup-nodes'])
+    })
   })
 
   describe('the Pastebin Challenge', () => {
@@ -372,7 +434,7 @@ describe('catalog of the pinned primer commit', () => {
     const ruleResult = (stage: DesignStage, design: Design, ruleId: string) => evaluateDesign(stage, design, {}).rules.find((result) => result.ruleId === ruleId)!
 
     it('each run through all five Stages, link their Solution page and practise their primer question Lesson', () => {
-      expect(catalog.challenges.map((challenge) => challenge.id)).toEqual(Object.keys(PRIMER_LESSONS))
+      expect(catalog.challenges.filter((challenge) => challenge.kind === 'architecture').map((challenge) => challenge.id)).toEqual(Object.keys(PRIMER_LESSONS))
       for (const challenge of primerChallenges) {
         expect(challenge.stages.map((stage) => stage.type), challenge.id).toEqual(['requirements', 'estimation', 'high-level-design', 'deep-dive', 'scaling'])
         expect(catalog.solutions.some((solution) => solution.id === challenge.solutionId), challenge.id).toBe(true)
@@ -578,10 +640,10 @@ describe('catalog of the pinned primer commit', () => {
       expect(outside.map((lesson) => lesson.id)).toEqual([])
     })
 
-    it('requires the Challenges only in the design questions, so every topic before them can be mastered without one', () => {
+    it('requires the Challenges only in the design question topics, so every topic before them can be mastered without one', () => {
       const requiring = catalog.skillTree.filter((topic) => topicItems(catalog, topic).challenges.some(({ required }) => required))
 
-      expect(requiring.map((topic) => topic.id)).toEqual(['design-questions'])
+      expect(requiring.map((topic) => topic.id)).toEqual(['design-questions', 'object-oriented-design'])
     })
 
     it('starts from the scalability basics and ends with the design questions and real world architectures', () => {

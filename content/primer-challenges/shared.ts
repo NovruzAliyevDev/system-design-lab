@@ -2,7 +2,7 @@
 // common, predicates built from them, and the helpers that lay out Reference Solutions.
 import type { NodeSelector, Predicate, Rule, TrafficKind } from '../../src/core/challenges/rules'
 import { MAX_REPLICAS, type ComponentType, type ConfigValue } from '../../src/core/design/components'
-import type { EdgeMode, EdgeTraffic } from '../../src/core/design/design'
+import type { ClassKind, EdgeMode, EdgeTraffic, Multiplicity, RelationKind } from '../../src/core/design/design'
 
 /** Whatever sits in front of the application servers and forwards requests to them. */
 export const ENTRY: NodeSelector = ['web-server', 'reverse-proxy', 'load-balancer']
@@ -142,3 +142,26 @@ export const edge = (source: string, target: string, traffic: EdgeTraffic, mode:
   mode,
   traffic,
 })
+
+/** A class of a reference UML, its members written as the primer's Python names them. */
+export const umlClass = (id: string, name: string, x: number, y: number, fields: string[], methods: string[], kind: ClassKind = 'class') => ({
+  id,
+  name,
+  kind,
+  fields,
+  methods,
+  position: { x, y },
+})
+
+/** A relation of a reference UML, from the subclass, implementer or whole to the other class (or to itself). */
+export const umlRelation = (source: string, target: string, kind: RelationKind, sourceMultiplicity?: Multiplicity, targetMultiplicity?: Multiplicity) => ({
+  id: `${source}->${target}`,
+  source,
+  target,
+  kind,
+  ...(sourceMultiplicity && { sourceMultiplicity }),
+  ...(targetMultiplicity && { targetMultiplicity }),
+})
+
+/** A reference UML: classes and relations, and no Nodes or Edges. */
+export const umlDesign = (classes: ReturnType<typeof umlClass>[], relations: ReturnType<typeof umlRelation>[]) => ({ nodes: [], edges: [], classes, relations })

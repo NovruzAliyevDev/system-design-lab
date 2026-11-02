@@ -72,6 +72,8 @@ function sampleDesign(): Design {
       { id: 'message-queue-1->task-queue-1', source: 'message-queue-1', target: 'task-queue-1', mode: 'async', traffic: 'write' },
     ],
     zones: [{ id: 'us-east-1a', label: 'us-east-1a', position: { x: 160, y: -40 }, size: { width: 260, height: 160 } }],
+    classes: [],
+    relations: [],
   }
 }
 
@@ -106,7 +108,7 @@ describe('Design serialisation', () => {
   })
 
   it('round-trips the empty Design', () => {
-    expect(deserializeDesign(serializeDesign(emptyDesign()))).toEqual({ nodes: [], edges: [], zones: [] })
+    expect(deserializeDesign(serializeDesign(emptyDesign()))).toEqual({ nodes: [], edges: [], zones: [], classes: [], relations: [] })
   })
 
   it('reads a Design stored before zones existed as one without zones', () => {

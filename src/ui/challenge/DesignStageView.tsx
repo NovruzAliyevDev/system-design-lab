@@ -1,31 +1,19 @@
 import { useState } from 'react'
 import type { StageWork } from '../../core/challenges/attempt'
-import type { DesignStage } from '../../core/challenges/challenge'
-import {
-  evaluateDesign,
-  HINT_CAPS,
-  HINT_TIERS,
-  levelZeroFeedback,
-  openNextHint,
-  problemHints,
-  type Evaluation,
-} from '../../core/challenges/rules'
+import type { DesignStage, RuledStageType } from '../../core/challenges/challenge'
+import { evaluateDesign, openNextHint } from '../../core/challenges/rules'
 import type { Design } from '../../core/design/design'
 import { createHistory, type History } from '../../core/design/history'
 import { useChaosControls } from '../canvas/ChaosPanel'
 import { DesignEditor } from '../canvas/DesignEditor'
 import { draftOf, SimulationSummary, useLoadControls, useSimulation } from '../canvas/SimulationPanel'
-import { formatNumber, t, type StringKey } from '../i18n'
+import { t } from '../i18n'
 import { TABLET_QUERY, useMediaQuery } from '../useMediaQuery'
+import { Feedback, RuleResults } from './RuleFeedback'
 import { primaryButtonClass } from './shared'
 
-type DesignWork = Extract<StageWork, { type: DesignStage['type'] }>
-
-/** Names of the Hint tiers, in the order they open. */
-const HINT_TIER_LABELS: StringKey[] = ['hintTierQuestion', 'hintTierPointer', 'hintTierExplanation']
-
-/** How much of a Rule's points each opened Hint tier takes, as a percentage. */
-const HINT_COST_PERCENT = Math.round((HINT_CAPS[0] - HINT_CAPS[1]) * 100)
+/** The work on a Stage whose input is a Design, on either canvas. */
+export type DesignWork = Extract<StageWork, { type: RuledStageType }>
 
 /**
  * A Stage solved on the canvas: build, check against the Rules and open Hints (none in a Mock Interview).
@@ -93,67 +81,6 @@ function OpenStage(props: { stage: DesignStage; work: DesignWork; editable: bool
   )
 }
 
-/** Level-0 feedback (the score and how many problems remain) with the Hints of each problem. No Rule is named. */
-function Feedback({
-  stage,
-  evaluation,
-  stale,
-  hints,
-  onOpenHint,
-}: {
-  stage: DesignStage
-  evaluation: Evaluation
-  stale: boolean
-  hints: boolean
-  onOpenHint: (ruleId: string) => void
-}) {
-  const { score, maxScore, totalWeight, failingCount } = levelZeroFeedback(evaluation)
-  return (
-    <div role="status" className="mt-3 text-sm">
-      <ScoreLine score={score} totalWeight={totalWeight} />
-      {maxScore < totalWeight && <p className="text-zinc-400">{t('stageMaxScore', { max: formatNumber(maxScore) })}</p>}
-      <p className={failingCount === 0 ? 'text-emerald-400' : 'text-zinc-300'}>
-        {failingCount === 0 ? t('stageAllPass') : t('stageProblemsLeft', { count: failingCount })}
-      </p>
-      {stale && <p className="text-amber-300">{t('stageCheckStale')}</p>}
-      {failingCount > 0 && !hints && <p className="mt-2 text-xs text-zinc-500">{t('stageNoHintsInInterview')}</p>}
-      {failingCount > 0 && hints && (
-        <>
-          <ol className="mt-2 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
-            {problemHints(stage, evaluation).map((problem, i) => (
-              <li key={problem.ruleId} className="rounded border border-zinc-800 px-3 py-2">
-                <div className="flex items-center justify-between gap-2">
-                  <p className="font-medium text-zinc-200">{t('stageProblem', { number: i + 1 })}</p>
-                  {problem.canOpenMore && (
-                    <button type="button" className="rounded border border-zinc-700 px-2 py-0.5 text-xs text-zinc-200 hover:border-zinc-500" onClick={() => onOpenHint(problem.ruleId)}>
-                      {t('stageOpenHint', { tier: problem.opened.length + 1, tiers: HINT_TIERS })}
-                    </button>
-                  )}
-                </div>
-                {problem.opened.map((hint, tier) => (
-                  <p key={tier} className="mt-1 text-zinc-300">
-                    <span className="text-zinc-500">{t(HINT_TIER_LABELS[tier])}: </span>
-                    {hint}
-                  </p>
-                ))}
-              </li>
-            ))}
-          </ol>
-          <p className="mt-2 text-xs text-zinc-500">{t('stageHintCost', { percent: HINT_COST_PERCENT })}</p>
-        </>
-      )}
-    </div>
-  )
-}
-
-function ScoreLine({ score, totalWeight }: { score: number; totalWeight: number }) {
-  return (
-    <p className="font-medium text-zinc-100">
-      {t('stageScore', { score: formatNumber(score), total: formatNumber(totalWeight), percent: Math.round((score / totalWeight) * 100) })}
-    </p>
-  )
-}
-
 /**
  * After the Stage: every Rule's result as recorded when it ended, and the learner's Design beside the
  * Reference Solution, both simulated under the same load to compare them.
@@ -162,7 +89,6 @@ function OverStage({ stage, work }: { stage: DesignStage; work: DesignWork }) {
   const evaluation = work.outcome?.evaluation ?? evaluateDesign(stage, work.design, work.hintUsage)
   const [reference] = useState(() => createHistory(stage.referenceSolution))
   const [yours] = useState(() => createHistory(work.design))
-  const descriptions = new Map(stage.rules.map((rule) => [rule.id, rule.description]))
   const load = useLoadControls(draftOf(stage.loadProfile))
   // Only the Stage's Chaos tasks, which pick their Nodes in each Design alike.
   const chaos = useChaosControls(stage.chaosTasks ?? [])
@@ -171,25 +97,7 @@ function OverStage({ stage, work }: { stage: DesignStage; work: DesignWork }) {
 
   return (
     <>
-      <section className="mt-4 rounded border border-zinc-800 bg-zinc-900/60 p-3 text-sm">
-        {/* Given up, the Stage scores 0 whatever its Design would have earned. */}
-        {!work.outcome?.gaveUp && <ScoreLine score={evaluation.score} totalWeight={evaluation.totalWeight} />}
-        <h3 className="mt-3 font-semibold text-zinc-100">{t('stageResultsTitle')}</h3>
-        <ul className="mt-2 space-y-1">
-          {evaluation.rules.map((result) => (
-            <li key={result.ruleId} className="flex flex-wrap items-baseline gap-x-2">
-              <span className={result.passed ? 'text-emerald-400' : 'text-rose-400'}>
-                {result.passed ? '✓' : '✗'} {t(result.passed ? 'stageRulePassed' : 'stageRuleFailed')}:
-              </span>
-              <span className="text-zinc-200">{descriptions.get(result.ruleId) ?? result.ruleId}</span>
-              <span className="text-xs text-zinc-500">
-                {t('stageRulePoints', { points: formatNumber(result.points), weight: formatNumber(result.weight) })}
-                {result.hintsOpened > 0 && ` · ${t('stageRuleHints', { count: result.hintsOpened })}`}
-              </span>
-            </li>
-          ))}
-        </ul>
-      </section>
+      <RuleResults stage={stage} evaluation={evaluation} gaveUp={work.outcome?.gaveUp ?? false} />
 
       <section className="mt-6">
         <h3 className="mb-3 text-lg font-semibold text-zinc-100">{t('stageCompareTitle')}</h3>

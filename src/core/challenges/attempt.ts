@@ -2,7 +2,7 @@ import { isRecord, isTimestamp } from '../content/validation'
 import { emptyDesign, readDesign, type Design } from '../design/design'
 import { gradeEstimate } from '../estimation/estimate'
 import { gradeQuestion } from '../quizzes/grading'
-import type { Challenge, DesignStage, Stage } from './challenge'
+import type { Challenge, RuledStageType, Stage } from './challenge'
 import { readInterviewPlan, readSelfAssessment, type InterviewPlan, type SelfAssessment } from './mock-interview'
 import { evaluateDesign, HINT_TIERS, type Evaluation, type HintUsage } from './rules'
 
@@ -27,7 +27,7 @@ export type StageInput =
       answers: Record<string, number>
     }
   | {
-      type: 'high-level-design' | 'scaling'
+      type: RuledStageType
       /** Auto-saved as it changes. */
       design: Design
       /** The Hint tiers opened, which cap the Stage's score. */
@@ -90,6 +90,7 @@ export function stageWork(challenge: Challenge, attempt: Attempt, stageId: strin
     case 'deep-dive':
       return { type: stage.type, answers: stage.questions.map(() => []) }
     case 'high-level-design':
+    case 'class-design':
       return { type: stage.type, design: emptyDesign(), hintUsage: {} }
     case 'scaling': {
       const highLevel = challenge.stages.find((candidate) => candidate.type === 'high-level-design')
@@ -151,8 +152,9 @@ export function stageScore(stage: Stage, input: StageInput): { score: number; ev
       return { score: scores.reduce((sum, score) => sum + score, 0) / scores.length }
     }
     case 'high-level-design':
-    case 'scaling': {
-      const { design, hintUsage } = input as Extract<StageInput, { type: DesignStage['type'] }>
+    case 'scaling':
+    case 'class-design': {
+      const { design, hintUsage } = input as Extract<StageInput, { type: RuledStageType }>
       const evaluation = evaluateDesign(stage, design, hintUsage)
       return { score: evaluation.score / evaluation.totalWeight, evaluation }
     }
@@ -231,7 +233,8 @@ function readStageInput(value: Record<string, unknown>): StageInput | undefined 
       if (!Array.isArray(value.answers) || !value.answers.every(isIndexList)) return undefined
       return { type: value.type, answers: value.answers }
     case 'high-level-design':
-    case 'scaling': {
+    case 'scaling':
+    case 'class-design': {
       const { design } = readDesign(value.design)
       const hintUsage = readHintUsage(value.hintUsage)
       return design && hintUsage && { type: value.type, design, hintUsage }

@@ -203,7 +203,7 @@ describe('authored Challenges', () => {
     ['an unknown field', [{ ...pastebin, difficulty: 'easy' }], 'unknown field "difficulty"'],
     ['a repeated Challenge id', [pastebin, pastebin], 'its id is already used by another Challenge'],
     ['no Stages', [{ ...pastebin, stages: [] }], '"stages" must list at least one Stage'],
-    ['an unknown Stage type', withStage({ type: 'review' }), '"type" must be one of requirements, estimation, high-level-design, deep-dive, scaling'],
+    ['an unknown Stage type', withStage({ type: 'review' }), '"type" must be one of requirements, estimation, high-level-design, class-design, deep-dive, scaling'],
     ['a Stage weight that is not positive', withStage({ weight: -1 }), '"weight" must be a positive number'],
     ['no Stage weight', withStage({ weight: undefined }), '"weight" must be a positive number'],
     ['an invalid Reference Solution', withStage({ referenceSolution: { nodes: [node('x', 'mainframe')], edges: [] } }), 'unknown component type "mainframe"'],

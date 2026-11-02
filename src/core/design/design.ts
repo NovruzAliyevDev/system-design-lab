@@ -11,7 +11,9 @@ import {
 } from './components'
 
 // A Design is a graph of Nodes (components) and Edges (data flow), shared by the Design Canvas, the
-// Rule Engine and the Traffic Simulation. It knows nothing of how a canvas draws it.
+// Rule Engine and the Traffic Simulation. It knows nothing of how a canvas draws it. A UML Design, built
+// on the UML Class Builder, keeps its classes and relations in lists of their own beside the Nodes and
+// Edges (docs/adr/0001), so that it shares serialisation, history and storage with every other Design.
 
 export interface Position {
   x: number
@@ -77,18 +79,71 @@ export interface DesignZone {
   size: Size
 }
 
+/** Whether a class can be instantiated, must be subclassed, or only declares methods for others to implement. */
+export const CLASS_KINDS = ['class', 'abstract', 'interface'] as const
+export type ClassKind = (typeof CLASS_KINDS)[number]
+
+/** A class of a UML Design. */
+export interface DesignClass {
+  /** Unique within the Design, e.g. `class-2`; relations refer to it. */
+  id: string
+  name: string
+  kind: ClassKind
+  /** As the learner writes them, one per entry, e.g. `size: int`; Rules match the `memberName`. */
+  fields: string[]
+  methods: string[]
+  /** Where the canvas draws it. Rules ignore it. */
+  position: Position
+}
+
+/**
+ * How the `source` class relates to the `target` class:
+ * - `inheritance`: the source is a subclass of the target;
+ * - `implementation`: the source implements the target interface;
+ * - `composition`: the source is a whole the target part belongs to, and lives and dies with;
+ * - `aggregation`: the source is a whole that holds target parts, which can exist without it;
+ * - `association`: the source knows of and uses the target.
+ */
+export const RELATION_KINDS = ['inheritance', 'implementation', 'composition', 'aggregation', 'association'] as const
+export type RelationKind = (typeof RELATION_KINDS)[number]
+
+/** How many objects of the class at one end of a relation take part: exactly one, at most one, any number, at least one. */
+export const MULTIPLICITIES = ['1', '0..1', '*', '1..*'] as const
+export type Multiplicity = (typeof MULTIPLICITIES)[number]
+
+/**
+ * A relation between classes of a UML Design, at most one each way between two of them. A class can
+ * relate to itself, e.g. a linked-list Node to the next one.
+ */
+export interface DesignRelation {
+  id: string
+  source: string
+  target: string
+  kind: RelationKind
+  /** Set when the learner gives one. */
+  sourceMultiplicity?: Multiplicity
+  targetMultiplicity?: Multiplicity
+}
+
 export interface Design {
   nodes: DesignNode[]
   edges: DesignEdge[]
   zones: DesignZone[]
+  /** A UML Design's Nodes. */
+  classes: DesignClass[]
+  /** A UML Design's Edges. */
+  relations: DesignRelation[]
 }
 
 export const LABEL_MAX_LENGTH = 80
 export const NOTES_MAX_LENGTH = 2000
 export const ZONE_MIN_SIZE: Size = { width: 160, height: 100 }
 
+export const MEMBER_MAX_LENGTH = 120
+export const MAX_MEMBERS = 30
+
 export function emptyDesign(): Design {
-  return { nodes: [], edges: [], zones: [] }
+  return { nodes: [], edges: [], zones: [], classes: [], relations: [] }
 }
 
 /**
@@ -220,22 +275,29 @@ export function updateEdge(design: Design, edgeId: string, change: Partial<Pick<
 }
 
 export interface ElementIds {
+  /** Nodes, or the classes of a UML Design. */
   nodeIds?: string[]
+  /** Edges, or the relations of a UML Design. */
   edgeIds?: string[]
   zoneIds?: string[]
 }
 
-/** Removes Nodes with every Edge touching them, Edges on their own, and zone boxes (but not the Nodes in them). */
+/**
+ * Removes Nodes (and classes) with every Edge (and relation) touching them, Edges and relations on their
+ * own, and zone boxes (but not the Nodes in them).
+ */
 export function removeElements(design: Design, { nodeIds = [], edgeIds = [], zoneIds = [] }: ElementIds): Design {
   const removedNodes = new Set(nodeIds)
   const removedEdges = new Set(edgeIds)
   const removedZones = new Set(zoneIds)
+  const kept = (link: { id: string; source: string; target: string }) =>
+    !removedEdges.has(link.id) && !removedNodes.has(link.source) && !removedNodes.has(link.target)
   return placeInZones({
     nodes: design.nodes.filter((node) => !removedNodes.has(node.id)),
-    edges: design.edges.filter(
-      (edge) => !removedEdges.has(edge.id) && !removedNodes.has(edge.source) && !removedNodes.has(edge.target),
-    ),
+    edges: design.edges.filter(kept),
     zones: design.zones.filter((zone) => !removedZones.has(zone.id)),
+    classes: design.classes.filter((each) => !removedNodes.has(each.id)),
+    relations: design.relations.filter(kept),
   })
 }
 
@@ -278,14 +340,15 @@ export function moveZone(design: Design, zoneId: string, position: Position): De
 }
 
 /**
- * Moves Nodes and zones, by id, to where they were dragged together. A zone takes what is in it along,
- * so a Node or zone inside it that was dragged with it ends up where it was dragged too.
+ * Moves Nodes, zones and classes, by id, to where they were dragged together. A zone takes what is in it
+ * along, so a Node or zone inside it that was dragged with it ends up where it was dragged too.
  */
 export function moveElements(design: Design, positions: Record<string, Position>): Design {
   let next = design
   for (const zone of design.zones) if (Object.hasOwn(positions, zone.id)) next = moveZone(next, zone.id, positions[zone.id])
   const nodeIds = new Set(design.nodes.map((node) => node.id))
-  return moveNodes(next, Object.fromEntries(Object.entries(positions).filter(([id]) => nodeIds.has(id))))
+  next = moveNodes(next, Object.fromEntries(Object.entries(positions).filter(([id]) => nodeIds.has(id))))
+  return { ...next, classes: next.classes.map((each) => (Object.hasOwn(positions, each.id) ? { ...each, position: positions[each.id] } : each)) }
 }
 
 /** The innermost (smallest) zone covering `point`; of equal ones the last added, which the canvas draws on top. */
@@ -327,6 +390,87 @@ export function zoneArea(zone: DesignZone): number {
 
 function atLeastMinimum(size: Size): Size {
   return { width: Math.max(ZONE_MIN_SIZE.width, size.width), height: Math.max(ZONE_MIN_SIZE.height, size.height) }
+}
+
+/** Adds a class, `class-N` after the highest in use, named `baseName` and numbered the same way when it is not the first. */
+export function addClass(design: Design, position: Position, baseName: string): { design: Design; classId: string } {
+  const number = nextNumber(design.classes, 'class')
+  const added: DesignClass = { id: `class-${number}`, name: number === 1 ? baseName : `${baseName} ${number}`, kind: 'class', fields: [], methods: [], position }
+  return { design: { ...design, classes: [...design.classes, added] }, classId: added.id }
+}
+
+/** Changes a class; throws a `RangeError` for a name or member that is too long, too many members, or no such class. */
+export function updateClass(design: Design, classId: string, change: Partial<Pick<DesignClass, 'name' | 'kind' | 'fields' | 'methods'>>): Design {
+  if (!design.classes.some((each) => each.id === classId)) throw new RangeError(`No class ${classId}.`)
+  if (change.name !== undefined && change.name.length > LABEL_MAX_LENGTH) throw new RangeError(`A class name has at most ${LABEL_MAX_LENGTH} characters.`)
+  for (const members of [change.fields, change.methods]) {
+    if (members !== undefined && !isMemberList(members)) {
+      throw new RangeError(`A class has at most ${MAX_MEMBERS} fields and ${MAX_MEMBERS} methods of at most ${MEMBER_MAX_LENGTH} characters.`)
+    }
+  }
+  return { ...design, classes: design.classes.map((each) => (each.id === classId ? { ...each, ...change } : each)) }
+}
+
+/**
+ * The name Rules match a field or method by: what comes before its type or parameters, without a
+ * visibility sign, e.g. `get` for `+ get(query): Node`.
+ */
+export function memberName(member: string): string {
+  return member.trim().replace(/^[-+#~]\s*/, '').split(/[\s(:]/, 1)[0]
+}
+
+/** Whether a relation from the `source` class to the `target` class (maybe itself) may be added: both exist and are not yet related that way. */
+export function canRelate(design: Design, source: string, target: string): boolean {
+  const ids = new Set(design.classes.map((umlClass) => umlClass.id))
+  return ids.has(source) && ids.has(target) && !design.relations.some((relation) => relation.source === source && relation.target === target)
+}
+
+/** Adds a relation without multiplicities; throws a `RangeError` when `canRelate` refuses it. */
+export function relate(design: Design, source: string, target: string, kind: RelationKind): Design {
+  if (!canRelate(design, source, target)) throw new RangeError(`Cannot relate ${source} to ${target}.`)
+  return { ...design, relations: [...design.relations, { id: edgeId(source, target), source, target, kind }] }
+}
+
+/** Changes a relation's kind or multiplicities; a multiplicity given as `undefined` is cleared. */
+export function updateRelation(
+  design: Design,
+  relationId: string,
+  change: Partial<Pick<DesignRelation, 'kind' | 'sourceMultiplicity' | 'targetMultiplicity'>>,
+): Design {
+  return updateRelationWith(design, relationId, (relation) => {
+    const next: DesignRelation = { ...relation, ...change }
+    if (next.sourceMultiplicity === undefined) delete next.sourceMultiplicity
+    if (next.targetMultiplicity === undefined) delete next.targetMultiplicity
+    return next
+  })
+}
+
+/**
+ * Turns a relation round, its multiplicities with it, e.g. an inheritance drawn from the superclass;
+ * throws when that way is taken. A class's relation to itself only swaps its multiplicities.
+ */
+export function reverseRelation(design: Design, relationId: string): Design {
+  const relation = design.relations.find((candidate) => candidate.id === relationId)
+  if (relation && design.relations.some((other) => other !== relation && other.source === relation.target && other.target === relation.source)) {
+    throw new RangeError(`${relation.target} is already related to ${relation.source}.`)
+  }
+  return updateRelationWith(design, relationId, ({ source, target, kind, sourceMultiplicity, targetMultiplicity }) => ({
+    id: edgeId(target, source),
+    source: target,
+    target: source,
+    kind,
+    ...(targetMultiplicity !== undefined && { sourceMultiplicity: targetMultiplicity }),
+    ...(sourceMultiplicity !== undefined && { targetMultiplicity: sourceMultiplicity }),
+  }))
+}
+
+function updateRelationWith(design: Design, relationId: string, change: (relation: DesignRelation) => DesignRelation): Design {
+  if (!design.relations.some((each) => each.id === relationId)) throw new RangeError(`No relation ${relationId}.`)
+  return { ...design, relations: design.relations.map((each) => (each.id === relationId ? change(each) : each)) }
+}
+
+function isMemberList(value: unknown): value is string[] {
+  return Array.isArray(value) && value.length <= MAX_MEMBERS && value.every((member) => typeof member === 'string' && member.length <= MEMBER_MAX_LENGTH)
 }
 
 function updateZone(design: Design, zoneId: string, change: (zone: DesignZone) => DesignZone): Design {
@@ -421,7 +565,76 @@ export function readDesign(value: unknown): { design?: Design; problems: string[
     return [{ id, source, target, mode, traffic } as DesignEdge]
   })
 
-  return problems.length > 0 ? { problems } : { design: { nodes, edges, zones }, problems }
+  // Designs stored before UML Designs existed have no classes or relations.
+  const storedClasses = value.classes ?? []
+  const storedRelations = value.relations ?? []
+  if (!Array.isArray(storedClasses) || !Array.isArray(storedRelations)) return { problems: ['the classes and relations of a Design must be lists'] }
+
+  const classIds = new Set<string>()
+  const classes = storedClasses.flatMap((item: unknown, i): DesignClass[] => {
+    const read = readClass(item, (message) => problems.push(`class ${i + 1}: ${message}`))
+    if (!read) return []
+    if (classIds.has(read.id)) problems.push(`class ${i + 1}: its id "${read.id}" is already used`)
+    classIds.add(read.id)
+    return [read]
+  })
+
+  const relationIds = new Set<string>()
+  const relations = storedRelations.flatMap((item: unknown, i): DesignRelation[] => {
+    const relation = readRelation(item, classIds, (message) => problems.push(`relation ${i + 1}: ${message}`))
+    if (!relation) return []
+    if (relationIds.has(relation.id)) problems.push(`relation ${i + 1}: its id "${relation.id}" is already used`)
+    relationIds.add(relation.id)
+    return [relation]
+  })
+
+  return problems.length > 0 ? { problems } : { design: { nodes, edges, zones, classes, relations }, problems }
+}
+
+function readClass(item: unknown, problem: (message: string) => void): DesignClass | undefined {
+  if (!isRecord(item)) return void problem('must be an object')
+  const { id, name, kind, fields, methods, position } = item
+  let valid = true
+  const fail = (message: string) => {
+    valid = false
+    problem(message)
+  }
+  if (!isId(id)) fail('"id" must be a non-empty string')
+  if (typeof name !== 'string' || name.length > LABEL_MAX_LENGTH) fail(`"name" must be text of at most ${LABEL_MAX_LENGTH} characters`)
+  if (!CLASS_KINDS.includes(kind as ClassKind)) fail(`"kind" must be one of ${CLASS_KINDS.join(', ')}`)
+  for (const [field, members] of [['fields', fields], ['methods', methods]] as const) {
+    if (!isMemberList(members)) fail(`"${field}" must be a list of at most ${MAX_MEMBERS} texts of at most ${MEMBER_MAX_LENGTH} characters`)
+  }
+  if (!isPoint(position)) fail('"position" must be a point')
+  if (!valid) return undefined
+  const point = position as Record<string, number>
+  return { id, name, kind, fields: [...(fields as string[])], methods: [...(methods as string[])], position: { x: point.x, y: point.y } } as DesignClass
+}
+
+function readRelation(item: unknown, classIds: ReadonlySet<string>, problem: (message: string) => void): DesignRelation | undefined {
+  if (!isRecord(item)) return void problem('must be an object')
+  const { id, source, target, kind, sourceMultiplicity, targetMultiplicity } = item
+  let valid = true
+  const fail = (message: string) => {
+    valid = false
+    problem(message)
+  }
+  if (!isId(id)) fail('"id" must be a non-empty string')
+  if (!isId(source) || !classIds.has(source)) fail('"source" must be the id of a class')
+  if (!isId(target) || !classIds.has(target)) fail('"target" must be the id of a class')
+  if (!RELATION_KINDS.includes(kind as RelationKind)) fail(`"kind" must be one of ${RELATION_KINDS.join(', ')}`)
+  for (const [field, multiplicity] of [['sourceMultiplicity', sourceMultiplicity], ['targetMultiplicity', targetMultiplicity]] as const) {
+    if (multiplicity !== undefined && !MULTIPLICITIES.includes(multiplicity as Multiplicity)) fail(`"${field}" must be one of ${MULTIPLICITIES.join(', ')}`)
+  }
+  if (!valid) return undefined
+  return {
+    id,
+    source,
+    target,
+    kind,
+    ...(sourceMultiplicity !== undefined && { sourceMultiplicity }),
+    ...(targetMultiplicity !== undefined && { targetMultiplicity }),
+  } as DesignRelation
 }
 
 function readZone(item: unknown, problem: (message: string) => void): DesignZone | undefined {

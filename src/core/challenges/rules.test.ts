@@ -27,6 +27,8 @@ function build(nodeIds: string[], edges: string[] = []): Design {
     }),
     edges: [],
     zones: [],
+    classes: [],
+    relations: [],
   }
   for (const spec of edges) {
     const [pair, mode = 'sync', traffic = 'both'] = spec.split(':')
@@ -447,6 +449,8 @@ describe('chaosScenarioOf', () => {
       ['client-1->load-balancer-1', 'load-balancer-1->web-server-1', 'load-balancer-1->web-server-2'],
     ),
     zones: [],
+    classes: [],
+    relations: [],
   }
   const zoned: Design = { ...design, nodes: design.nodes.map((node) => (node.id === 'web-server-2' ? { ...node, zoneId: 'zone-2' } : node)) }
 

@@ -1,6 +1,20 @@
 import { isRecord, isText } from '../content/validation'
 import { componentDefinition, configProblem, isComponentType, type ComponentType, type ConfigValue } from '../design/components'
-import { EDGE_MODES, type Design, type DesignEdge, type DesignNode, type EdgeMode } from '../design/design'
+import {
+  CLASS_KINDS,
+  EDGE_MODES,
+  memberName,
+  MULTIPLICITIES,
+  RELATION_KINDS,
+  type ClassKind,
+  type Design,
+  type DesignClass,
+  type DesignEdge,
+  type DesignNode,
+  type EdgeMode,
+  type Multiplicity,
+  type RelationKind,
+} from '../design/design'
 import {
   CHAOS_TYPES,
   REQUEST_KINDS,
@@ -16,7 +30,8 @@ import {
 
 // The Rule Engine: checks a Design against a Challenge Stage's Rules. Rules are declarative,
 // serialisable data built from a fixed set of predicates, so that they can be authored as content
-// and validated at build time.
+// and validated at build time. Architecture predicates check Nodes and Edges; UML predicates check the
+// classes and relations of a UML Design; the combinators combine either.
 
 /** A config value a node must have: exactly this one, or any one of a list. */
 export type ConfigMatch = ConfigValue | readonly ConfigValue[]
@@ -39,6 +54,59 @@ export type Predicate =
   | NotPredicate
   | CustomPredicate
   | SimulationPredicate
+  | ClassPredicate
+  | MemberPredicate
+  | RelationPredicate
+
+/** The predicates that check a UML Design's classes and relations rather than Nodes and Edges. */
+const UML_PREDICATE_TYPES: ReadonlySet<Predicate['type']> = new Set(['class', 'member', 'relation'])
+/** The predicates that combine others, of either sort. */
+const COMBINATOR_TYPES: ReadonlySet<Predicate['type']> = new Set(['all-of', 'any-of', 'not'])
+
+/** What a Stage's Rules check: an architecture on the Design Canvas, or classes on the UML Class Builder. */
+export type PredicateFamily = 'architecture' | 'uml'
+
+/**
+ * Classes of a UML Design: by a name pattern and a kind, or by the members that give a class its role,
+ * whatever it is named. Patterns are regular expressions, matched whole and ignoring case. An empty
+ * selector picks every class.
+ */
+export interface ClassSelector {
+  /** E.g. `(lru)?cache`. */
+  name?: string
+  kind?: ClassKind | readonly ClassKind[]
+  /** For each pattern, the class has a field whose `memberName` matches it. */
+  fields?: readonly string[]
+  /** For each pattern, the class has a method whose `memberName` matches it. */
+  methods?: readonly string[]
+}
+
+/** At least `min` and at most `max` (default any) classes match; `min` defaults to 1, or 0 when `max` is 0. */
+export interface ClassPredicate {
+  type: 'class'
+  class: ClassSelector
+  min?: number
+  max?: number
+}
+
+/** A matching class has a field, or a method, whose `memberName` matches the pattern, whole and ignoring case. */
+export type MemberPredicate = { type: 'member'; class: ClassSelector } & ({ field: string; method?: never } | { method: string; field?: never })
+
+/** One multiplicity a relation end must have, or any one of a list. */
+export type MultiplicityMatch = Multiplicity | readonly Multiplicity[]
+
+/**
+ * A relation leads from a `from` class to a `to` class (from the subclass, the implementer or the whole),
+ * of `kind` when given, with the multiplicity asked for at each end that names one.
+ */
+export interface RelationPredicate {
+  type: 'relation'
+  from: ClassSelector
+  to: ClassSelector
+  kind?: RelationKind | readonly RelationKind[]
+  fromMultiplicity?: MultiplicityMatch
+  toMultiplicity?: MultiplicityMatch
+}
 
 /** Reads travel along edges carrying `read` or `both`; writes along `write` or `both`. */
 export type TrafficKind = 'read' | 'write'
@@ -379,7 +447,59 @@ function holds(predicate: Predicate, context: CheckContext): boolean {
     }
     case 'simulation':
       return meetsTargets(predicate, context.simulation(predicate.load, predicate.chaos))
+    case 'class': {
+      const count = matchingClasses(design, predicate.class).length
+      const max = predicate.max ?? Infinity
+      return count >= (predicate.min ?? Math.min(1, max)) && count <= max
+    }
+    case 'member': {
+      const [members, pattern] = predicate.field !== undefined ? (['fields', predicate.field] as const) : (['methods', predicate.method] as const)
+      return matchingClasses(design, predicate.class).some((each) => hasMember(each[members], pattern))
+    }
+    case 'relation': {
+      const sources = ids(matchingClasses(design, predicate.from))
+      const targets = ids(matchingClasses(design, predicate.to))
+      const kinds = listOf(predicate.kind)
+      return design.relations.some(
+        (relation) =>
+          sources.has(relation.source) &&
+          targets.has(relation.target) &&
+          (kinds === undefined || kinds.includes(relation.kind)) &&
+          multiplicityMatches(relation.sourceMultiplicity, predicate.fromMultiplicity) &&
+          multiplicityMatches(relation.targetMultiplicity, predicate.toMultiplicity),
+      )
+    }
   }
+}
+
+function matchingClasses(design: Design, selector: ClassSelector): DesignClass[] {
+  const kinds = listOf(selector.kind)
+  return design.classes.filter(
+    (each) =>
+      (selector.name === undefined || wholePattern(selector.name).test(each.name.trim())) &&
+      (kinds === undefined || kinds.includes(each.kind)) &&
+      (selector.fields ?? []).every((pattern) => hasMember(each.fields, pattern)) &&
+      (selector.methods ?? []).every((pattern) => hasMember(each.methods, pattern)),
+  )
+}
+
+function hasMember(members: readonly string[], pattern: string): boolean {
+  const whole = wholePattern(pattern)
+  return members.some((member) => whole.test(memberName(member)))
+}
+
+/** An end without a multiplicity matches only when none is asked for. */
+function multiplicityMatches(actual: Multiplicity | undefined, wanted: MultiplicityMatch | undefined): boolean {
+  return wanted === undefined || (actual !== undefined && listOf(wanted)!.includes(actual))
+}
+
+/** A Rule's pattern, matched against a whole name and ignoring case. */
+function wholePattern(pattern: string): RegExp {
+  return new RegExp(`^(?:${pattern})$`, 'i')
+}
+
+function listOf<T extends string>(value: T | readonly T[] | undefined): readonly T[] | undefined {
+  return value === undefined ? undefined : typeof value === 'string' ? [value] : (value as readonly T[])
 }
 
 function meetsTargets(targets: SimulationPredicate, { load, result }: { load: LoadProfile; result: SimulationResult }): boolean {
@@ -435,8 +555,8 @@ function carries(edge: DesignEdge, traffic: TrafficKind | undefined): boolean {
   return traffic === undefined || edge.traffic === 'both' || edge.traffic === traffic
 }
 
-function ids(nodes: DesignNode[]): Set<string> {
-  return new Set(nodes.map((node) => node.id))
+function ids(elements: readonly { id: string }[]): Set<string> {
+  return new Set(elements.map((element) => element.id))
 }
 
 function matching(design: Design, selector: NodeSelector): DesignNode[] {
@@ -470,14 +590,24 @@ const PREDICATE_FIELDS: Record<Predicate['type'], ReadonlySet<string>> = {
   not: new Set(['type', 'predicate']),
   custom: new Set(['type', 'name']),
   simulation: new Set(['type', 'chaos', 'load', 'maxLatencyMs', 'maxOverloadedNodes', 'maxErrorRate']),
+  class: new Set(['type', 'class', 'min', 'max']),
+  member: new Set(['type', 'class', 'field', 'method']),
+  relation: new Set(['type', 'from', 'to', 'kind', 'fromMultiplicity', 'toMultiplicity']),
 }
 
+const CLASS_SELECTOR_FIELDS = new Set(['name', 'kind', 'fields', 'methods'])
+
 /**
- * Checks authored Rules against the Rule schema: known predicates, component types, config fields and
- * values, three Hint tiers each, unique ids, and only the Stage's `chaosTaskIds` named. Returns the Rules,
- * or undefined after reporting every problem.
+ * Checks authored Rules against the Rule schema: known predicates of the Stage's `family`, component
+ * types, config fields and values, class selector patterns, three Hint tiers each, unique ids, and only the
+ * Stage's `chaosTaskIds` named. Returns the Rules, or undefined after reporting every problem.
  */
-export function validateRules(input: unknown, problem: (message: string) => void, chaosTaskIds: ReadonlySet<string>): Rule[] | undefined {
+export function validateRules(
+  input: unknown,
+  problem: (message: string) => void,
+  chaosTaskIds: ReadonlySet<string>,
+  family: PredicateFamily = 'architecture',
+): Rule[] | undefined {
   if (!Array.isArray(input) || input.length === 0) return void problem('"rules" must list at least one Rule')
   let valid = true
   const ids = new Set<string>()
@@ -497,7 +627,7 @@ export function validateRules(input: unknown, problem: (message: string) => void
     if (!Array.isArray(item.hints) || item.hints.length !== HINT_TIERS || !item.hints.every(isText)) {
       fail('"hints" must be three texts')
     }
-    checkPredicate(item.check, (message) => fail(`check: ${message}`), chaosTaskIds)
+    checkPredicate(item.check, (message) => fail(`check: ${message}`), chaosTaskIds, family)
   })
   return valid ? (input as Rule[]) : undefined
 }
@@ -576,10 +706,13 @@ function checkChaosScenario(value: unknown, fail: (message: string) => void): vo
   }
 }
 
-function checkPredicate(value: unknown, fail: (message: string) => void, chaosTaskIds: ReadonlySet<string>): void {
+function checkPredicate(value: unknown, fail: (message: string) => void, chaosTaskIds: ReadonlySet<string>, family: PredicateFamily): void {
   if (!isRecord(value)) return fail('a predicate must be an object')
   const type = Object.hasOwn(PREDICATE_FIELDS, String(value.type)) ? (value.type as Predicate['type']) : undefined
   if (!type) return fail(`unknown predicate type "${String(value.type)}"`)
+  if (!COMBINATOR_TYPES.has(type) && UML_PREDICATE_TYPES.has(type) !== (family === 'uml')) {
+    return fail(`a ${type} predicate does not check ${family === 'uml' ? 'a UML Design' : 'an architecture Design'}`)
+  }
   for (const field of Object.keys(value)) if (!PREDICATE_FIELDS[type].has(field)) fail(`unknown field "${field}" in a ${type} predicate`)
 
   switch (type) {
@@ -611,10 +744,10 @@ function checkPredicate(value: unknown, fail: (message: string) => void, chaosTa
     case 'all-of':
     case 'any-of':
       if (!Array.isArray(value.predicates) || value.predicates.length === 0) return fail('"predicates" must list at least one predicate')
-      for (const part of value.predicates) checkPredicate(part, fail, chaosTaskIds)
+      for (const part of value.predicates) checkPredicate(part, fail, chaosTaskIds, family)
       return
     case 'not':
-      return checkPredicate(value.predicate, fail, chaosTaskIds)
+      return checkPredicate(value.predicate, fail, chaosTaskIds, family)
     case 'custom':
       if (!isText(value.name) || !Object.hasOwn(CUSTOM_PREDICATES, value.name)) fail(`no custom predicate "${String(value.name)}" is registered`)
       return
@@ -634,7 +767,54 @@ function checkPredicate(value: unknown, fail: (message: string) => void, chaosTa
       if (maxErrorRate !== undefined && !ratesFit) fail('"maxErrorRate" must be a number from 0 to 1, or such numbers for "read" and "write" only')
       return
     }
+    case 'class': {
+      checkClassSelector(value.class, fail)
+      const { min, max } = value
+      const bounds = [min, max].filter((bound) => bound !== undefined)
+      if (!bounds.every(isCount) || (bounds.length === 2 && (min as number) > (max as number))) fail('"min" and "max" must be whole numbers with min ≤ max')
+      return
+    }
+    case 'member':
+      checkClassSelector(value.class, fail)
+      if ((value.field === undefined) === (value.method === undefined)) return fail('give either "field" or "method"')
+      return checkPattern(value.field ?? value.method, fail)
+    case 'relation':
+      checkClassSelector(value.from, fail)
+      checkClassSelector(value.to, fail)
+      checkChoices(value.kind, 'kind', RELATION_KINDS, fail)
+      checkChoices(value.fromMultiplicity, 'fromMultiplicity', MULTIPLICITIES, fail)
+      checkChoices(value.toMultiplicity, 'toMultiplicity', MULTIPLICITIES, fail)
   }
+}
+
+/** Checks a class selector: its fields, kinds and patterns, each of which must be a regular expression. */
+function checkClassSelector(value: unknown, fail: (message: string) => void): void {
+  if (!isRecord(value)) return fail('a class selector must be an object')
+  for (const field of Object.keys(value)) if (!CLASS_SELECTOR_FIELDS.has(field)) fail(`unknown field "${field}" in a class selector`)
+  if (value.name !== undefined) checkPattern(value.name, fail)
+  checkChoices(value.kind, 'kind', CLASS_KINDS, fail)
+  for (const members of ['fields', 'methods'] as const) {
+    const patterns = value[members]
+    if (patterns === undefined) continue
+    if (!Array.isArray(patterns) || patterns.length === 0) fail(`"${members}" must list at least one pattern`)
+    else for (const pattern of patterns) checkPattern(pattern, fail)
+  }
+}
+
+function checkPattern(value: unknown, fail: (message: string) => void): void {
+  if (!isText(value)) return fail('a pattern must be a non-empty string')
+  try {
+    new RegExp(value)
+  } catch {
+    fail(`"${value}" is not a regular expression`)
+  }
+}
+
+/** An optional value that is one of `choices`, or a non-empty list of them. */
+function checkChoices(value: unknown, field: string, choices: readonly string[], fail: (message: string) => void): void {
+  if (value === undefined) return
+  const listed = Array.isArray(value) ? value : [value]
+  if (listed.length === 0 || !listed.every((each) => choices.includes(each))) fail(`"${field}" must be one of ${choices.join(', ')}, or a list of them`)
 }
 
 /** Checks a node selector; returns the component types it names. */

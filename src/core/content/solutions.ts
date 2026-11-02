@@ -8,6 +8,30 @@ export interface SolutionSource {
   markdown: string
 }
 
+/** A Python solution file of the primer, as the Content Pipeline reads it. */
+export interface CodeSolutionSource {
+  /** Path of the file in the primer repo, e.g. `solutions/object_oriented_design/lru_cache/lru_cache.py`. */
+  path: string
+  code: string
+}
+
+/** The primer's Python solution of an object-oriented design question, shown as code beside its reference UML. */
+export interface CodeSolution {
+  /** The name of its folder, e.g. `lru_cache`. */
+  id: string
+  path: string
+  /** Link to the file at the pinned commit. */
+  sourceUrl: string
+  code: string
+}
+
+/** Python solutions in the order of their ids. */
+export function buildCodeSolutions(inputs: CodeSolutionSource[], source: ContentSource): CodeSolution[] {
+  return inputs
+    .map(({ path, code }) => ({ id: path.split('/').at(-2) ?? path, path, sourceUrl: `${source.repoUrl}/blob/${source.commit}/${path}`, code }))
+    .sort((a, b) => a.id.localeCompare(b.id))
+}
+
 /** A solution write-up of a system design question, shown as a Solution page. */
 export interface Solution extends PrimerText {
   /** The name of its folder, e.g. `pastebin`. */

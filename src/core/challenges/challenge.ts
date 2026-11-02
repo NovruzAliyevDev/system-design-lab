@@ -1,5 +1,5 @@
 import type { LessonReference } from '../content/catalog'
-import type { Solution } from '../content/solutions'
+import type { CodeSolution, Solution } from '../content/solutions'
 import { isRecord, isText, isTextList } from '../content/validation'
 import { readDesign, type Design } from '../design/design'
 import { ESTIMATION_QUANTITIES, estimate, isEstimationQuantity, type EstimationInputs, type EstimationQuantity } from '../estimation/estimate'
@@ -17,7 +17,11 @@ import { chaosScenarioOf, evaluateDesign, validateChaosTasks, validateLoadProfil
 // A Challenge is a system design question solved Stage by Stage, the way an interview runs. Its
 // definition is authored data, validated when the Content Pipeline builds the catalog.
 
-export const CHALLENGE_KINDS = ['architecture'] as const
+/**
+ * - `architecture`: a system design question, its design built on the Design Canvas.
+ * - `ood`: an object-oriented design question, its classes built on the UML Class Builder.
+ */
+export const CHALLENGE_KINDS = ['architecture', 'ood'] as const
 export type ChallengeKind = (typeof CHALLENGE_KINDS)[number]
 
 /** Where a Challenge comes from: a question of the primer, or one authored for the app. */
@@ -25,8 +29,14 @@ export const CHALLENGE_SOURCES = ['primer', 'authored'] as const
 export type ChallengeSource = (typeof CHALLENGE_SOURCES)[number]
 
 /** The Stage types, in the order an interview (and a Challenge) goes through them. */
-export const STAGE_TYPES = ['requirements', 'estimation', 'high-level-design', 'deep-dive', 'scaling'] as const
+export const STAGE_TYPES = ['requirements', 'estimation', 'high-level-design', 'class-design', 'deep-dive', 'scaling'] as const
 export type StageType = (typeof STAGE_TYPES)[number]
+
+/** The Stage types each kind of Challenge can have; an ood Challenge always has a class-design Stage. */
+const KIND_STAGE_TYPES: Record<ChallengeKind, readonly StageType[]> = {
+  architecture: ['requirements', 'estimation', 'high-level-design', 'deep-dive', 'scaling'],
+  ood: ['requirements', 'class-design', 'deep-dive'],
+}
 
 interface StageBase {
   /** Unique within its Challenge; the learner's work on it is stored by it. */
@@ -88,6 +98,14 @@ export interface DesignStage extends StageBase {
   chaosTasks?: ChaosTask[]
 }
 
+/** An object-oriented design solved on the UML Class Builder and checked by UML Rules. */
+export interface ClassDesignStage extends StageBase {
+  type: 'class-design'
+  rules: Rule[]
+  /** The classes of the primer's Python solution. Hidden until the Stage is over, then shown beside that code. */
+  referenceSolution: Design
+}
+
 export type TradeOffQuestion = MultipleChoiceQuestion | MultiSelectQuestion
 
 /** Trade-off questions about the design, every option explained. */
@@ -96,11 +114,18 @@ export interface DeepDiveStage extends StageBase {
   questions: TradeOffQuestion[]
 }
 
-export type Stage = RequirementsStage | EstimationStage | DesignStage | DeepDiveStage
+export type Stage = RequirementsStage | EstimationStage | DesignStage | ClassDesignStage | DeepDiveStage
 
 /** Whether a Stage type is solved on the Design Canvas. */
 export function isDesignStageType(type: StageType): type is DesignStage['type'] {
   return type === 'high-level-design' || type === 'scaling'
+}
+
+/** The Stage types built on a canvas, the Design Canvas or the UML Class Builder, and checked by Rules. */
+export type RuledStageType = DesignStage['type'] | ClassDesignStage['type']
+
+export function isRuledStageType(type: StageType): type is RuledStageType {
+  return isDesignStageType(type) || type === 'class-design'
 }
 
 export interface Challenge {
@@ -111,10 +136,12 @@ export interface Challenge {
   source: ChallengeSource
   /** The primer's Solution page of the question, if it has one. */
   solutionId?: string
+  /** An ood Challenge's: the primer's Python solution, shown as code beside the reference UML. */
+  codeSolutionId?: string
   /** Lessons the Challenge practises. */
   lessonIds: string[]
-  /** The default Load Profile, e.g. the question's average traffic. */
-  loadProfile: LoadProfile
+  /** An architecture Challenge's default Load Profile, e.g. the question's average traffic. An ood Challenge has none. */
+  loadProfile?: LoadProfile
   /** In interview order, each type at most once. */
   stages: Stage[]
 }
@@ -124,17 +151,19 @@ export type AuthoredStage =
   | (Omit<RequirementsStage, 'items'> & { items: (QuizOptionInput & { section: RequirementSection })[] })
   | (Omit<EstimationStage, 'questions'> & { questions: Omit<EstimationQuestion, 'referenceValue'>[] })
   | (Omit<DesignStage, 'referenceSolution' | 'loadProfile'> & { referenceSolution: unknown; loadProfile?: LoadProfile })
+  | (Omit<ClassDesignStage, 'referenceSolution'> & { referenceSolution: unknown })
   | (Omit<DeepDiveStage, 'questions'> & { questions: (MultipleChoiceQuestion<QuizOptionInput> | MultiSelectQuestion<QuizOptionInput>)[] })
 
 /** A Challenge as it is authored. */
 export type ChallengeInput = Omit<Challenge, 'stages'> & { stages: AuthoredStage[] }
 
-const CHALLENGE_FIELDS = new Set(['id', 'title', 'kind', 'source', 'solutionId', 'lessonIds', 'loadProfile', 'stages'])
+const CHALLENGE_FIELDS = new Set(['id', 'title', 'kind', 'source', 'solutionId', 'codeSolutionId', 'lessonIds', 'loadProfile', 'stages'])
 const COMMON_STAGE_FIELDS = ['id', 'type', 'prompt', 'weight', 'solutionAnchor']
 const STAGE_FIELDS: Record<StageType, Set<string>> = {
   requirements: new Set([...COMMON_STAGE_FIELDS, 'items']),
   estimation: new Set([...COMMON_STAGE_FIELDS, 'inputs', 'explanation', 'questions']),
   'high-level-design': new Set([...COMMON_STAGE_FIELDS, 'rules', 'referenceSolution', 'loadProfile', 'chaosTasks']),
+  'class-design': new Set([...COMMON_STAGE_FIELDS, 'rules', 'referenceSolution']),
   'deep-dive': new Set([...COMMON_STAGE_FIELDS, 'questions']),
   scaling: new Set([...COMMON_STAGE_FIELDS, 'rules', 'referenceSolution', 'loadProfile', 'chaosTasks']),
 }
@@ -145,14 +174,15 @@ const OPTIONAL_INPUTS = ['bytesPerRead', 'peakFactor', 'years'] as const
 const INPUT_FIELDS = new Set<string>([...REQUIRED_INPUTS, ...OPTIONAL_INPUTS])
 
 /**
- * Checks authored Challenges against their schema, the Lessons and Solution pages they reference, and
- * their own Rules: every Reference Solution must pass every Rule of its Stage, simulation targets
- * included. Returns the Challenges in authored order, or every problem found.
+ * Checks authored Challenges against their schema and kind, the Lessons, Solution pages and Python
+ * solutions they reference, and their own Rules: every Reference Solution must pass every Rule of its
+ * Stage, simulation targets included. Returns the Challenges in authored order, or every problem found.
  */
 export function validateChallenges(
   input: unknown,
   lessonIds: ReadonlySet<string>,
   solutions: readonly Solution[],
+  codeSolutions: readonly CodeSolution[] = [],
 ): { challenges: Challenge[]; problems: string[] } {
   if (!Array.isArray(input)) return { challenges: [], problems: ['Challenges: must be a list of Challenges'] }
 
@@ -170,13 +200,20 @@ export function validateChallenges(
     else if (ids.has(item.id)) problem('its id is already used by another Challenge')
     else ids.add(item.id)
     if (!isText(item.title)) problem('"title" must be a non-empty string')
-    if (!CHALLENGE_KINDS.includes(item.kind as ChallengeKind)) problem(`"kind" must be one of ${CHALLENGE_KINDS.join(', ')}`)
+    const kind = CHALLENGE_KINDS.find((known) => known === item.kind)
+    if (!kind) problem(`"kind" must be one of ${CHALLENGE_KINDS.join(', ')}`)
     if (!CHALLENGE_SOURCES.includes(item.source as ChallengeSource)) problem(`"source" must be one of ${CHALLENGE_SOURCES.join(', ')}`)
     const solution = item.solutionId === undefined ? undefined : solutions.find((candidate) => candidate.id === item.solutionId)
     if (item.solutionId !== undefined && !solution) problem(`unknown Solution page "${String(item.solutionId)}"`)
+    if (kind === 'ood') {
+      if (!isText(item.codeSolutionId)) problem('"codeSolutionId" must name a Python solution of the primer')
+      else if (!codeSolutions.some((candidate) => candidate.id === item.codeSolutionId)) problem(`unknown Python solution "${item.codeSolutionId}"`)
+    } else if (item.codeSolutionId !== undefined) problem(`an ${String(kind ?? item.kind)} Challenge has no "codeSolutionId"`)
     if (!isTextList(item.lessonIds)) problem('"lessonIds" must be a list of Lesson ids')
     else for (const lessonId of item.lessonIds) if (!lessonIds.has(lessonId)) problem(`unknown Lesson id "${lessonId}"`)
-    const loadProfile = validateLoadProfile(item.loadProfile, (message) => problem(`loadProfile: ${message}`))
+    // An ood Challenge sends no traffic: its Stages have no simulation.
+    if (kind === 'ood' && item.loadProfile !== undefined) problem('an ood Challenge has no "loadProfile"')
+    const loadProfile = kind === 'ood' ? undefined : validateLoadProfile(item.loadProfile, (message) => problem(`loadProfile: ${message}`))
 
     if (!Array.isArray(item.stages) || item.stages.length === 0) return problem('"stages" must list at least one Stage')
     const stageIds = new Set<string>()
@@ -185,6 +222,8 @@ export function validateChallenges(
     const stages = item.stages.map((stageItem: unknown, s) => {
       const stageName = isRecord(stageItem) && isText(stageItem.id) ? `Stage "${stageItem.id}"` : `Stage #${s + 1}`
       const stageProblem = (message: string) => problems.push(`${name} ${stageName}: ${message}`)
+      const type = isRecord(stageItem) ? STAGE_TYPES.find((known) => known === stageItem.type) : undefined
+      if (kind && type && !KIND_STAGE_TYPES[kind].includes(type)) return void stageProblem(`an ${kind} Challenge has no ${type} Stage`)
       const stage = validateStage(stageItem, item.solutionId === undefined ? 'none' : solution, loadProfile, stageProblem)
       if (!stage) return undefined
       if (stageIds.has(stage.id)) stageProblem('its id is already used in the Challenge')
@@ -199,17 +238,21 @@ export function validateChallenges(
       typesSoFar.push(stage.type)
       return stage
     })
+    if (kind === 'ood' && !item.stages.some((stageItem: unknown) => isRecord(stageItem) && stageItem.type === 'class-design')) {
+      problem('an ood Challenge needs a class-design Stage')
+    }
 
     if (problems.length > before) return
-    const { id, title, kind, source, solutionId, lessonIds: lessons } = item as unknown as Challenge
+    const { id, title, source, solutionId, codeSolutionId, lessonIds: lessons } = item as unknown as Challenge
     challenges.push({
       id,
       title,
-      kind,
+      kind: kind!,
       source,
       ...(solutionId !== undefined && { solutionId }),
+      ...(codeSolutionId !== undefined && { codeSolutionId }),
       lessonIds: lessons,
-      loadProfile: loadProfile!,
+      ...(loadProfile && { loadProfile }),
       stages: stages as Stage[],
     })
   })
@@ -286,6 +329,17 @@ function validateStage(
         return validateQuestion(question, questionFail) as TradeOffQuestion | undefined
       })
       return valid ? { type, ...base, questions: questions as TradeOffQuestion[] } : undefined
+    }
+    case 'class-design': {
+      const rules = validateRules(item.rules, fail, new Set(), 'uml')
+      const { design, problems } = readDesign(item.referenceSolution)
+      for (const designProblem of problems) fail(`Reference Solution: ${designProblem}`)
+      if (!valid || !rules || !design) return undefined
+      const stage: ClassDesignStage = { type, ...base, rules, referenceSolution: design }
+      for (const result of evaluateDesign(stage, design, {}).rules) {
+        if (!result.passed) fail(`the Reference Solution fails Rule "${result.ruleId}"`)
+      }
+      return valid ? stage : undefined
     }
     case 'high-level-design':
     case 'scaling': {

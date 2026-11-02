@@ -231,7 +231,7 @@ All Core functions are deterministic. Time (`now`) and randomness (seed) are pas
   - A **Design** is a graph of **Nodes** and **Edges**.
   - A Node has a `componentType`, a typed `config` (per component type), a label, an optional zone id and a position. Position is not used by Rules or Simulation.
   - An Edge has source, target, `mode` (sync | async) and `traffic` (read | write | both).
-  - A UML Design uses the same graph shape: class Nodes carry fields, methods and abstract/interface flags; Edges carry the relation kind and multiplicity.
+  - A UML Design is a Design whose classes (with fields, methods and abstract/interface flags) and relations (with the relation kind and multiplicity) sit in their own lists beside the Nodes and Edges; see `docs/adr/0001-uml-classes-and-relations-beside-nodes-and-edges.md`.
   - Each component type defines default capacity (QPS per instance), base latency, monthly cost per instance and its config schema. Defaults are derived from the primer's latency numbers.
 - **Rule Engine**: `evaluateDesign(challengeStage, design, hintUsage) → Evaluation`.
   - Rules are declarative, serialisable data built from a fixed set of predicates:

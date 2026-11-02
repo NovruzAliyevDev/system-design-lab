@@ -15,7 +15,7 @@ import { buildContentCatalog, type Catalog } from '../src/core/content/catalog'
 import { findUnresolvedLinks, isImagePath, referencedAssets } from '../src/core/content/links'
 import { paletteGlossaryProblems } from '../src/core/design/components'
 import type { DeckSource } from '../src/core/flashcards/deck'
-import type { SolutionSource } from '../src/core/content/solutions'
+import type { CodeSolutionSource, SolutionSource } from '../src/core/content/solutions'
 import { buildSearchIndex, searchDocuments } from '../src/core/search/search'
 import { readAnkiPackage } from './anki'
 
@@ -25,6 +25,8 @@ export const PRIMER_DIR = join(root, PRIMER_PATH)
 export const PRIMER_REPO_URL = 'https://github.com/donnemartin/system-design-primer'
 /** Each system design question has a folder here with its write-up in `README.md`. */
 const SOLUTIONS_PATH = 'solutions/system_design'
+/** Each object-oriented design question has a folder here with its Python solution, beside a notebook of it. */
+const CODE_SOLUTIONS_PATH = 'solutions/object_oriented_design'
 /** The primer's Anki Decks, `<title>.apkg` each, in the order the app lists them. */
 const DECKS_PATH = 'resources/flash_cards'
 const DECK_TITLES = ['System Design', 'System Design Exercises', 'OO Design']
@@ -64,6 +66,18 @@ function readSolutions(): SolutionSource[] {
     })
 }
 
+/** The Python file of each object-oriented design folder; the notebooks hold the same code. */
+function readCodeSolutions(): CodeSolutionSource[] {
+  return readdirSync(join(PRIMER_DIR, CODE_SOLUTIONS_PATH), { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .flatMap((entry) => {
+      const folder = `${CODE_SOLUTIONS_PATH}/${entry.name}`
+      return readdirSync(join(PRIMER_DIR, folder))
+        .filter((name) => name.endsWith('.py') && name !== '__init__.py')
+        .map((name) => ({ path: `${folder}/${name}`, code: readFileSync(join(PRIMER_DIR, folder, name), 'utf8') }))
+    })
+}
+
 function readDecks(): DeckSource[] {
   return DECK_TITLES.map((title) => {
     const path = `${DECKS_PATH}/${title}.apkg`
@@ -84,6 +98,7 @@ export function loadPrimerCatalog() {
     markdown,
     source: { repoUrl: PRIMER_REPO_URL, commit, path: 'README.md' },
     solutions: readSolutions(),
+    codeSolutions: readCodeSolutions(),
     decks: readDecks(),
     primerImages: primerImages(),
     authored: { glossary, imageMirrors, flashcardLinkFixes, flashcardPlaceholderLinks, flashcardFormerRepoUrls, flashcards, quizzes, challenges, skillTree, conceptSimulations },
@@ -138,6 +153,6 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   writeFileSync(CATALOG_OUTPUT, JSON.stringify(catalog))
   writeFileSync(SEARCH_OUTPUT, JSON.stringify(buildSearchIndex(searchDocuments(catalog))))
   console.log(
-    `Content catalog: ${catalog.lessons.length} Lessons in ${catalog.groups.length} groups, ${catalog.solutions.length} Solutions, ${catalog.glossary.length} Glossary Terms, ${catalog.decks.reduce((count, deck) => count + deck.cards.length, 0)} Flashcards, ${catalog.quizzes.length} Quizzes, ${catalog.challenges.length} Challenges, ${catalog.skillTree.length} Skill Tree topics, ${catalog.conceptSimulations.length} Concept Simulations, ${assetCount} images (${catalog.source.commit.slice(0, 7)})`,
+    `Content catalog: ${catalog.lessons.length} Lessons in ${catalog.groups.length} groups, ${catalog.solutions.length} Solutions, ${catalog.codeSolutions.length} Python solutions, ${catalog.glossary.length} Glossary Terms, ${catalog.decks.reduce((count, deck) => count + deck.cards.length, 0)} Flashcards, ${catalog.quizzes.length} Quizzes, ${catalog.challenges.length} Challenges, ${catalog.skillTree.length} Skill Tree topics, ${catalog.conceptSimulations.length} Concept Simulations, ${assetCount} images (${catalog.source.commit.slice(0, 7)})`,
   )
 }

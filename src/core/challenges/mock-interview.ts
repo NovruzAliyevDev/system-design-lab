@@ -13,6 +13,7 @@ const STAGE_TYPE_MINUTES: Record<StageType, number> = {
   requirements: 5,
   estimation: 5,
   'high-level-design': 15,
+  'class-design': 30,
   'deep-dive': 10,
   scaling: 10,
 }

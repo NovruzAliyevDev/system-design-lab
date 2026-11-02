@@ -9,6 +9,7 @@ export const STAGE_NAMES: Record<StageType, StringKey> = {
   requirements: 'stageRequirements',
   estimation: 'stageEstimation',
   'high-level-design': 'stageHighLevelDesign',
+  'class-design': 'stageClassDesign',
   'deep-dive': 'stageDeepDive',
   scaling: 'stageScaling',
 }

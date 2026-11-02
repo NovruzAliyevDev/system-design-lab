@@ -51,6 +51,8 @@ export function autoLayout(design: Design): Design {
     nodes: design.nodes.map((node) => ({ ...node, position: positions.get(node.id)! })),
     edges: design.edges,
     zones: design.zones.map((zone) => zones.get(zone.id)!),
+    classes: design.classes,
+    relations: design.relations,
   }
 }
 

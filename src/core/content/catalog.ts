@@ -7,7 +7,7 @@ import { validateSkillTree, type SkillTopic } from '../skill-tree/skill-tree'
 import { extractAppendix, type Appendix } from './appendix'
 import { validateImageMirrors } from './image-mirrors'
 import { quoteUnquotedLinkUrls, readHeadings } from './markdown'
-import { buildSolutions, type Solution, type SolutionSource } from './solutions'
+import { buildCodeSolutions, buildSolutions, type CodeSolution, type CodeSolutionSource, type Solution, type SolutionSource } from './solutions'
 import { extractStudyGuide, type StudyGuide } from './study-guide'
 
 export interface ContentSource {
@@ -62,6 +62,8 @@ export interface Catalog {
   studyGuide?: StudyGuide
   /** The solution write-ups of the system design questions, in the order the README lists them. */
   solutions: Solution[]
+  /** The Python solutions of the object-oriented design questions, by id. */
+  codeSolutions: CodeSolution[]
   /** Image URLs used by primer text → the same image in the primer repo, served with the site. */
   imageMirrors: Record<string, string>
   /** The primer's Anki Decks as Flashcards. */
@@ -134,13 +136,15 @@ export function buildContentCatalog(input: {
   source: ContentSource
   /** The primer's solution write-ups, in any order. */
   solutions?: SolutionSource[]
+  /** The primer's Python solutions of the object-oriented design questions, in any order. */
+  codeSolutions?: CodeSolutionSource[]
   /** The primer's Anki Decks, in the order the app lists them. */
   decks?: DeckSource[]
   /** Paths of the image files in the primer, which card images are served from when they have a copy there. */
   primerImages?: string[]
   authored?: AuthoredContent
 }): Catalog {
-  const { source, solutions = [], decks = [], primerImages = [], authored = {} } = input
+  const { source, solutions = [], codeSolutions = [], decks = [], primerImages = [], authored = {} } = input
   const markdown = quoteUnquotedLinkUrls(input.markdown)
   const { headings, groups, lessons, sectionsWithLesson } = splitIntoLessons(markdown, source)
 
@@ -169,7 +173,8 @@ export function buildContentCatalog(input: {
   )
   const quizzes = validateQuizzes(authored.quizzes ?? [], lessonIds)
   const builtSolutions = buildSolutions(solutions, source, markdown)
-  const challenges = validateChallenges(authored.challenges ?? [], lessonIds, builtSolutions)
+  const builtCodeSolutions = buildCodeSolutions(codeSolutions, source)
+  const challenges = validateChallenges(authored.challenges ?? [], lessonIds, builtSolutions, builtCodeSolutions)
   const skillTree = validateSkillTree(authored.skillTree ?? [], lessonIds)
   const conceptSimulations = validateConceptSimulations(authored.conceptSimulations ?? [], lessons)
   const problems = [
@@ -194,6 +199,7 @@ export function buildContentCatalog(input: {
     glossary: glossary.terms,
     appendix: extractAppendix(lessons),
     solutions: builtSolutions,
+    codeSolutions: builtCodeSolutions,
     imageMirrors: imageMirrors.mirrors,
     decks: flashcards.decks,
     quizzes: quizzes.quizzes,
@@ -286,6 +292,10 @@ export function findLesson(catalog: Catalog, lessonId: string): Lesson | undefin
 
 export function findSolution(catalog: Catalog, solutionId: string): Solution | undefined {
   return catalog.solutions.find((solution) => solution.id === solutionId)
+}
+
+export function findCodeSolution(catalog: Catalog, codeSolutionId: string): CodeSolution | undefined {
+  return catalog.codeSolutions.find((solution) => solution.id === codeSolutionId)
 }
 
 /** The source anchor of the heading that starts at `offset` in the page's text, if any. */
