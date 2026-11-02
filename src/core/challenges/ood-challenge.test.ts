@@ -115,7 +115,7 @@ describe('object-oriented design Challenges', () => {
     expect(problems).toEqual([
       'Challenge "lru-cache" Stage "class-design": Rule "pattern": check: unknown field "colour" in a class selector',
       'Challenge "lru-cache" Stage "class-design": Rule "pattern": check: "(cache" is not a regular expression',
-      'Challenge "lru-cache" Stage "class-design": Rule "member": check: "kind" must be one of class, abstract, interface, or a list of them',
+      'Challenge "lru-cache" Stage "class-design": Rule "member": check: "kind" must be one of class, abstract, interface, enum, or a list of them',
       'Challenge "lru-cache" Stage "class-design": Rule "member": check: give either "field" or "method"',
       'Challenge "lru-cache" Stage "class-design": Rule "relation": check: "fields" must list at least one pattern',
       'Challenge "lru-cache" Stage "class-design": Rule "relation": check: "kind" must be one of inheritance, implementation, composition, aggregation, association, or a list of them',

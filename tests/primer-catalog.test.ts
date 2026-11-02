@@ -8,7 +8,7 @@ import { findCodeSolution, findLesson } from '../src/core/content/catalog'
 import { findUnresolvedLinks, resolveLink } from '../src/core/content/links'
 import { linkUrls } from '../src/core/content/markdown'
 import { defaultConfig, paletteGlossaryProblems, PRIMER_LATENCY_NS } from '../src/core/design/components'
-import { connect, removeElements, setNodeConfig, updateEdge, type Design, type DesignNode } from '../src/core/design/design'
+import { connect, emptyDesign, removeElements, setNodeConfig, updateEdge, type Design, type DesignClass, type DesignNode, type DesignRelation } from '../src/core/design/design'
 import { BYTE_UNITS, estimate, gradeEstimate, workedSteps } from '../src/core/estimation/estimate'
 import { compareLatencies } from '../src/core/estimation/latency'
 import { htmlLinkUrls } from '../src/core/flashcards/deck'
@@ -337,6 +337,145 @@ describe('catalog of the pinned primer commit', () => {
       const failing = evaluateDesign(classDesign, reversed, {}).rules.filter((result) => !result.passed).map((result) => result.ruleId)
 
       expect(failing).toEqual(['cache-owns-list', 'list-holds-nodes', 'lookup-nodes'])
+    })
+  })
+
+  describe('the other OOD Challenges', () => {
+    /** The class-design Stage of an OOD Challenge. */
+    const classDesignOf = (id: string) => findChallenge(catalog.challenges, id)!.stages[0] as ClassDesignStage
+    /** The Rules a Design fails on a Challenge's class-design Stage. */
+    const failing = (id: string, design: Design) =>
+      evaluateDesign(classDesignOf(id), design, {})
+        .rules.filter((result) => !result.passed)
+        .map((result) => result.ruleId)
+    /** A Challenge's reference UML with a class, found by name, changed. */
+    const withClass = (id: string, name: string, change: Partial<DesignClass>): Design => {
+      const reference = classDesignOf(id).referenceSolution
+      return { ...reference, classes: reference.classes.map((each) => (each.name === name ? { ...each, ...change } : each)) }
+    }
+    /** A Challenge's reference UML with the relation between two classes, found by name, changed, or removed when `change` is null. */
+    const withRelation = (id: string, source: string, target: string, change: Partial<DesignRelation> | null): Design => {
+      const reference = classDesignOf(id).referenceSolution
+      const idOf = (name: string) => reference.classes.find((each) => each.name === name)!.id
+      const chosen = reference.relations.find((relation) => relation.source === idOf(source) && relation.target === idOf(target))
+      expect(chosen, `${source} -> ${target}`).toBeDefined()
+      return {
+        ...reference,
+        relations: change === null ? reference.relations.filter((relation) => relation !== chosen) : reference.relations.map((relation) => (relation === chosen ? { ...relation, ...change } : relation)),
+      }
+    }
+    /** A Challenge's reference UML with its classes renamed, in order. */
+    const renamed = (id: string, names: string[]): Design => {
+      const reference = classDesignOf(id).referenceSolution
+      return { ...reference, classes: reference.classes.map((each, i) => ({ ...each, name: names[i] ?? each.name })) }
+    }
+
+    it('are the primer OOD questions in its order, each beside its Python solution', () => {
+      const ood = catalog.challenges.filter((challenge) => challenge.kind === 'ood')
+
+      expect(ood.map((challenge) => [challenge.id, challenge.kind === 'ood' && challenge.codeSolutionId])).toEqual([
+        ['hash-map', 'hash_table'],
+        ['lru-cache', 'lru_cache'],
+        ['call-center', 'call_center'],
+        ['deck-of-cards', 'deck_of_cards'],
+        ['parking-lot', 'parking_lot'],
+        ['online-chat', 'online_chat'],
+      ])
+      for (const challenge of ood) {
+        expect(challenge.stages.map((stage) => stage.type), challenge.id).toEqual(['class-design'])
+        expect(challenge.lessonIds).toEqual(['object-oriented-design-interview-questions-with-solutions'])
+      }
+    })
+
+    it.each([
+      ['hash-map', ['HashTable', 'Item']],
+      ['call-center', ['CallCenter', 'Employee', 'Operator', 'Supervisor', 'Director', 'Call', 'Rank', 'CallState']],
+      ['deck-of-cards', ['Deck', 'Card', 'BlackJackCard', 'Suit', 'Hand', 'BlackJackHand']],
+      ['parking-lot', ['ParkingLot', 'Level', 'ParkingSpot', 'Vehicle', 'Motorcycle', 'Car', 'Bus', 'VehicleSize']],
+      ['online-chat', ['UserService', 'User', 'AddRequest', 'RequestStatus', 'Chat', 'PrivateChat', 'GroupChat', 'Message']],
+    ])("%s has a reference UML of the Python solution's classes, each in its code", (id, names) => {
+      const stage = classDesignOf(id)
+      const code = findCodeSolution(catalog, (findChallenge(catalog.challenges, id) as Challenge & { codeSolutionId: string }).codeSolutionId)!.code
+
+      expect(stage.referenceSolution.classes.map((each) => each.name)).toEqual(names)
+      for (const name of names) expect(code, name).toContain(`class ${name}(`)
+      // No Rule passes on an empty canvas.
+      expect(failing(id, emptyDesign())).toEqual(stage.rules.map((rule) => rule.id))
+    })
+
+    describe('hash map', () => {
+      it('accepts the classes under other names, found by their role', () => {
+        expect(failing('hash-map', renamed('hash-map', ['Dictionary', 'Entry']))).toEqual([])
+      })
+
+      it('needs a hash function of its own, and Items that may be none', () => {
+        expect(failing('hash-map', withClass('hash-map', 'HashTable', { methods: ['set(key, value)', 'get(key)', 'remove(key)'] }))).toEqual(['hash-function'])
+        expect(failing('hash-map', withRelation('hash-map', 'HashTable', 'Item', { targetMultiplicity: '1..*' }))).toEqual(['table-holds-items'])
+      })
+
+      it('accepts the Items chained through a Bucket class of their own', () => {
+        const direct = withRelation('hash-map', 'HashTable', 'Item', null)
+        const bucket = { id: 'class-3', name: 'Bucket', kind: 'class' as const, fields: [], methods: [], position: { x: 0, y: 0 } }
+        const holds = (source: string, target: string) => ({ id: `${source}->${target}`, source, target, kind: 'composition' as const, targetMultiplicity: '*' as const })
+        const throughBuckets = { ...direct, classes: [...direct.classes, bucket], relations: [holds('class-1', 'class-3'), holds('class-3', 'class-2')] }
+
+        expect(failing('hash-map', direct)).toEqual(['table-holds-items'])
+        expect(failing('hash-map', throughBuckets)).toEqual([])
+      })
+    })
+
+    describe('call center', () => {
+      it('finds the call center, the employee base and the call by their role', () => {
+        expect(failing('call-center', renamed('call-center', ['Switchboard', 'Staff', 'Operator', 'Supervisor', 'Director', 'PhoneCall', 'Level']))).toEqual([])
+      })
+
+      it('needs all three ranks to be Employees, each handling one call at a time', () => {
+        expect(failing('call-center', withRelation('call-center', 'Director', 'Employee', null))).toEqual(['ranks'])
+        expect(failing('call-center', withRelation('call-center', 'Employee', 'Call', { targetMultiplicity: '*' }))).toEqual(['employee-call'])
+      })
+    })
+
+    describe('deck of cards', () => {
+      it('needs a generic Card that is abstract, and Hands that hold Cards without owning them', () => {
+        expect(failing('deck-of-cards', withClass('deck-of-cards', 'Card', { kind: 'class' }))).toEqual(['abstract-card'])
+        expect(failing('deck-of-cards', withRelation('deck-of-cards', 'Hand', 'Card', { kind: 'composition' }))).toEqual(['hand-holds-cards'])
+      })
+
+      it('needs blackjack as subclasses of the generic Card and Hand', () => {
+        expect(failing('deck-of-cards', withRelation('deck-of-cards', 'BlackJackHand', 'Hand', null))).toEqual(['blackjack-hand'])
+        expect(failing('deck-of-cards', withRelation('deck-of-cards', 'BlackJackCard', 'Card', { kind: 'association' }))).toEqual(['blackjack-card'])
+        // A subclass of Card that knows nothing of blackjack does not count.
+        expect(failing('deck-of-cards', withClass('deck-of-cards', 'BlackJackCard', { name: 'PokerCard', methods: ['value(): int'] }))).toEqual(['blackjack-card'])
+      })
+    })
+
+    describe('parking lot', () => {
+      it('needs every vehicle type to be a Vehicle', () => {
+        expect(failing('parking-lot', withRelation('parking-lot', 'Bus', 'Vehicle', null))).toEqual(['vehicle-types'])
+      })
+
+      it('parks at most one vehicle on a spot, and a vehicle, a bus, over several spots', () => {
+        expect(failing('parking-lot', withRelation('parking-lot', 'Vehicle', 'ParkingSpot', { sourceMultiplicity: '*' }))).toEqual(['spot-holds-one'])
+        expect(failing('parking-lot', withRelation('parking-lot', 'Vehicle', 'ParkingSpot', { targetMultiplicity: '0..1' }))).toEqual(['vehicle-takes-spots'])
+      })
+    })
+
+    describe('online chat', () => {
+      it('finds the user service by its role', () => {
+        expect(failing('online-chat', renamed('online-chat', ['Accounts']))).toEqual([])
+      })
+
+      it('needs private and group chats as kinds of one abstract Chat', () => {
+        expect(failing('online-chat', withRelation('online-chat', 'GroupChat', 'Chat', null))).toEqual(['chat-types'])
+        expect(failing('online-chat', withClass('online-chat', 'Chat', { kind: 'class' }))).toEqual(['chat-types'])
+      })
+
+      it('accepts Chat as an interface that both kinds of chat implement', () => {
+        const asInterface = withClass('online-chat', 'Chat', { kind: 'interface' })
+        const implemented = { ...asInterface, relations: asInterface.relations.map((relation) => (relation.kind === 'inheritance' ? { ...relation, kind: 'implementation' as const } : relation)) }
+
+        expect(failing('online-chat', implemented)).toEqual([])
+      })
     })
   })
 

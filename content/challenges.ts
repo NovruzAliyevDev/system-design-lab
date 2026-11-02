@@ -18,8 +18,13 @@
 // sharing the building blocks of `primer-challenges/shared.ts`.
 import type { ChallengeInput } from '../src/core/challenges/challenge'
 import type { NodeSelector, Predicate } from '../src/core/challenges/rules'
+import { callCenter } from './primer-challenges/call-center'
+import { deckOfCards } from './primer-challenges/deck-of-cards'
+import { hashMap } from './primer-challenges/hash-map'
 import { lruCache } from './primer-challenges/lru-cache'
 import { mint } from './primer-challenges/mint'
+import { onlineChat } from './primer-challenges/online-chat'
+import { parkingLot } from './primer-challenges/parking-lot'
 import { queryCache } from './primer-challenges/query-cache'
 import { salesRank } from './primer-challenges/sales-rank'
 import { scalingAws } from './primer-challenges/scaling-aws'
@@ -662,5 +667,10 @@ export const challenges: ChallengeInput[] = [
   queryCache,
   salesRank,
   scalingAws,
+  hashMap,
   lruCache,
+  callCenter,
+  deckOfCards,
+  parkingLot,
+  onlineChat,
 ]

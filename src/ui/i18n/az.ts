@@ -920,6 +920,7 @@ export const az = {
   umlKindClass: 'Sinif (class)',
   umlKindAbstract: 'Abstrakt sinif (abstract)',
   umlKindInterface: 'İnterfeys (interface)',
+  umlKindEnum: 'Sadalama (enum)',
   umlFields: 'Sahələr (field)',
   umlMethods: 'Metodlar (method)',
   umlMembersHint: 'Hər sətirdə bir üzv, məsələn size: int və ya get(query). Qaydalar üzvü adına görə tanıyır: tipdən və parametrlərdən əvvəlki hissəyə.',

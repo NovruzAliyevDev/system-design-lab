@@ -79,8 +79,11 @@ export interface DesignZone {
   size: Size
 }
 
-/** Whether a class can be instantiated, must be subclassed, or only declares methods for others to implement. */
-export const CLASS_KINDS = ['class', 'abstract', 'interface'] as const
+/**
+ * Whether a class can be instantiated, must be subclassed, only declares methods for others to implement,
+ * or is an enumeration, whose fields are its values.
+ */
+export const CLASS_KINDS = ['class', 'abstract', 'interface', 'enum'] as const
 export type ClassKind = (typeof CLASS_KINDS)[number]
 
 /** A class of a UML Design. */

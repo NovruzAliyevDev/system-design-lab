@@ -7,6 +7,14 @@ export const CLASS_KIND_LABELS: Record<ClassKind, StringKey> = {
   class: 'umlKindClass',
   abstract: 'umlKindAbstract',
   interface: 'umlKindInterface',
+  enum: 'umlKindEnum',
+}
+
+/** The keyword UML writes above the name of a class of each kind but a plain one. */
+export const CLASS_KIND_KEYWORDS: Record<Exclude<ClassKind, 'class'>, string> = {
+  abstract: 'abstract',
+  interface: 'interface',
+  enum: 'enumeration',
 }
 
 export const RELATION_KIND_LABELS: Record<RelationKind, StringKey> = {

@@ -51,6 +51,15 @@ describe('UML classes', () => {
     expect(changed.classes[0]).toMatchObject({ name: 'Cache', kind: 'abstract', fields: ['size: int'], methods: ['get(query)'] })
   })
 
+  it('makes a class an enum, its fields the values', () => {
+    const { design, classId } = addClass(emptyDesign(), { x: 0, y: 0 }, 'Class')
+
+    const rank = updateClass(design, classId, { name: 'Rank', kind: 'enum', fields: ['OPERATOR', 'SUPERVISOR', 'DIRECTOR'] })
+
+    expect(rank.classes[0]).toMatchObject({ name: 'Rank', kind: 'enum', fields: ['OPERATOR', 'SUPERVISOR', 'DIRECTOR'] })
+    expect(deserializeDesign(serializeDesign(rank))).toEqual(rank)
+  })
+
   it('refuses an over-long name or member, and an unknown class', () => {
     const { design, classId } = addClass(emptyDesign(), { x: 0, y: 0 }, 'Class')
 
@@ -156,7 +165,7 @@ describe('UML Design serialisation', () => {
 
     expect(readDesign(stored).problems).toEqual([
       'class 3: its id "class-2" is already used',
-      'class 4: "kind" must be one of class, abstract, interface',
+      'class 4: "kind" must be one of class, abstract, interface, enum',
       'class 5: "fields" must be a list of at most 30 texts of at most 120 characters',
       'relation 1: "kind" must be one of inheritance, implementation, composition, aggregation, association',
       'relation 1: "targetMultiplicity" must be one of 1, 0..1, *, 1..*',

@@ -63,6 +63,7 @@ describe('UML predicates', () => {
         { name: 'Drawable', kind: 'interface' },
         { name: 'Circle' },
         { name: 'Square' },
+        { name: 'Color', kind: 'enum', fields: ['RED', 'GREEN'] },
       ])
       const of = (kind: ClassKind, min?: number, max?: number): Predicate => ({ type: 'class', class: { kind }, min, max })
 
@@ -70,8 +71,16 @@ describe('UML predicates', () => {
       expect(passes(of('interface'), lruCache)).toBe(false)
       expect(passes(of('class', 2, 2), shapes)).toBe(true)
       expect(passes(of('class', 3), shapes)).toBe(false)
-      expect(passes({ type: 'class', class: {}, max: 3 }, shapes)).toBe(false)
+      expect(passes({ type: 'class', class: {}, max: 4 }, shapes)).toBe(false)
       expect(passes({ type: 'class', class: { kind: ['abstract', 'interface'] }, min: 2 }, shapes)).toBe(true)
+    })
+
+    it('finds an enum by its values', () => {
+      const shapes = uml([{ name: 'Circle', fields: ['color: Color'] }, { name: 'Color', kind: 'enum', fields: ['RED', 'GREEN'] }])
+
+      expect(passes({ type: 'class', class: { kind: 'enum', fields: ['red', 'green'] } }, shapes)).toBe(true)
+      expect(passes({ type: 'class', class: { kind: 'enum', fields: ['blue'] } }, shapes)).toBe(false)
+      expect(passes({ type: 'class', class: { kind: 'class', fields: ['red'] } }, shapes)).toBe(false)
     })
   })
 

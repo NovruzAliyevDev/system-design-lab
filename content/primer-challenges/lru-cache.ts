@@ -11,8 +11,8 @@
 // rather than also as fields. Its Node keeps the `query` the Cache reads off the tail when it evicts, which
 // the primer's constructor leaves out, and its link to the next Node is a Node → Node association.
 import type { ChallengeInput } from '../../src/core/challenges/challenge'
-import type { ClassSelector, Predicate, RelationPredicate } from '../../src/core/challenges/rules'
-import { umlClass, umlDesign, umlRelation } from './shared'
+import type { ClassSelector, Predicate } from '../../src/core/challenges/rules'
+import { anyClass, anyRelation, umlClass, umlDesign, umlRelation } from './shared'
 
 /** Where a cache finds an entry by its key in O(1). */
 const LOOKUP_FIELD = '.*(lookup|map|dict|table|index|hash|entries|nodes|items|store|cache).*'
@@ -31,15 +31,6 @@ const NODE: ClassSelector[] = [{ name: '(list_?)?node|entry|item' }, { fields: [
 
 /** Any number of objects: an LRU cache starts empty, so none is allowed. */
 const MANY = '*'
-
-/** Some class picked by one of the selectors exists. */
-const anyClass = (selectors: ClassSelector[]): Predicate => ({ type: 'any-of', predicates: selectors.map((selector) => ({ type: 'class', class: selector })) })
-
-/** A relation of the kinds and multiplicities given leads from a class of one of `froms` to a class of one of `tos`. */
-const anyRelation = (froms: ClassSelector[], tos: ClassSelector[], match: Omit<RelationPredicate, 'type' | 'from' | 'to'>): Predicate => ({
-  type: 'any-of',
-  predicates: froms.flatMap((from) => tos.map((to): Predicate => ({ type: 'relation', from, to, ...match }))),
-})
 
 export const lruCache: ChallengeInput = {
   id: 'lru-cache',

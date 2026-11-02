@@ -1,6 +1,7 @@
 // Building blocks the authored Challenges share: node selectors for what the primer's diagrams have in
-// common, predicates built from them, and the helpers that lay out Reference Solutions.
-import type { NodeSelector, Predicate, Rule, TrafficKind } from '../../src/core/challenges/rules'
+// common, predicates built from them, the class and relation predicates of the OOD Challenges, and the
+// helpers that lay out Reference Solutions and reference UMLs.
+import type { ClassSelector, MultiplicityMatch, NodeSelector, Predicate, RelationPredicate, Rule, TrafficKind } from '../../src/core/challenges/rules'
 import { MAX_REPLICAS, type ComponentType, type ConfigValue } from '../../src/core/design/components'
 import type { ClassKind, EdgeMode, EdgeTraffic, Multiplicity, RelationKind } from '../../src/core/design/design'
 
@@ -142,6 +143,36 @@ export const edge = (source: string, target: string, traffic: EdgeTraffic, mode:
   mode,
   traffic,
 })
+
+/** A class that must be subclassed or implemented: abstract, or an interface. */
+export const ABSTRACT: ClassKind[] = ['abstract', 'interface']
+
+/** Some class picked by one of the selectors exists. */
+export const anyClass = (selectors: ClassSelector[]): Predicate => ({ type: 'any-of', predicates: selectors.map((selector) => ({ type: 'class', class: selector })) })
+
+/** A relation of the kinds and multiplicities given leads from a class of one of `froms` to a class of one of `tos`. */
+export const anyRelation = (froms: ClassSelector[], tos: ClassSelector[], match: Omit<RelationPredicate, 'type' | 'from' | 'to'>): Predicate => ({
+  type: 'any-of',
+  predicates: froms.flatMap((from) => tos.map((to): Predicate => ({ type: 'relation', from, to, ...match }))),
+})
+
+/**
+ * A relation of one of `kinds` joins a class of one of `ones` and a class of one of `others`, drawn either
+ * way, with `othersEnd` at the end of the `others` class: how many of them each of the `ones` has.
+ */
+export const anyRelationEitherWay = (ones: ClassSelector[], others: ClassSelector[], kinds: RelationPredicate['kind'], othersEnd: MultiplicityMatch): Predicate => ({
+  type: 'any-of',
+  predicates: [anyRelation(ones, others, { kind: kinds, toMultiplicity: othersEnd }), anyRelation(others, ones, { kind: kinds, fromMultiplicity: othersEnd })],
+})
+
+/** A class picked by one of the selectors has a field, or a method, matching the pattern. */
+export const anyMember = (selectors: ClassSelector[], member: { field: string } | { method: string }): Predicate => ({
+  type: 'any-of',
+  predicates: selectors.map((selector): Predicate => ({ type: 'member', class: selector, ...member })),
+})
+
+/** Many at a relation end: any number, or at least one. */
+export const MANY_OR_SOME: MultiplicityMatch = ['*', '1..*']
 
 /** A class of a reference UML, its members written as the primer's Python names them. */
 export const umlClass = (id: string, name: string, x: number, y: number, fields: string[], methods: string[], kind: ClassKind = 'class') => ({

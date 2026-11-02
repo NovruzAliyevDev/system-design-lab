@@ -28,3 +28,5 @@ architecture predicates in a class-design Stage and UML predicates elsewhere.
   - `moveElements` moves classes too.
 - A class can relate to itself, e.g. a linked-list Node to the next one. An Edge cannot connect a Node to
   itself.
+- A class is of a kind: `class`, `abstract`, `interface` or `enum` (ticket 29, for the primer's Python
+  Enums). An enum's fields are its values, so Rules find one by them like any class by its fields.

@@ -1,6 +1,7 @@
 import { Handle, Position, type Node, type NodeProps } from '@xyflow/react'
 import type { DesignClass } from '../../core/design/design'
 import { t } from '../i18n'
+import { CLASS_KIND_KEYWORDS } from './umlText'
 
 export type ClassFlowNode = Node<{ umlClass: DesignClass }, 'class'>
 
@@ -8,8 +9,9 @@ export type ClassFlowNode = Node<{ umlClass: DesignClass }, 'class'>
 export const CLASS_WIDTH = 220
 
 /**
- * A class as UML draws it: a keyword for an abstract class or interface, the name (in italics when
- * abstract), then the fields and the methods, each in a compartment of their own.
+ * A class as UML draws it: a keyword for an abstract class, interface or enumeration, the name (in
+ * italics when abstract), then the fields (an enumeration's values) and the methods, each in a
+ * compartment of their own.
  */
 export function ClassNode({ data: { umlClass }, selected, isConnectable }: NodeProps<ClassFlowNode>) {
   const { name, kind, fields, methods } = umlClass
@@ -21,7 +23,7 @@ export function ClassNode({ data: { umlClass }, selected, isConnectable }: NodeP
     >
       <Handle type="target" position={Position.Left} isConnectable={isConnectable} className="!h-3 !w-3 !border-zinc-950 !bg-zinc-400" />
       <div className="border-b border-zinc-600 px-3 py-1.5 text-center">
-        {kind !== 'class' && <div className="text-[11px] text-zinc-400">«{kind}»</div>}
+        {kind !== 'class' && <div className="text-[11px] text-zinc-400">«{CLASS_KIND_KEYWORDS[kind]}»</div>}
         <div className={`truncate text-sm font-semibold text-zinc-50 ${kind === 'abstract' ? 'italic' : ''}`}>{name || t('umlUnnamedClass')}</div>
       </div>
       <Compartment members={fields} empty={t('umlNoFields')} />
