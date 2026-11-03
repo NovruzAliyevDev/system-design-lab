@@ -480,6 +480,89 @@ describe('a push service', () => {
   })
 })
 
+describe('a CDN', () => {
+  // An instance serves 50,000 requests a second from the edge, and answers 90% of reads itself.
+  const design = edges(nodes('client', 'cdn', 'object-store'), ['client-1', 'cdn-1'], ['cdn-1', 'object-store-1'])
+
+  it('answers most reads at the edge, passing only its misses on to the origin', () => {
+    const result = simulate(design, load(10_000, 0))
+
+    expect(result.nodes['cdn-1']).toMatchObject({ readQps: 10_000, capacityQps: 50_000 })
+    expect(result.nodes['object-store-1'].readQps).toBeCloseTo(1_000, 9)
+  })
+
+  it('cold, passes every read on to the origin', () => {
+    const result = simulate(design, load(10_000, 0), { type: 'cache-cold', nodeIds: ['cdn-1'] })
+
+    expect(result.nodes['cdn-1'].cold).toBe(true)
+    expect(result.nodes['object-store-1'].readQps).toBe(10_000)
+  })
+})
+
+describe('a transcoder', () => {
+  // Encodes 5 renditions a second per instance, each in about a second (1,000.5 ms); 1 rendition unless told otherwise.
+  const design = edges(nodes('client', 'transcoder', 'object-store'), ['client-1', 'transcoder-1'], ['transcoder-1', 'object-store-1'])
+  const fourRenditions = setNodeConfig(design, 'transcoder-1', 'renditions', 4)
+
+  it('stores each upload once with its default single rendition', () => {
+    expect(simulate(design, load(0, 2)).nodes['object-store-1'].writeQps).toBe(2)
+  })
+
+  it('sends each upload on as one write per rendition along each Edge out, its capacity counting the renditions it encodes', () => {
+    const withMetadata = edges(addNode(fourRenditions, 'sql-database', { x: 0, y: 0 }, 'sql-database').design, ['transcoder-1', 'sql-database-1'])
+    const result = simulate(withMetadata, load(0, 1))
+
+    // 4 renditions of the 5 an instance encodes, however many Edges they are written along.
+    expect(result.nodes['transcoder-1']).toMatchObject({ loadQps: 1, capacityQps: 1.25, utilisation: 0.8, overloaded: false })
+    expect(result.nodes['transcoder-1'].latencyMs).toBeCloseTo(1_000.5 / 0.2, 9)
+    expect(result.nodes['object-store-1'].writeQps).toBe(4)
+    expect(result.nodes['sql-database-1'].writeQps).toBe(4)
+  })
+
+  it('past its capacity, encodes fewer uploads and drops the rest', () => {
+    // 2 uploads are 8 renditions, over the 5 an instance encodes: it serves 1.25 uploads a second.
+    const result = simulate(fourRenditions, load(0, 2))
+
+    expect(result.nodes['transcoder-1']).toMatchObject({ capacityQps: 1.25, utilisation: 1.6, overloaded: true })
+    expect(result.nodes['transcoder-1'].droppedQps).toBeCloseTo(0.75, 9)
+    expect(result.errorRate).toBeCloseTo(0.375, 9)
+  })
+})
+
+describe('a geospatial index', () => {
+  // Keeps every driver's last location in memory: an instance takes 20,000 requests a second in 0.51 ms.
+  const design = edges(
+    nodes('client', 'app-service', 'geo-index', 'nosql-store'),
+    ['client-1', 'app-service-1'],
+    ['app-service-1', 'geo-index-1'],
+    ['geo-index-1', 'nosql-store-1'],
+  )
+
+  it('takes location updates in memory and answers nearby searches itself, passing only writes on', () => {
+    const result = simulate(setNodeConfig(design, 'app-service-1', 'instances', 40), load(4_000, 12_000))
+
+    expect(result.nodes['geo-index-1']).toMatchObject({ readQps: 4_000, writeQps: 12_000, capacityQps: 20_000, utilisation: 0.8, overloaded: false })
+    expect(result.nodes['geo-index-1'].latencyMs).toBeCloseTo(0.51 / 0.2, 9)
+    expect(result.nodes['nosql-store-1']).toMatchObject({ readQps: 0, writeQps: 12_000 })
+  })
+})
+
+describe('a trie', () => {
+  // Walks a prefix and returns the suggestions kept at its last node: an instance answers 5,000 lookups a second.
+  it('answers suggestions itself, and beside a cache (cache-aside) gets only the misses', () => {
+    const direct = edges(nodes('client', 'trie'), ['client-1', 'trie-1'])
+    const cached = edges(
+      nodes('client', 'app-service', 'cache', 'trie'),
+      ['client-1', 'app-service-1'],
+      ['app-service-1', 'cache-1'],
+      ['app-service-1', 'trie-1'],
+    )
+
+    expect(simulate(direct, load(4_000, 0)).nodes['trie-1']).toMatchObject({ capacityQps: 5_000, utilisation: 0.8 })
+    expect(simulate(setNodeConfig(cached, 'app-service-1', 'instances', 4), load(1_000, 0)).nodes['trie-1'].readQps).toBeCloseTo(200, 9)
+  })
+})
+
 describe('routing by traffic', () => {
   it('sends reads and writes only along the Edges that carry them', () => {
     const design = edges(

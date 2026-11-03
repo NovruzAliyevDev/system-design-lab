@@ -12,7 +12,7 @@
 import type { ChallengeInput } from '../../src/core/challenges/challenge'
 import type { NodeSelector, Predicate } from '../../src/core/challenges/rules'
 import { allConnectedRule, apiPath, edge, ENTRY, node, QUEUES, shardedDatabase } from '../primer-challenges/shared'
-import { loadBalancerRule, MOBILE_PUSH, scaleOutRule } from './shared'
+import { loadBalancerRule, MOBILE_PUSH, scaledOutNodes, scaleOutRule } from './shared'
 
 /** The provider of e-mail. */
 const EMAIL: NodeSelector = { component: 'push-service', config: { channel: 'email' } }
@@ -431,7 +431,7 @@ export const notificationSystem: ChallengeInput = {
             'Push worker-lərinin (fan-out service) "instances" sahəsini 2 və ya daha çox edin.',
             'Worker-lər stateless-dir: işi növbədən götürürlər, ona görə onları istənilən qədər artırmaq olar. Növbə qəfil dalğanı bir anlıq udur, amma worker-lər onu orta hesabla yetişdirə bilməsə, növbə sonsuz böyüyür və bildirişlər saatlarla gecikir.',
           ],
-          check: { type: 'all-of', predicates: [{ type: 'node', node: 'fan-out' }, { type: 'node', node: { component: 'fan-out', config: { instances: 1 } }, max: 0 }] },
+          check: scaledOutNodes('fan-out'),
         },
         allConnectedRule('Push Queue → Push Workers'),
       ],

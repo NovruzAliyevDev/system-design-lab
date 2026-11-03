@@ -69,7 +69,7 @@ export interface SimulationDefaults {
   /** How `baseLatencyMs` is made up from the primer's latency numbers, so that it stays explainable. */
   latency: LatencyTerm[]
   monthlyCostUsd: number
-  /** For a cache: the share of reads it answers itself, from 0 to 1; the rest go on as misses. */
+  /** For a cache or CDN: the share of reads it answers itself, from 0 to 1; the rest go on as misses. */
   hitRatio?: number
 }
 
@@ -106,6 +106,12 @@ const limitQps: IntegerField = { kind: 'integer', min: 1, max: 10_000_000, defau
 /** The copies a fan-out service sends each request on as, e.g. one for each follower's feed. */
 const fanOut: IntegerField = { kind: 'integer', min: 1, max: 10_000, default: 1 }
 
+/** The formats a transcoder encodes each upload into, e.g. 360p, 480p, 720p and 1080p. */
+const renditions: IntegerField = { kind: 'integer', min: 1, max: 10, default: 1 }
+
+/** The suggestions a trie keeps at each prefix, ranked by how often they are searched. */
+const topK: IntegerField = { kind: 'integer', min: 1, max: 20, default: 5 }
+
 function simulation(capacityQps: number, terms: [PrimerOperation, number][], monthlyCostUsd: number, hitRatio?: number): SimulationDefaults {
   const latency = terms.map(([operation, times]) => ({ operation, nanoseconds: PRIMER_LATENCY_NS[operation], times }))
   const nanoseconds = latency.reduce((sum, term) => sum + term.nanoseconds * term.times, 0)
@@ -126,7 +132,8 @@ const COMPONENTS = {
   cdn: {
     glossaryTermId: 'content-delivery-network',
     config: { kind: choice(['pull', 'push'], 'pull'), instances },
-    simulation: simulation(50_000, [[ROUND_TRIP, 1], ['Read 1 MB sequentially from SSD*', 1]], 50),
+    // Popular static content is served from the edge: a CDN typically answers about 90% of requests itself.
+    simulation: simulation(50_000, [[ROUND_TRIP, 1], ['Read 1 MB sequentially from SSD*', 1]], 50, 0.9),
   },
   'load-balancer': {
     glossaryTermId: 'load-balancer',
@@ -204,6 +211,14 @@ const COMPONENTS = {
     config: { instances },
     simulation: simulation(200, [[ROUND_TRIP, 1], ['Read 1 MB sequentially from memory', 4]], 70),
   },
+  transcoder: {
+    glossaryTermId: 'transcoding',
+    config: { renditions, instances },
+    // Encoding video is CPU work the primer's table has no line for. A rendition stands here as reading a
+    // gigabyte sequentially from SSD: about a second, far quicker than real encoders, but long enough that
+    // nothing should wait for it. An instance encodes a few renditions at once.
+    simulation: simulation(5, [[ROUND_TRIP, 1], ['Read 1 MB sequentially from SSD*', 1000]], 300),
+  },
   'fan-out': {
     glossaryTermId: 'fan-out',
     config: { fanOut, instances },
@@ -228,6 +243,20 @@ const COMPONENTS = {
     glossaryTermId: 'search-index',
     config: { shardKey, instances },
     simulation: simulation(1_000, [[ROUND_TRIP, 1], ['Read 4 KB randomly from SSD*', 4], ['Read 1 MB sequentially from memory', 1]], 200),
+  },
+  'geo-index': {
+    glossaryTermId: 'geospatial-index',
+    config: { index: choice(['geohash', 'quadtree', 'h3'], 'geohash'), shardKey, instances },
+    // Every driver's last location, held in memory: an update or a search of the nearby cells touches about
+    // a hundred memory references.
+    simulation: simulation(20_000, [[ROUND_TRIP, 1], ['Main memory reference', 100]], 150),
+  },
+  trie: {
+    glossaryTermId: 'trie',
+    config: { topK, shardKey, instances },
+    // Held in memory: a lookup walks the prefix one node a character and copies the suggestions kept at its
+    // last node, more work than a cache's single key. The whole trie sits in each instance's memory.
+    simulation: simulation(5_000, [[ROUND_TRIP, 1], ['Main memory reference', 50]], 200),
   },
   analytics: {
     glossaryTermId: 'mapreduce',

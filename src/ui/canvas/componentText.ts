@@ -18,10 +18,13 @@ const COMPONENT_NAMES: Record<ComponentType, StringKey> = {
   'object-store': 'componentObjectStore',
   'message-queue': 'componentMessageQueue',
   'task-queue': 'componentTaskQueue',
+  transcoder: 'componentTranscoder',
   'fan-out': 'componentFanOut',
   'push-service': 'componentPushService',
   'coordination-service': 'componentCoordinationService',
   'search-index': 'componentSearchIndex',
+  'geo-index': 'componentGeoIndex',
+  trie: 'componentTrie',
   analytics: 'componentAnalytics',
   'data-warehouse': 'componentDataWarehouse',
 }
@@ -45,10 +48,13 @@ export const COMPONENT_TAGS: Record<ComponentType, string> = {
   'object-store': 'OBJ',
   'message-queue': 'MQ',
   'task-queue': 'WRK',
+  transcoder: 'ENC',
   'fan-out': 'FAN',
   'push-service': 'PUSH',
   'coordination-service': 'ZK',
   'search-index': 'IDX',
+  'geo-index': 'GEO',
+  trie: 'TRIE',
   analytics: 'MR',
   'data-warehouse': 'DWH',
 }
@@ -67,6 +73,9 @@ const FIELD_LABELS: Record<ConfigFieldKey, StringKey> = {
   failMode: 'fieldFailMode',
   fanOut: 'fieldFanOut',
   channel: 'fieldChannel',
+  renditions: 'fieldRenditions',
+  index: 'fieldIndex',
+  topK: 'fieldTopK',
   instances: 'fieldInstances',
 }
 
@@ -108,6 +117,9 @@ const OPTION_LABELS: Record<ConfigOption, StringKey> = {
   'mobile-push': 'optionMobilePush',
   sms: 'optionSms',
   email: 'optionEmail',
+  geohash: 'optionGeohash',
+  quadtree: 'optionQuadtree',
+  h3: 'optionH3',
 }
 
 /** A choice field's option label; options are listed by their schema, so every value has one. */

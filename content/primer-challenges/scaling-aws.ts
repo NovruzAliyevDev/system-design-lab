@@ -365,7 +365,7 @@ export const scalingAws: ChallengeInput = {
         usersTarget('users-10m', 10_000_000, 3, '10 milyon istifadəçidə (saniyədə 40 000 oxuma, 400 yazma) orta gecikmə 200 ms-dən çox deyil, həddən artıq yüklənən node və xəta yoxdur.', [
           'On milyon istifadəçidə (saniyədə 40 000 oxuma, 400 yazma) hansı node-lar yenidən tıxanır?',
           'Simulyasiyada oxuma sahəsinə 40 000, yazma sahəsinə 400 yazın. Load Balancer, Web Server, Read API, cache, read replica və CDN arxasındakı Object Store nüsxələrini darboğazlar aradan qalxana qədər artırın.',
-          'Primer-in Users+++++ addımında hər darboğaz yenidən benchmark və profiling ilə tapılır. Load balancer təxminən 20 000 sorğu/san daşıyır, ona görə o da bir neçə nüsxədə işləyir; web və tətbiq serverləri onlarla nüsxəyə (autoscaling qrupları) çıxır; Memory Cache böyüdülür; read replica-lar cache miss-ləri daşımalıdır; CDN-in ötürdüyü oxumalar Object Store-a çatır, onun oxuması 40 ms-dən başlayır, ona görə o da bir çox nüsxədə işləyir.',
+          'Primer-in Users+++++ addımında hər darboğaz yenidən benchmark və profiling ilə tapılır. Load balancer təxminən 20 000 sorğu/san daşıyır, ona görə o da bir neçə nüsxədə işləyir; web və tətbiq serverləri onlarla nüsxəyə (autoscaling qrupları) çıxır; Memory Cache böyüdülür; read replica-lar cache miss-ləri daşımalıdır; CDN-in özü cavablamadığı oxumalar (cache miss-lər) Object Store-a çatır, onun oxuması 40 ms-dən başlayır, ona görə o da bir çox nüsxədə işləyir.',
         ]),
         {
           id: 'static-content',
@@ -455,8 +455,8 @@ export const scalingAws: ChallengeInput = {
           node('app-service-3', 'app-service', 'Worker Service', 1200, 120, { instances: 2 }),
           node('sql-database-1', 'sql-database', 'SQL Write Master-Slave', 1200, 280, { shardKey: 'user_id', instances: 2 }),
           node('sql-database-2', 'sql-database', 'SQL Read Replicas', 1200, 520, { role: 'replica', instances: 12 }),
-          // The CDN passes every read on, and an Object Store read starts at 40 ms: it runs well below capacity.
-          node('object-store-1', 'object-store', 'Object Store', 1200, 760, { instances: 50 }),
+          // It takes the CDN's misses, and an Object Store read starts at 40 ms: it runs well below capacity.
+          node('object-store-1', 'object-store', 'Object Store', 1200, 760, { instances: 10 }),
         ],
         edges: [
           edge('client-1', 'dns-1', 'read'),

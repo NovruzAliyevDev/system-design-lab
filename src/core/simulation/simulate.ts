@@ -56,7 +56,8 @@ export interface NodeMetrics extends Traffic {
   /**
    * What the Node serves before it is overloaded, for this mix of reads and writes; none for a client.
    * It is capacity × instances, except that each copy of a primary with replicas serves a share of the reads,
-   * and a fan-out service's capacity counts every copy it sends: `fanOut` along each Edge out, for each request.
+   * a fan-out service's capacity counts every copy it sends: `fanOut` along each Edge out, for each request,
+   * and a transcoder's counts every rendition it encodes: `renditions` for each upload.
    */
   capacityQps?: number
   /** ρ = load ÷ capacity; 0 for a client. */
@@ -136,9 +137,9 @@ export const LATENCY_CAP = 10
 export const MAX_PATHS = 100
 
 /** Components that keep data: they answer reads themselves and pass on only writes (replication, indexing). */
-const STORAGE: ReadonlySet<ComponentType> = new Set(['sql-database', 'nosql-store', 'object-store', 'search-index', 'data-warehouse'])
-/** Storage a cache beside it (cache-aside) takes reads off. */
-const DATABASES: ReadonlySet<ComponentType> = new Set(['sql-database', 'nosql-store'])
+const STORAGE: ReadonlySet<ComponentType> = new Set(['sql-database', 'nosql-store', 'object-store', 'search-index', 'geo-index', 'trie', 'data-warehouse'])
+/** Storage a cache beside it (cache-aside) takes reads off: the databases, and a trie. */
+const CACHE_ASIDE_STORES: ReadonlySet<ComponentType> = new Set(['sql-database', 'nosql-store', 'trie'])
 const QUEUES: ReadonlySet<ComponentType> = new Set(['message-queue', 'task-queue'])
 /** Where a rate limiter keeps the counters it checks requests against, e.g. Redis. */
 const COUNTER_STORES: ReadonlySet<ComponentType> = new Set(['cache', 'nosql-store'])
@@ -182,12 +183,12 @@ export function simulate(design: Design, load: LoadProfile, scenario?: ChaosScen
       backlogQps: metrics.backlogQps + (stranded.get(node.id) ?? 0),
     }
     servedShare.set(node.id, shares)
-    const fanOut = fanOutOf(node)
+    const outputs = outputsPerRequestOf(node)
     for (const kind of REQUEST_KINDS) {
       for (const { edge, fraction } of routesOf(node, kind)) {
         // A rate limiter checks its counters for every request it serves, those it rejects too.
-        // A fan-out service sends each request it serves on as several copies.
-        const sent = (isCounterEdge(edge, graph) ? checked[kind] : shares[kind]) * fraction * fanOut
+        // A fan-out service sends each request it serves on as several copies, a transcoder as its renditions.
+        const sent = (isCounterEdge(edge, graph) ? checked[kind] : shares[kind]) * fraction * outputs
         // Work handed to a queue, or along an asynchronous Edge, is deferred from then on.
         const sync = edge.mode === 'sync' && !QUEUES.has(node.componentType)
         add(edges[edge.id], kind, qpsOf(flow.all, kind) * sent)
@@ -305,7 +306,7 @@ type NodeState = 'up' | 'down' | 'primary-down'
  * A Node's metrics, and the share of the requests of each kind reaching it that it serves. `limitQps` is
  * the most requests a second it lets through, of all kinds together: a rate limiter's, or else Infinity.
  * A rate limiter also gives the share it checks before rejecting what is over its limit (`checked`).
- * `sends` is what one request costs its capacity: more than one for a fan-out service.
+ * `sends` is what one request costs its capacity: more than one for a fan-out service or a transcoder.
  */
 function nodeMetrics(
   node: DesignNode,
@@ -331,7 +332,8 @@ function nodeMetrics(
   const monthlyCostUsd = settings.monthlyCostUsd * instances * copies
   const syncQps = flow.sync.readQps + flow.sync.writeQps
   const deferred = loadQps > 0 && syncQps === 0
-  // A fan-out service's capacity is in the copies it sends: it serves that many times fewer requests.
+  // A fan-out service's capacity is in the copies it sends, a transcoder's in the renditions it encodes:
+  // it serves that many times fewer requests.
   const perCopy = (settings.capacityQps * instances) / sends
   const latencyAt = (utilisation: number) => settings.baseLatencyMs * (utilisation >= 1 ? LATENCY_CAP : Math.min(LATENCY_CAP, 1 / (1 - utilisation)))
 
@@ -418,7 +420,7 @@ function nodeMetrics(
  * - other Nodes call each target, except that reads meant for a primary go to its replicas (those it
  *   replicates to, or else any of its type) when the Node reaches some, split evenly; and a cache beside a
  *   database (cache-aside) leaves the database only its misses;
- * - a cache passes on only its misses;
+ * - a cache (or CDN) passes on only its misses;
  * - under a Chaos Scenario, a load balancer and a reader of replicas leave out what is down or cut while
  *   some target is left, a cache-aside cache that is down or cut off is skipped, a primary does not
  *   replicate to a replica it cannot reach, and a rate limiter failing open skips the counter stores it
@@ -441,7 +443,7 @@ function routes(node: DesignNode, kind: RequestKind, graph: Graph): Route[] {
     eligible = eligible.filter((edge) => !isCounterEdge(edge, graph) || writable(edge, graph))
   }
   // A cache beside a database (cache-aside) that is down or cut off is skipped: the database answers instead.
-  if (eligible.some((edge) => DATABASES.has(targetOf(edge).componentType))) {
+  if (eligible.some((edge) => CACHE_ASIDE_STORES.has(targetOf(edge).componentType))) {
     eligible = eligible.filter((edge) => targetOf(edge).componentType !== 'cache' || available(edge))
   }
 
@@ -460,7 +462,7 @@ function routes(node: DesignNode, kind: RequestKind, graph: Graph): Route[] {
     const missesBeside = 1 - Math.max(0, ...caches.map((cache) => hitRatioOf(cache, 'read', graph)))
     result = eligible.flatMap((edge): Route[] => {
       const target = targetOf(edge)
-      const missShare = DATABASES.has(target.componentType) ? missesBeside : 1
+      const missShare = CACHE_ASIDE_STORES.has(target.componentType) ? missesBeside : 1
       if (groups.primaries.has(target.id)) return []
       const group = groups.groupOf.get(target.id)
       if (group === null) return []
@@ -560,19 +562,28 @@ function instancesOf(node: DesignNode): number {
   return typeof instances === 'number' ? instances : 1
 }
 
-/** The copies a Node sends each request it serves on as: a fan-out service's `fanOut`, or else one. */
-function fanOutOf(node: DesignNode): number {
-  const { fanOut } = configOf(node)
-  return node.componentType === 'fan-out' && typeof fanOut === 'number' ? fanOut : 1
+/**
+ * The components that send each request they serve on as several outputs along each Edge out: the config
+ * field counting them, and whether each Edge's outputs cost capacity (a fan-out service's copies, each sent)
+ * or only one Edge's do (a transcoder's renditions, each encoded once, however many Edges they are written along).
+ */
+const MULTI_OUTPUT: Partial<Record<ComponentType, { field: 'fanOut' | 'renditions'; costPerEdge: boolean }>> = {
+  'fan-out': { field: 'fanOut', costPerEdge: true },
+  transcoder: { field: 'renditions', costPerEdge: false },
 }
 
-/**
- * What one request costs a Node's capacity, in sends: one, except that a fan-out service sends `fanOut`
- * copies along each of its Edges out.
- */
+/** The outputs a Node sends each request it serves on as, along each Edge out: one, except for `MULTI_OUTPUT`. */
+function outputsPerRequestOf(node: DesignNode): number {
+  const multi = MULTI_OUTPUT[node.componentType]
+  const outputs = multi && configOf(node)[multi.field]
+  return typeof outputs === 'number' ? outputs : 1
+}
+
+/** What one request costs a Node's capacity: its outputs, along each of its Edges out when each Edge's cost. */
 function sendsPerRequest(node: DesignNode, graph: Graph): number {
-  const fanOut = fanOutOf(node)
-  return fanOut === 1 ? 1 : fanOut * Math.max(1, (graph.outgoing.get(node.id) ?? []).length)
+  const outputs = outputsPerRequestOf(node)
+  if (outputs === 1 || !MULTI_OUTPUT[node.componentType]?.costPerEdge) return outputs
+  return outputs * Math.max(1, (graph.outgoing.get(node.id) ?? []).length)
 }
 
 /** A primary with replicas keeps a copy on each. */

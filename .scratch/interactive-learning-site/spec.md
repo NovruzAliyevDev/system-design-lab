@@ -251,11 +251,12 @@ All Core functions are deterministic. Time (`now`) and randomness (seed) are pas
   - Simple mode:
     - Traffic enters at client nodes and is routed along edges by node semantics:
       - a load balancer splits across downstream nodes by its algorithm;
-      - a cache forwards misses (1 − hit ratio) downstream;
+      - a cache, or a CDN, forwards misses (1 − hit ratio) downstream;
       - reads may go to replicas, writes go to the primary;
       - a queue converts synchronous load into deferred work at the consumer;
       - a rate limiter checks every request against its counter store, lets through up to its limit and rejects the rest at once (HTTP 429, counted as failing); when it can reach none of its counter stores it fails closed (rejects everything) or open (lets everything through unchecked);
-      - a fan-out service sends each request it serves on as `fanOut` copies along each edge out, and its capacity counts every copy it sends; the copies of a request go out together, so a request waits for them once.
+      - a fan-out service sends each request it serves on as `fanOut` copies along each edge out, and its capacity counts every copy it sends; the copies of a request go out together, so a request waits for them once;
+      - a transcoder encodes each upload into `renditions` formats and writes each one along each edge out; its capacity counts the renditions it encodes, however many edges it writes them along.
     - Utilisation ρ = load / (capacity × instances). Node latency = base latency × 1/(1 − ρ), capped. ρ ≥ 1 means the node is overloaded, and the excess load is reported as dropped.
   - The result reports:
     - per-node load, utilisation, latency, cost and an overloaded flag;

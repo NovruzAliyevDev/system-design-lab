@@ -335,6 +335,20 @@ export const glossary: GlossaryTermInput[] = [
     explanation: 'Mətni sözlərə görə indeksləyib tam mətn axtarışını sürətli edən anbar (məsələn, Elasticsearch, Lucene).',
     lessonIds: ['design-the-twitter-timeline-and-search-or-facebook-feed-and-search', 'design-a-key-value-store-for-a-search-engine'],
   },
+  {
+    term: 'Geospatial index',
+    aliases: ['geohash', 'quadtree'],
+    explanation:
+      'Nöqtələri (məsələn, sürücülərin yerini) xəritədəki xanalara görə saxlayan indeks: "bu nöqtənin yaxınlığında kim var?" sualına bütün nöqtələri gəzmədən, yalnız qonşu xanalara baxaraq cavab verir. Geohash xəritəni prefiksləri olan xanalara bölür, quadtree sıx yerləri daha kiçik xanalara ayırır, H3 isə altıbucaqlı şəbəkədir. Tez-tez dəyişən yerlər yaddaşda (məsələn, Redis GEO) saxlanılır.',
+    lessonIds: ['nosql', 'company-architectures'],
+  },
+  {
+    term: 'Trie',
+    aliases: ['prefix tree'],
+    explanation:
+      'Sözləri hərf-hərf saxlayan ağac (prefix tree): eyni prefiksli sözlər eyni yoldan keçir, ona görə prefiksin bütün davamları onun düyünündən başlayır. Autocomplete-də hər düyündə ən çox axtarılan k təklif əvvəlcədən saxlanılır, sorğu isə prefiksin uzunluğu qədər addımda cavablanır.',
+    lessonIds: ['application-caching', 'additional-system-design-interview-questions'],
+  },
 
   // Caching
   {
@@ -404,6 +418,13 @@ export const glossary: GlossaryTermInput[] = [
     term: 'Task queue',
     explanation: 'Tapşırıqları və onların məlumatlarını qəbul edib worker-lərdə icra edən növbə (məsələn, Celery).',
     lessonIds: ['task-queues'],
+  },
+  {
+    term: 'Transcoding',
+    aliases: ['transcoder', 'video transcoding'],
+    explanation:
+      'Yüklənmiş videonu müxtəlif formatlara və keyfiyyətlərə (rendition, məsələn, 360p, 720p, 1080p) yenidən kodlaşdırmaq. Hər cihaz və şəbəkə öz keyfiyyətini ala bilsin deyə edilir. Bu, ağır CPU (və ya GPU) işidir və dəqiqələr çəkə bilər, ona görə worker-lərdə növbə vasitəsilə, asinxron icra olunur.',
+    lessonIds: ['task-queues', 'asynchronism'],
   },
   {
     term: 'Back pressure',

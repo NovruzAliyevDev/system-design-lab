@@ -27,7 +27,10 @@ import { idGenerator } from './authored-challenges/id-generator'
 import { newsFeed } from './authored-challenges/news-feed'
 import { notificationSystem } from './authored-challenges/notification-system'
 import { rateLimiter } from './authored-challenges/rate-limiter'
+import { rideSharing } from './authored-challenges/ride-sharing'
+import { searchAutocomplete } from './authored-challenges/search-autocomplete'
 import { urlShortener } from './authored-challenges/url-shortener'
+import { videoStreaming } from './authored-challenges/video-streaming'
 import { callCenter } from './primer-challenges/call-center'
 import { deckOfCards } from './primer-challenges/deck-of-cards'
 import { hashMap } from './primer-challenges/hash-map'
@@ -646,7 +649,7 @@ export const challenges: ChallengeInput[] = [
             node('cache-1', 'cache', 'Memory Cache', 960, 520, { instances: 3 }),
             node('sql-database-1', 'sql-database', 'SQL Write Master-Slave', 1200, 120, { instances: 2 }),
             node('sql-database-2', 'sql-database', 'SQL Read Replicas', 1200, 360, { role: 'replica', instances: 3 }),
-            // Serves the CDN's and the Read API's reads at the peak load.
+            // Serves the Read API's reads and the CDN's misses at the peak load; three instances keep its 40 ms reads from slowing under it.
             node('object-store-1', 'object-store', 'Object Store', 1200, 600, { instances: 3 }),
             node('data-warehouse-1', 'data-warehouse', 'SQL Analytics', 1200, 800),
           ],
@@ -689,4 +692,7 @@ export const challenges: ChallengeInput[] = [
   chatSystem,
   newsFeed,
   notificationSystem,
+  videoStreaming,
+  rideSharing,
+  searchAutocomplete,
 ]

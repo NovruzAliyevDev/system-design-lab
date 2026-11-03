@@ -520,14 +520,15 @@ describe('catalog of the pinned primer commit', () => {
       })
 
       it('is missed when one Node of the scaled design is too small, and offers its Hints like any other Rule', () => {
-        const oneObjectStore = setNodeConfig(scaling.referenceSolution, 'object-store-1', 'instances', 1)
-        const evaluation = evaluateDesign(scaling, oneObjectStore, { 'peak-load': 1 })
+        const oneReadApi = setNodeConfig(scaling.referenceSolution, 'app-service-2', 'instances', 1)
+        const evaluation = evaluateDesign(scaling, oneReadApi, { 'peak-load': 1 })
 
-        expect(peakLoad(oneObjectStore).passed).toBe(false)
-        // The overloaded Object Store drops reads under the Chaos task too.
+        expect(peakLoad(oneReadApi).passed).toBe(false)
+        // The overloaded Read API drops reads under the Chaos task too, and is not scaled out.
         expect(problemHints(scaling, evaluation)).toEqual([
           { ruleId: 'peak-load', opened: scaling.rules[0].hints.slice(0, 1), canOpenMore: true },
           { ruleId: 'primary-db-down', opened: [], canOpenMore: true },
+          { ruleId: 'scale-out', opened: [], canOpenMore: true },
         ])
       })
     })
@@ -735,7 +736,7 @@ describe('catalog of the pinned primer commit', () => {
   })
 
   describe('the authored Challenges', () => {
-    const AUTHORED = ['url-shortener', 'rate-limiter', 'id-generator', 'chat-system', 'news-feed', 'notification-system']
+    const AUTHORED = ['url-shortener', 'rate-limiter', 'id-generator', 'chat-system', 'news-feed', 'notification-system', 'video-streaming', 'ride-sharing', 'search-autocomplete']
     const authored = AUTHORED.map((id) => findChallenge(catalog.challenges, id)!)
     const answersOf = (challenge: Challenge) => Object.fromEntries(stageOfType(challenge, 'estimation').questions.map((question) => [question.id, question.referenceValue]))
     const ruleResult = (stage: DesignStage, design: Design, ruleId: string) => evaluateDesign(stage, design, {}).rules.find((result) => result.ruleId === ruleId)!
@@ -1017,6 +1018,143 @@ describe('catalog of the pinned primer commit', () => {
         expect(ruleResult(scaling, synchronous, 'push-provider-down').passed).toBe(false)
         expect(ruleResult(scaling, synchronous, 'peak-load').passed).toBe(false)
         expect(ruleResult(scaling, scaling.referenceSolution, 'push-provider-down').passed).toBe(true)
+      })
+    })
+
+    it('estimate video streaming: 10 uploads and 10,000 views a second, 1.25 PB of originals a month, 500 GB a second streamed', () => {
+      expect(answersOf(findChallenge(catalog.challenges, 'video-streaming')!)).toEqual({
+        'write-qps': 10,
+        'read-qps': 10_000,
+        'peak-read-qps': 20_000,
+        'storage-per-month': 1.25e15,
+        'read-bandwidth': 5e11,
+      })
+    })
+
+    describe('video streaming', () => {
+      const challenge = findChallenge(catalog.challenges, 'video-streaming')!
+      const highLevel = stageOfType(challenge, 'high-level-design')
+      const scaling = stageOfType(challenge, 'scaling')
+
+      it('encodes every upload into four renditions, each written to the object store', () => {
+        const peak = simulate(scaling.referenceSolution, scaling.loadProfile)
+
+        // 20 originals and 80 renditions a second, beside the 2,000 views the CDN misses.
+        expect(peak.nodes['transcoder-1']).toMatchObject({ writeQps: 20, overloaded: false })
+        expect(peak.nodes['object-store-1']).toMatchObject({ writeQps: 100, readQps: expect.closeTo(2_000, 9) })
+        expect(ruleResult(highLevel, setNodeConfig(highLevel.referenceSolution, 'transcoder-1', 'renditions', 1), 'renditions').passed).toBe(false)
+      })
+
+      it('accepts a pull or a push CDN, but not views read from the object store around it', () => {
+        const push = connect(removeElements(highLevel.referenceSolution, { edgeIds: ['cdn-1->object-store-1'] }), 'transcoder-1', 'cdn-1')
+        const pushing = updateEdge(push, 'transcoder-1->cdn-1', { traffic: 'write' })
+
+        expect(ruleResult(highLevel, pushing, 'cdn-delivery').passed).toBe(true)
+        expect(ruleResult(highLevel, connect(highLevel.referenceSolution, 'client-1', 'object-store-1'), 'cdn-delivery').passed).toBe(false)
+      })
+
+      it('needs the CDN at the peak: without it every view waits on the object store’s disks', () => {
+        const withoutCdn = removeElements(scaling.referenceSolution, { nodeIds: ['cdn-1'] })
+        const fromOrigin = updateEdge(connect(withoutCdn, 'client-1', 'object-store-1'), 'client-1->object-store-1', { traffic: 'read' })
+        const sized = setNodeConfig(fromOrigin, 'object-store-1', 'instances', 100)
+
+        expect(simulate(sized, scaling.loadProfile).meanLatencyMs.read).toBeGreaterThan(30)
+        expect(ruleResult(scaling, sized, 'peak-load').passed).toBe(false)
+      })
+
+      it('accepts uploads while the transcoders are down only with a queue before them, and keeps encoding off the upload', () => {
+        const withoutQueue = removeElements(scaling.referenceSolution, { nodeIds: ['message-queue-1'] })
+        const synchronous = updateEdge(connect(withoutQueue, 'app-service-1', 'transcoder-1'), 'app-service-1->transcoder-1', { traffic: 'write' })
+
+        expect(simulate(synchronous, scaling.loadProfile).meanLatencyMs.write).toBeGreaterThan(1_000)
+        expect(ruleResult(scaling, synchronous, 'peak-load').passed).toBe(false)
+        expect(ruleResult(scaling, synchronous, 'transcoders-down').passed).toBe(false)
+        expect(ruleResult(highLevel, synchronous, 'queued-transcoding').passed).toBe(false)
+      })
+    })
+
+    it('estimate ride sharing: 10,000 location updates and 2,000 riders’ requests a second, 2.5 TB of history a month, 30 TB a year', () => {
+      expect(answersOf(findChallenge(catalog.challenges, 'ride-sharing')!)).toEqual({
+        'write-qps': 10_000,
+        'read-qps': 2_000,
+        'peak-write-qps': 20_000,
+        'storage-per-month': 2.5e12,
+        'storage-per-year': 30e12,
+      })
+    })
+
+    describe('ride sharing', () => {
+      const challenge = findChallenge(catalog.challenges, 'ride-sharing')!
+      const highLevel = stageOfType(challenge, 'high-level-design')
+      const scaling = stageOfType(challenge, 'scaling')
+
+      it('refuses location updates written to a SQL database, or sent around the WebSocket gateway, but not trips on Edges carrying both kinds', () => {
+        const bothWays = ['client-1->web-server-1', 'web-server-1->app-service-2', 'app-service-2->sql-database-1'].reduce(
+          (design, edgeId) => updateEdge(design, edgeId, { traffic: 'both' }),
+          highLevel.referenceSolution,
+        )
+
+        expect(ruleResult(highLevel, bothWays, 'locations-in-memory').passed).toBe(true)
+        expect(ruleResult(highLevel, connect(highLevel.referenceSolution, 'app-service-1', 'sql-database-1'), 'locations-in-memory').passed).toBe(false)
+        expect(ruleResult(highLevel, connect(highLevel.referenceSolution, 'client-1', 'app-service-1'), 'websocket-updates').passed).toBe(false)
+      })
+
+      it('keeps every driver’s location and answers the nearby searches in the geospatial index, which a single instance cannot take at the peak', () => {
+        const peak = simulate(scaling.referenceSolution, scaling.loadProfile)
+        const unsharded = setNodeConfig(scaling.referenceSolution, 'geo-index-1', 'instances', 1)
+
+        expect(peak.nodes['geo-index-1']).toMatchObject({ readQps: 4_000, writeQps: 20_000, overloaded: false })
+        expect(ruleResult(scaling, unsharded, 'peak-load').passed).toBe(false)
+        expect(ruleResult(scaling, unsharded, 'geo-index-sharded').passed).toBe(false)
+      })
+
+      it('keeps the updates working while the history store is down only with a stream before it', () => {
+        const withoutQueue = removeElements(scaling.referenceSolution, { nodeIds: ['message-queue-1'] })
+        const synchronous = connect(withoutQueue, 'app-service-1', 'app-service-3')
+
+        expect(ruleResult(scaling, synchronous, 'peak-load').passed).toBe(true)
+        expect(ruleResult(scaling, synchronous, 'history-down').passed).toBe(false)
+        expect(ruleResult(scaling, scaling.referenceSolution, 'history-down').passed).toBe(true)
+      })
+    })
+
+    it('estimate search autocomplete: 4,000 suggestion requests and 1,000 searches a second, 250 GB of logged searches a month, 3 TB a year', () => {
+      expect(answersOf(findChallenge(catalog.challenges, 'search-autocomplete')!)).toEqual({
+        'read-qps': 4_000,
+        'write-qps': 1_000,
+        'peak-read-qps': 12_000,
+        'storage-per-month': 2.5e11,
+        'storage-per-year': 3e12,
+      })
+    })
+
+    describe('search autocomplete', () => {
+      const challenge = findChallenge(catalog.challenges, 'search-autocomplete')!
+      const highLevel = stageOfType(challenge, 'high-level-design')
+      const scaling = stageOfType(challenge, 'scaling')
+
+      it('refuses suggestions read from a SQL database', () => {
+        const { design, nodeId } = addNode(highLevel.referenceSolution, 'sql-database', { x: 720, y: 0 }, 'Queries')
+        const scanning = updateEdge(connect(design, 'app-service-1', nodeId), `app-service-1->${nodeId}`, { traffic: 'read' })
+
+        expect(ruleResult(highLevel, scanning, 'no-database-scan').passed).toBe(false)
+      })
+
+      it('refuses searches updating the trie on their way, which only the builder writes', () => {
+        const updating = connect(highLevel.referenceSolution, 'app-service-2', 'trie-1')
+
+        expect(ruleResult(highLevel, updating, 'trie-built-offline').passed).toBe(false)
+        expect(ruleResult(highLevel, removeElements(highLevel.referenceSolution, { nodeIds: ['analytics-1'] }), 'trie-built-offline').passed).toBe(false)
+      })
+
+      it('answers most suggestions from the cache, and survives it being flushed only with a trie that takes every one itself', () => {
+        const peak = simulate(scaling.referenceSolution, scaling.loadProfile)
+        const oneTrie = setNodeConfig(scaling.referenceSolution, 'trie-1', 'instances', 1)
+
+        expect(peak.nodes['trie-1'].readQps).toBeCloseTo(2_400, 9)
+        expect(ruleResult(scaling, oneTrie, 'peak-load').passed).toBe(true)
+        expect(ruleResult(scaling, oneTrie, 'cache-flushed').passed).toBe(false)
+        expect(ruleResult(scaling, scaling.referenceSolution, 'cache-flushed').passed).toBe(true)
       })
     })
   })

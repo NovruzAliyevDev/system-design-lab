@@ -534,8 +534,8 @@ export const twitter: ChallengeInput = {
           node('sql-database-2', 'sql-database', 'SQL Read Replicas', 1440, 120, { role: 'replica', instances: 140 }),
           node('sql-database-1', 'sql-database', 'SQL Write Master-Slave', 1440, 300, { shardKey: 'user_id', instances: 8 }),
           node('app-service-9', 'app-service', 'Notification Service', 1440, 540, { instances: 15 }),
-          // The CDN passes every read on, and an Object Store read starts at 40 ms: it runs well below capacity.
-          node('object-store-1', 'object-store', 'Object Store', 1440, 800, { instances: 200 }),
+          // It takes the CDN's misses, and an Object Store read starts at 40 ms: it runs well below capacity.
+          node('object-store-1', 'object-store', 'Object Store', 1440, 800, { instances: 25 }),
         ],
         edges: [
           edge('client-1', 'dns-1', 'read'),
