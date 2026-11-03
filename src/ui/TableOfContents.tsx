@@ -11,8 +11,9 @@ import { lessonPath, HEADER_PAGES } from './routes'
 const toc = tableOfContents(catalog)
 
 function lessonLinkClass({ isActive }: { isActive: boolean }) {
-  return `block min-w-0 flex-1 rounded px-2 py-1 text-sm ${
-    isActive ? 'bg-sky-500/15 font-medium text-sky-300' : 'text-zinc-400 hover:bg-zinc-900 hover:text-zinc-100'
+  // 44px rows on a phone, where the drawer is the main navigation.
+  return `block min-w-0 flex-1 rounded px-2 py-3 text-sm sm:py-1 ${
+    isActive ? 'bg-accent/10 font-medium text-accent' : 'text-text-muted hover:bg-surface-raised hover:text-text'
   }`
 }
 
@@ -28,7 +29,7 @@ export function TableOfContents({ currentLessonId }: { currentLessonId?: string 
   return (
     <nav ref={navRef} aria-label={t('tableOfContents')}>
       {/* Wider screens link these pages from the header. */}
-      <ul className="mb-4 lg:hidden">
+      <ul className="mb-4 xl:hidden">
         {HEADER_PAGES.map(({ to, label }) => (
           <li key={to}>
             <NavLink to={to} className={(state) => `${lessonLinkClass(state)} font-medium`}>
@@ -42,7 +43,7 @@ export function TableOfContents({ currentLessonId }: { currentLessonId?: string 
           return (
             <li key={group.id}>
               {!isSingleLesson && (
-                <p lang="en" className="px-2 pb-1 text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                <p lang="en" className="px-2 pb-1 text-xs font-semibold uppercase tracking-wide text-text-muted">
                   {group.title}
                 </p>
               )}

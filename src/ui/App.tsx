@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { BrowserRouter, Link, matchPath, Route, Routes, useLocation, useMatch } from 'react-router-dom'
+import { BrowserRouter, Link, matchPath, NavLink, Route, Routes, useLocation, useMatch } from 'react-router-dom'
 import { Attribution } from './Attribution'
 import { CalculatorsPage } from './CalculatorsPage'
 import { ChallengePage } from './ChallengePage'
@@ -38,6 +38,13 @@ import {
 /** Pages whose canvas takes the whole width. */
 const CANVAS_ROUTES = [SANDBOX_ROUTE, CHALLENGE_ROUTE, SKILL_TREE_ROUTE]
 
+/** The current page is marked by more than colour: it is underlined too. */
+function headerLinkClass({ isActive }: { isActive: boolean }) {
+  return `rounded text-sm whitespace-nowrap ${
+    isActive ? 'text-text underline decoration-accent decoration-2 underline-offset-6' : 'text-text-muted hover:text-text'
+  }`
+}
+
 function Layout() {
   const lessonMatch = useMatch(LESSON_ROUTE)
   const currentLessonId = lessonMatch?.params.lessonId
@@ -51,51 +58,62 @@ function Layout() {
 
   return (
     <div className="min-h-screen">
-      <header className="sticky top-0 z-30 border-b border-zinc-800 bg-zinc-950/90 backdrop-blur">
-        <div className="flex items-baseline gap-2 px-4 py-3 sm:gap-3">
+      <header className="sticky top-0 z-30 h-header border-b border-border bg-surface/90 backdrop-blur">
+        <div className="flex h-full items-center gap-2 px-4 sm:gap-4">
           <button
             type="button"
-            className="rounded border border-zinc-700 px-2 py-0.5 text-sm text-zinc-300 lg:hidden"
+            className={`flex min-h-11 min-w-11 items-center justify-center rounded border border-border px-2 text-sm text-text-muted hover:border-text-muted hover:text-text sm:min-h-8 sm:px-3 ${isCanvasPage ? '' : 'lg:hidden'}`}
             aria-expanded={tocOpen}
             aria-controls="toc-drawer"
             onClick={() => setTocOpen((open) => !open)}
           >
-            {tocOpen ? t('closeTableOfContents') : t('tableOfContents')}
+            {/* On a phone the header has room for the icon only; the label stays for screen readers. */}
+            <svg aria-hidden viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5 sm:hidden">
+              {tocOpen ? (
+                <path d="m5 5 10 10M15 5 5 15" strokeLinecap="round" />
+              ) : (
+                <path d="M3 5h1M3 10h1M3 15h1M8 5h9M8 10h9M8 15h9" strokeLinecap="round" />
+              )}
+            </svg>
+            <span className="max-sm:sr-only">{tocOpen ? t('closeTableOfContents') : t('tableOfContents')}</span>
           </button>
-          <Link to="/" className="font-semibold whitespace-nowrap text-zinc-50">
+          <Link to="/" className="min-w-0 truncate font-semibold text-text">
             {t('appTitle')}
           </Link>
-          <span className="hidden text-sm text-zinc-500 2xl:inline">{t('appTagline')}</span>
-          <div className="ml-auto self-center">
+          <span className="hidden text-sm text-text-muted 2xl:inline">{t('appTagline')}</span>
+          <div className="ml-auto">
             <Search />
           </div>
-          {/* A narrow header has no room for them; below `lg` the table of contents drawer links them. */}
+          {/* A narrow header has no room for them; below `xl` the table of contents links them. */}
           {HEADER_PAGES.map(({ to, label }) => (
-            <Link key={to} to={to} className="hidden text-sm whitespace-nowrap text-zinc-400 hover:text-zinc-100 lg:inline">
+            <NavLink key={to} to={to} className={(state) => `hidden xl:inline ${headerLinkClass(state)}`}>
               {t(label)}
-            </Link>
+            </NavLink>
           ))}
-          <Link
+          <NavLink
             to={SETTINGS_ROUTE}
             aria-label={t('settingsTitle')}
-            className="self-center text-sm text-zinc-400 hover:text-zinc-100 sm:self-auto"
+            className={(state) =>
+              // On a phone the icon has no text to underline, so the current page gets a ring instead.
+              `flex min-h-11 min-w-11 items-center justify-center sm:min-h-0 sm:min-w-0 ${headerLinkClass(state)} ${state.isActive ? 'max-sm:ring-1 max-sm:ring-accent' : ''}`
+            }
           >
             {/* On a phone the header has room for the icon only, as for search. */}
-            <svg aria-hidden viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4 sm:hidden">
+            <svg aria-hidden viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5 sm:hidden">
               <path d="M3 5h14M3 10h14M3 15h14" strokeLinecap="round" />
               <circle cx="7" cy="5" r="1.75" fill="currentColor" />
               <circle cx="13" cy="10" r="1.75" fill="currentColor" />
               <circle cx="9" cy="15" r="1.75" fill="currentColor" />
             </svg>
             <span className="hidden sm:inline">{t('settingsTitle')}</span>
-          </Link>
+          </NavLink>
         </div>
       </header>
 
       <div className="lg:flex">
         <aside
           id="toc-drawer"
-          className={`${tocOpen ? 'block' : 'hidden'} fixed inset-x-0 top-12 bottom-0 z-20 overflow-y-auto bg-zinc-950 px-3 py-4 lg:w-72 lg:border-r lg:border-zinc-800 ${isCanvasPage ? '' : 'lg:sticky lg:top-12 lg:block lg:h-[calc(100vh-3rem)] lg:shrink-0'}`}
+          className={`${tocOpen ? 'block' : 'hidden'} fixed inset-x-0 top-header bottom-0 z-20 overflow-y-auto bg-surface px-3 py-4 lg:w-72 lg:border-r lg:border-border ${isCanvasPage ? '' : 'lg:sticky lg:top-header lg:block lg:h-[calc(100vh-var(--spacing-header))] lg:shrink-0'}`}
         >
           <TableOfContents currentLessonId={currentLessonId} />
         </aside>
@@ -119,7 +137,7 @@ function Layout() {
               <Route path={SETTINGS_ROUTE} element={<SettingsPage />} />
             </Routes>
           </main>
-          <footer className="mx-auto max-w-3xl border-t border-zinc-800 px-4 py-6 text-xs text-zinc-500">
+          <footer className="mx-auto max-w-3xl border-t border-border px-4 py-6 text-xs text-text-muted">
             <Attribution textKey="siteAttribution" />
           </footer>
         </div>

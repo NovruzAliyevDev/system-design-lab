@@ -85,7 +85,7 @@ export function flashcardsPath(selection: CardSelection): string {
   return query ? `${FLASHCARDS_ROUTE}?${query}` : FLASHCARDS_ROUTE
 }
 
-/** Pages besides the Lessons, linked from the header (from `lg` up) and the table of contents drawer. */
+/** Pages besides the Lessons, linked from the header (from `xl` up) and the table of contents drawer. */
 export const HEADER_PAGES: { to: string; label: StringKey }[] = [
   { to: SKILL_TREE_ROUTE, label: 'skillTreeTitle' },
   { to: CHALLENGES_ROUTE, label: 'challengesTitle' },

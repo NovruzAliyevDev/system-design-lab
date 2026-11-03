@@ -56,18 +56,18 @@ export function Search() {
     <>
       <button
         type="button"
-        className="flex items-center gap-2 rounded border border-zinc-700 px-2 py-0.5 text-sm text-zinc-400 hover:border-zinc-500 hover:text-zinc-100"
+        className="flex min-h-11 min-w-11 items-center justify-center gap-2 rounded border border-border px-2 text-sm whitespace-nowrap text-text-muted hover:border-text-muted hover:text-text sm:min-h-8 sm:min-w-0 sm:px-3"
         aria-label={t('search')}
         aria-keyshortcuts={isMac ? 'Meta+K' : 'Control+K'}
         onClick={() => setOpen(true)}
       >
         {/* On a phone the header has room for the icon only. */}
-        <svg aria-hidden viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4 sm:hidden">
+        <svg aria-hidden viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5 sm:hidden">
           <circle cx="8.5" cy="8.5" r="5.5" />
           <path d="m13 13 4.5 4.5" strokeLinecap="round" />
         </svg>
         <span className="hidden sm:inline">{t('search')}</span>
-        <kbd aria-hidden className="hidden font-sans text-xs text-zinc-500 sm:inline">
+        <kbd aria-hidden className="hidden font-sans text-xs text-text-muted sm:inline">
           {t(isMac ? 'searchShortcutMac' : 'searchShortcut')}
         </kbd>
       </button>
@@ -136,7 +136,7 @@ function SearchDialog({ onClose }: { onClose: () => void }) {
     <dialog
       ref={dialogRef}
       aria-label={t('search')}
-      className="m-auto mt-[10vh] flex max-h-[80vh] w-[min(40rem,calc(100%-2rem))] flex-col rounded-lg border border-zinc-700 bg-zinc-900 text-zinc-200 shadow-2xl backdrop:bg-black/60"
+      className="m-auto mt-[10vh] flex max-h-[80vh] w-[min(40rem,calc(100%-2rem))] flex-col rounded-lg border border-border bg-surface-raised text-text shadow-2xl backdrop:bg-black/60"
       onClose={onClose}
       // A click on the backdrop lands on the dialog element itself.
       onClick={(event) => event.target === event.currentTarget && close()}
@@ -153,7 +153,7 @@ function SearchDialog({ onClose }: { onClose: () => void }) {
         autoComplete="off"
         spellCheck={false}
         placeholder={t('searchPlaceholder')}
-        className="w-full border-b border-zinc-700 bg-transparent px-4 py-3 text-zinc-50 placeholder:text-zinc-500 focus:outline-none"
+        className="w-full rounded-t-lg border-b border-border bg-transparent px-4 py-3 text-text placeholder:text-text-muted focus-visible:-outline-offset-2"
         value={query}
         onChange={(event) => {
           setQuery(event.target.value)
@@ -170,19 +170,19 @@ function SearchDialog({ onClose }: { onClose: () => void }) {
               id={resultId(i)}
               role="option"
               aria-selected={i === activeIndex}
-              className={`cursor-pointer rounded px-3 py-2 ${i === activeIndex ? 'bg-sky-500/15' : ''}`}
+              className={`cursor-pointer rounded px-3 py-2 ${i === activeIndex ? 'bg-accent/10 ring-1 ring-accent ring-inset' : ''}`}
               onMouseMove={() => setActiveIndex(i)}
               onClick={() => openResult(result)}
             >
               <div className="flex flex-wrap items-baseline gap-x-2">
-                <span lang={titleLang} className="font-medium text-zinc-50">
+                <span lang={titleLang} className="font-medium text-text">
                   <Highlighted text={result.title} highlights={result.titleHighlights} />
                 </span>
-                <span lang={contextLang} className="text-xs text-zinc-500">
+                <span lang={contextLang} className="text-xs text-text-muted">
                   {context}
                 </span>
               </div>
-              <p lang={textLang} className="mt-0.5 text-sm text-zinc-400">
+              <p lang={textLang} className="mt-0.5 text-sm text-text-muted">
                 <Highlighted text={result.snippet.text} highlights={result.snippet.highlights} />
               </p>
             </li>
@@ -190,11 +190,11 @@ function SearchDialog({ onClose }: { onClose: () => void }) {
         })}
       </ul>
       {message && (
-        <p role="status" className="px-4 pb-3 text-sm text-zinc-500">
+        <p role="status" className="px-4 pb-3 text-sm text-text-muted">
           {message}
         </p>
       )}
-      <p aria-hidden className="border-t border-zinc-800 px-4 py-2 text-xs text-zinc-500">
+      <p aria-hidden className="border-t border-border px-4 py-2 text-xs text-text-muted">
         {t('searchKeys')}
       </p>
     </dialog>
@@ -220,7 +220,7 @@ function Highlighted({ text, highlights }: { text: string; highlights: Highlight
   for (const { start, end } of highlights) {
     if (start > at) parts.push(text.slice(at, start))
     parts.push(
-      <mark key={start} className="rounded-sm bg-amber-400/25 text-inherit">
+      <mark key={start} className="rounded-sm bg-warning/25 text-text">
         {text.slice(start, end)}
       </mark>,
     )

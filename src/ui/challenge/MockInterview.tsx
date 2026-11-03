@@ -118,7 +118,7 @@ export function InterviewTimer({ challenge, attempt }: { challenge: Challenge; a
     <div
       role="timer"
       aria-label={t('mockInterviewTimer')}
-      className={`sticky top-12 z-10 mt-3 flex flex-wrap items-baseline gap-x-4 gap-y-1 rounded border px-3 py-2 text-sm backdrop-blur ${clock.overtime ? 'border-rose-500/50 bg-rose-950/80' : 'border-sky-500/40 bg-zinc-950/90'}`}
+      className={`sticky top-header z-10 mt-3 flex flex-wrap items-baseline gap-x-4 gap-y-1 rounded border px-3 py-2 text-sm backdrop-blur ${clock.overtime ? 'border-rose-500/50 bg-rose-950/80' : 'border-sky-500/40 bg-zinc-950/90'}`}
     >
       <span className="font-medium text-zinc-100">{t('mockInterviewTitle')}</span>
       <span className={`font-mono text-lg ${clock.overtime ? 'text-rose-300' : 'text-zinc-50'}`}>
