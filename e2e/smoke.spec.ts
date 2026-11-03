@@ -418,11 +418,14 @@ test('answers the quiz at the end of a Lesson, with feedback per option, and kee
   // Ordering: move each step up to its place, first step first.
   const ordering = question(/addımlarını sıraya düzün/)
   const steps = ['Girişi keşdə axtar', 'Girişi bazadan yüklə', 'Girişi keşə əlavə et', 'Girişi qaytar']
+  // The quiz shows once progress has loaded, and reading the steps does not wait for it.
+  await expect(ordering.getByRole('listitem')).toHaveCount(steps.length)
   for (const [target, step] of steps.entries()) {
     const texts = await ordering.getByRole('listitem').allInnerTexts()
     const current = texts.findIndex((text) => text.includes(step))
     for (let i = current; i > target; i--) await ordering.getByRole('button', { name: `Yuxarı: ${step}` }).click()
   }
+  await expect(ordering.getByRole('listitem')).toContainText(steps)
   await ordering.getByRole('button', { name: 'Yoxla' }).click()
   await expect(ordering.getByRole('status')).toHaveText('Doğrudur!')
 
