@@ -39,15 +39,15 @@ export function CalculatorsPage() {
   useScrollToHash()
   return (
     <section>
-      <h1 className="text-2xl font-semibold text-zinc-50">{t('calculatorsTitle')}</h1>
-      <p className="mt-1 text-sm text-zinc-400">{t('calculatorsDescription')}</p>
+      <h1 className="text-2xl font-semibold text-text">{t('calculatorsTitle')}</h1>
+      <p className="mt-1 text-sm text-text-muted">{t('calculatorsDescription')}</p>
       <BackOfTheEnvelope />
       <LatencyComparison />
     </section>
   )
 }
 
-const fieldClass = 'w-full rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-zinc-100'
+const fieldClass = 'min-h-11 w-full rounded border border-border bg-surface-raised px-2 text-text sm:min-h-8'
 
 const PERIOD_NAMES: Record<Period, StringKey> = {
   second: 'periodSecond',
@@ -128,10 +128,10 @@ function BackOfTheEnvelope() {
 
   return (
     <section id="back-of-the-envelope" aria-labelledby="bote-title" className="mt-8 scroll-mt-16">
-      <h2 id="bote-title" className="text-xl font-semibold text-zinc-50">
+      <h2 id="bote-title" className="text-xl font-semibold text-text">
         {t('calculatorBoteTitle')}
       </h2>
-      <p className="mt-1 text-sm text-zinc-400">{t('calculatorBoteDescription')}</p>
+      <p className="mt-1 text-sm text-text-muted">{t('calculatorBoteDescription')}</p>
 
       <div className="mt-4 grid gap-3 sm:grid-cols-2">
         <NumberField label={t('calculatorDailyActiveUsers')} value={fields.dailyActiveUsers} onChange={set('dailyActiveUsers')} />
@@ -144,25 +144,25 @@ function BackOfTheEnvelope() {
       </div>
 
       {!estimate ? (
-        <p role="alert" className="mt-4 text-sm text-rose-400">
+        <p role="alert" className="mt-4 text-sm text-danger">
           {t('calculatorInvalid')}
         </p>
       ) : (
         <>
-          <h3 className="mt-6 font-semibold text-zinc-100">{t('calculatorResults')}</h3>
-          <dl className="mt-2 divide-y divide-zinc-800 rounded border border-zinc-800">
+          <h3 className="mt-6 font-semibold text-text">{t('calculatorResults')}</h3>
+          <dl className="mt-2 divide-y divide-border/60 rounded border border-border">
             {RESULT_QUANTITIES.map((quantity) => {
               const kind = ESTIMATION_QUANTITIES[quantity]
               const value = estimate.result.values[quantity]
               return (
                 <div key={quantity} className="px-3 py-2">
-                  <dt className="text-sm text-zinc-400">{quantityName(quantity)}</dt>
+                  <dt className="text-sm text-text-muted">{quantityName(quantity)}</dt>
                   {kind === 'bytes' ? (
-                    <dd className="text-zinc-100">{formatMeasure(value, kind)}</dd>
+                    <dd className="text-text">{formatMeasure(value, kind)}</dd>
                   ) : (
-                    <dd className="flex flex-wrap gap-x-3 text-zinc-100">
+                    <dd className="flex flex-wrap gap-x-3 text-text">
                       {PERIODS.map((period) => (
-                        <span key={period} className={period === 'second' ? '' : 'text-sm text-zinc-400'}>
+                        <span key={period} className={period === 'second' ? '' : 'text-sm text-text-muted'}>
                           {formatRate(value, kind, period)}
                         </span>
                       ))}
@@ -173,8 +173,8 @@ function BackOfTheEnvelope() {
             })}
           </dl>
 
-          <h3 className="mt-6 font-semibold text-zinc-100">{t('calculatorSteps')}</h3>
-          <ol className="mt-2 space-y-1 rounded border border-zinc-800 bg-zinc-900/60 p-3 font-mono text-xs break-words text-zinc-300">
+          <h3 className="mt-6 font-semibold text-text">{t('calculatorSteps')}</h3>
+          <ol className="mt-2 space-y-1 rounded border border-border bg-surface-raised/50 p-3 font-mono text-xs break-words text-text-muted">
             {[...estimate.usageSteps, ...estimate.result.steps].map((step) => (
               <li key={step.quantity}>
                 <StepLine step={step} />
@@ -191,9 +191,9 @@ function Field({ label, hint, children }: { label: string; hint?: string; childr
   const id = useId()
   return (
     <div>
-      <label htmlFor={id} className="block text-sm text-zinc-300">
+      <label htmlFor={id} className="block text-sm text-text">
         {label}
-        {hint && <span className="text-zinc-500"> ({hint})</span>}
+        {hint && <span className="text-text-muted"> ({hint})</span>}
       </label>
       <div className="mt-1 flex gap-2">{children(id)}</div>
     </div>
@@ -216,7 +216,7 @@ function SizeField({ label, hint, value, onChange }: { label: string; hint?: str
           <input id={id} inputMode="decimal" className={fieldClass} value={value.text} onChange={(event) => onChange({ ...value, text: event.target.value })} />
           <select
             aria-label={t('calculatorUnit', { field: label })}
-            className="rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm text-zinc-100"
+            className="min-h-11 rounded border border-border bg-surface-raised px-2 text-sm text-text sm:min-h-8"
             value={value.unit}
             onChange={(event) => onChange({ ...value, unit: event.target.value as ByteUnit })}
           >
@@ -251,18 +251,22 @@ function LatencyComparison() {
 
   return (
     <section id="latency" aria-labelledby="latency-title" className="mt-12 scroll-mt-16">
-      <h2 id="latency-title" className="text-xl font-semibold text-zinc-50">
+      <h2 id="latency-title" className="text-xl font-semibold text-text">
         {t('calculatorLatencyTitle')}
       </h2>
-      <p className="mt-1 text-sm text-zinc-400">{t('calculatorLatencyDescription')}</p>
+      <p className="mt-1 text-sm text-text-muted">{t('calculatorLatencyDescription')}</p>
 
       {examples.length > 0 && (
         <div className="mt-4 text-sm">
-          <p className="text-zinc-400">{t('calculatorLatencyExamples')}</p>
-          <ul className="mt-1 space-y-1">
+          <p className="text-text-muted">{t('calculatorLatencyExamples')}</p>
+          <ul className="mt-2 flex flex-col items-start gap-2">
             {examples.map((example) => (
               <li key={example.label}>
-                <button type="button" className="text-left text-sky-400 hover:underline" onClick={() => setPair(example.pair)}>
+                <button
+                  type="button"
+                  className="min-h-11 rounded border border-border px-3 py-2 text-left hover:border-text-muted sm:min-h-8 sm:py-1"
+                  onClick={() => setPair(example.pair)}
+                >
                   {t(example.label)}
                 </button>
               </li>
@@ -276,12 +280,12 @@ function LatencyComparison() {
         <OperationSelect label={t('calculatorLatencySecond')} rows={rows} value={pair[1]} onChange={(index) => setPair([pair[0], index])} />
       </div>
 
-      <div className="mt-4 rounded border border-zinc-800 bg-zinc-900/60 p-3" aria-live="polite">
-        <p className="text-3xl font-semibold text-zinc-50">{t('calculatorLatencyRatio', { ratio: formatRounded(comparison.ratio) })}</p>
+      <div className="mt-4 rounded border border-border bg-surface-raised/50 p-3" aria-live="polite">
+        <p className="text-3xl font-semibold text-text tabular-nums">{t('calculatorLatencyRatio', { ratio: formatRounded(comparison.ratio) })}</p>
         {comparison.ratio === 1 ? (
-          <p className="mt-2 text-zinc-200">{t('calculatorLatencySame', { time: formatDuration(comparison.faster.nanoseconds) })}</p>
+          <p className="mt-2 text-text">{t('calculatorLatencySame', { time: formatDuration(comparison.faster.nanoseconds) })}</p>
         ) : (
-          <p className="mt-2 text-zinc-200">
+          <p className="mt-2 text-text">
               {tRich('calculatorLatencyFits', {
                 slower: <span lang="en">{comparison.slower.operation}</span>,
                 slowerTime: formatDuration(comparison.slower.nanoseconds),

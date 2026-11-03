@@ -42,8 +42,8 @@ const RESETS: { target: ResetTarget; label: StringKey }[] = [
   { target: 'all', label: 'resetAll' },
 ]
 
-const buttonClass = 'rounded border border-zinc-700 px-3 py-1.5 text-sm text-zinc-200 hover:border-zinc-500'
-const sectionClass = 'mt-8 border-t border-zinc-800 pt-6'
+const buttonClass = 'inline-flex min-h-11 items-center rounded border border-border px-3 text-sm text-text hover:border-text-muted sm:min-h-8'
+const sectionClass = 'mt-8 border-t border-border pt-6'
 
 /** File name for an export file, dated by when it was exported. */
 const exportFileName = (kind: 'progress' | 'backup', file: ProgressExport) =>
@@ -88,13 +88,13 @@ export function SettingsPage() {
 
   return (
     <section>
-      <h1 className="text-2xl font-semibold text-zinc-50">{t('settingsTitle')}</h1>
+      <h1 className="text-2xl font-semibold text-text">{t('settingsTitle')}</h1>
 
       <fieldset className="mt-6" disabled={!progress}>
-        <legend className="text-lg font-medium text-zinc-100">{t('appearanceTitle')}</legend>
+        <legend className="text-lg font-medium text-text">{t('appearanceTitle')}</legend>
         <div className="mt-3 flex gap-4">
           {THEMES.map((theme) => (
-            <label key={theme} className="flex items-center gap-2 text-sm text-zinc-300">
+            <label key={theme} className="flex min-h-11 items-center gap-2 text-sm text-text sm:min-h-8">
               <input
                 type="radio"
                 name="theme"
@@ -105,10 +105,10 @@ export function SettingsPage() {
             </label>
           ))}
         </div>
-        <p className="mt-4 text-sm text-zinc-300">{t('canvasStyleTitle')}</p>
+        <p className="mt-4 text-sm text-text">{t('canvasStyleTitle')}</p>
         <div className="mt-2 flex gap-4">
           {CANVAS_STYLES.map((canvasStyle) => (
-            <label key={canvasStyle} className="flex items-center gap-2 text-sm text-zinc-300">
+            <label key={canvasStyle} className="flex min-h-11 items-center gap-2 text-sm text-text sm:min-h-8">
               <input
                 type="radio"
                 name="canvas-style"
@@ -122,17 +122,17 @@ export function SettingsPage() {
       </fieldset>
 
       <fieldset className={sectionClass} disabled={!progress}>
-        <legend className="float-left text-lg font-medium text-zinc-100">{t('flashcardsSettingsTitle')}</legend>
-        <label className="clear-left block pt-3 text-sm text-zinc-300">
+        <legend className="float-left text-lg font-medium text-text">{t('flashcardsSettingsTitle')}</legend>
+        <label className="clear-left block pt-3 text-sm text-text">
           {t('newCardsPerDay')}
           <CountInput value={progress?.settings.newCardsPerDay} min={0} max={MAX_NEW_CARDS_PER_DAY} isValid={isNewCardLimit} onChange={setNewCardsPerDay} />
         </label>
-        <p className="mt-2 text-xs text-zinc-500">{t('newCardsPerDayDescription')}</p>
+        <p className="mt-2 max-w-prose text-xs text-text-muted">{t('newCardsPerDayDescription')}</p>
       </fieldset>
 
       <fieldset className={sectionClass} disabled={!progress}>
-        <legend className="float-left text-lg font-medium text-zinc-100">{t('streakSettingsTitle')}</legend>
-        <label className="clear-left block pt-3 text-sm text-zinc-300">
+        <legend className="float-left text-lg font-medium text-text">{t('streakSettingsTitle')}</legend>
+        <label className="clear-left block pt-3 text-sm text-text">
           {t('streakMinActivities')}
           <CountInput
             value={progress?.settings.streakMinActivities}
@@ -142,17 +142,17 @@ export function SettingsPage() {
             onChange={setStreakMinActivities}
           />
         </label>
-        <p className="mt-2 text-xs text-zinc-500">{t('streakMinActivitiesDescription')}</p>
+        <p className="mt-2 max-w-prose text-xs text-text-muted">{t('streakMinActivitiesDescription')}</p>
       </fieldset>
 
       <div className={sectionClass}>
-        <h2 className="text-lg font-medium text-zinc-100">{t('progressTitle')}</h2>
-        <p className="mt-1 text-sm text-zinc-400">{t('progressDescription')}</p>
+        <h2 className="text-lg font-medium text-text">{t('progressTitle')}</h2>
+        <p className="mt-1 max-w-prose text-sm text-text-muted">{t('progressDescription')}</p>
         <div className="mt-4 flex flex-wrap gap-3">
           <button type="button" className={buttonClass} onClick={() => void exportProgress()}>
             {t('exportProgress')}
           </button>
-          <label className={`${buttonClass} cursor-pointer focus-within:outline focus-within:outline-sky-400`}>
+          <label className={`${buttonClass} cursor-pointer has-focus-visible:outline-2 has-focus-visible:outline-offset-2 has-focus-visible:outline-accent`}>
             {t('importProgress')}
             <input type="file" accept="application/json,.json" className="sr-only" onChange={(event) => void importChosenFile(event)} />
           </label>
@@ -166,20 +166,20 @@ export function SettingsPage() {
             </button>
           )}
         </div>
-        <p className="mt-2 text-xs text-zinc-500">{t('importDescription')}</p>
+        <p className="mt-2 max-w-prose text-xs text-text-muted">{t('importDescription')}</p>
       </div>
 
       <div className={sectionClass}>
-        <h2 className="text-lg font-medium text-zinc-100">{t('resetTitle')}</h2>
+        <h2 className="text-lg font-medium text-text">{t('resetTitle')}</h2>
         <ul className="mt-4 space-y-3">
           {RESETS.map(({ target, label }) => (
             <li key={target}>
               {confirming === target ? (
                 <div role="group" aria-label={t(label)} className="flex flex-wrap items-center gap-3 text-sm">
-                  <span className="text-zinc-300">{t('resetConfirm')}</span>
+                  <span className="text-text">{t('resetConfirm')}</span>
                   <button
                     type="button"
-                    className="rounded bg-red-600 px-3 py-1.5 text-white hover:bg-red-500"
+                    className="min-h-11 rounded border border-danger bg-danger px-3 font-medium text-surface hover:opacity-90 sm:min-h-8"
                     onClick={() => void confirmReset(target)}
                   >
                     {t('resetConfirmYes')}
@@ -198,7 +198,7 @@ export function SettingsPage() {
         </ul>
       </div>
 
-      <p role="status" className={`mt-8 text-sm ${message?.isError ? 'text-red-500' : 'text-emerald-500'}`}>
+      <p role="status" className={`mt-8 text-sm ${message?.isError ? 'text-danger' : 'text-success'}`}>
         {message?.text}
       </p>
     </section>
@@ -233,7 +233,7 @@ function CountInput({ value, min, max, isValid, onChange }: CountInputProps) {
       max={max}
       step={1}
       aria-invalid={!isValid(parseCount(text))}
-      className="mt-1 block w-24 rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-zinc-100 aria-invalid:border-red-500"
+      className="mt-1 block min-h-11 w-24 rounded border border-border bg-surface-raised px-2 text-text aria-invalid:border-danger sm:min-h-8"
       value={text}
       onChange={(event) => {
         setText(event.currentTarget.value)

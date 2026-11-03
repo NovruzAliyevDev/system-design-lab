@@ -120,7 +120,7 @@ function WorkedSolution({ stage }: { stage: EstimationStage }) {
     <section className="mt-6 rounded border border-border bg-surface-raised/50 p-3 text-sm">
       <h3 className="font-semibold text-text">{t('estimationWorkedSolution')}</h3>
       <p className="mt-2 text-text">{stage.explanation}</p>
-      <ol className="mt-3 space-y-1 font-mono text-xs text-text">
+      <ol className="mt-3 space-y-1 font-mono text-xs text-text-muted">
         {result.steps
           .filter((step) => needed.has(step))
           .map((step) => (

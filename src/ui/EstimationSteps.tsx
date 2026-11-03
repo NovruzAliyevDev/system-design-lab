@@ -80,8 +80,8 @@ export function StepLine({ step }: { step: EstimationStep | UsageStep }) {
   const result = isEstimationQuantity(step.quantity) ? formatMeasure(step.value, ESTIMATION_QUANTITIES[step.quantity]) : formatRounded(step.value)
   return (
     <>
-      <span className="text-zinc-100">{quantityName(step.quantity)}</span> = {operandName(left)} {sign} {operandName(right)} = {formatOperand(left)} {sign}{' '}
-      {formatOperand(right)} = <span className="text-zinc-100">{result}</span>
+      <span className="text-text">{quantityName(step.quantity)}</span> = {operandName(left)} {sign} {operandName(right)} = {formatOperand(left)} {sign}{' '}
+      {formatOperand(right)} = <span className="text-text">{result}</span>
     </>
   )
 }

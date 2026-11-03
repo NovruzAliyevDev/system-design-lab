@@ -15,7 +15,7 @@ import { useProgress } from './progress/store'
 import { challengePath, FLASHCARDS_ROUTE, LESSONS_ROUTE, lessonPath, skillTreePath } from './routes'
 import { MasteryBar } from './SkillTreePage'
 
-const linkClass = 'text-sm text-sky-400 hover:underline'
+const linkClass = 'link text-sm'
 
 /** How often the Dashboard looks at the clock again, so a page left open moves on to the next day. */
 const CLOCK_TICK_MS = 60 * 1000
@@ -34,9 +34,9 @@ export function DashboardPage() {
   const progress = useProgress((state) => state.progress)
   return (
     <section>
-      <h1 className="text-2xl font-semibold text-zinc-50">{t('dashboardTitle')}</h1>
-      <p className="mt-1 text-sm text-zinc-400">{t('dashboardDescription')}</p>
-      {progress ? <Blocks progress={progress} /> : <p className="mt-6 text-sm text-zinc-500">{t('dashboardLoading')}</p>}
+      <h1 className="text-2xl font-semibold text-text">{t('dashboardTitle')}</h1>
+      <p className="mt-1 text-sm text-text-muted">{t('dashboardDescription')}</p>
+      {progress ? <Blocks progress={progress} /> : <p className="mt-6 text-sm text-text-muted">{t('dashboardLoading')}</p>}
       <p className="mt-6">
         <Link to={LESSONS_ROUTE} className={linkClass}>
           {t('dashboardAllLessons')} →
@@ -63,16 +63,16 @@ function Blocks({ progress }: { progress: Progress }) {
 
 function Block({ title, children, action }: { title: string; children: ReactNode; action?: ReactNode }) {
   return (
-    <section aria-label={title} className="flex flex-col rounded-lg border border-zinc-800 p-4">
-      <h2 className="text-sm font-medium text-zinc-400">{title}</h2>
+    <section aria-label={title} className="flex flex-col rounded-lg border border-border p-4">
+      <h2 className="text-sm font-medium text-text-muted">{title}</h2>
       {children}
       {action && <p className="mt-auto pt-4">{action}</p>}
     </section>
   )
 }
 
-const valueClass = 'mt-2 text-3xl font-semibold text-zinc-50'
-const detailClass = 'mt-1 text-sm text-zinc-400'
+const valueClass = 'mt-2 text-3xl font-semibold text-text tabular-nums'
+const detailClass = 'mt-1 text-sm text-text-muted'
 
 function ReviewBlock({ review: { cards, counts }, streak }: { review: DailyQueue<unknown>; streak: Streak }) {
   const empty = cards.length === 0
@@ -103,7 +103,7 @@ function StreakBlock({ streak, minActivities, reviewLeft }: { streak: Streak; mi
     <Block title={t('dashboardStreakTitle')}>
       <p className={valueClass}>{t('dashboardStreakDays', { count: streak.current })}</p>
       <p className={detailClass}>{t('dashboardStreakLongest', { count: streak.longest })}</p>
-      <p className={`mt-3 text-sm ${today.counts ? 'text-emerald-500' : 'text-zinc-300'}`}>
+      <p className={`mt-3 text-sm ${today.counts ? 'text-success' : 'text-text'}`}>
         {today.counts
           ? t('dashboardStreakCounted')
           : t(reviewLeft ? 'dashboardStreakPending' : 'dashboardStreakPendingNoReview', tally)}
@@ -134,7 +134,7 @@ function ContinueBlock({ progress, target }: { progress: Progress; target: Conti
           </Link>
         }
       >
-        <p lang="en" className="mt-2 text-lg font-medium text-zinc-50">
+        <p lang="en" className="mt-2 text-lg font-medium text-text">
           {lesson.title}
         </p>
       </Block>
@@ -152,7 +152,7 @@ function ContinueBlock({ progress, target }: { progress: Progress; target: Conti
         </Link>
       }
     >
-      <p className="mt-2 text-lg font-medium text-zinc-50">{challenge.title}</p>
+      <p className="mt-2 text-lg font-medium text-text">{challenge.title}</p>
       <p className={detailClass}>
         {attempt?.score !== undefined
           ? t('dashboardContinueChallengeFinished', { percent: percent(attempt.score) })
@@ -183,7 +183,7 @@ function NextTopicBlock({ progress }: { progress: Progress }) {
         </Link>
       }
     >
-      <p className="mt-2 text-lg font-medium text-zinc-50">{topic.title}</p>
+      <p className="mt-2 text-lg font-medium text-text">{topic.title}</p>
       <p className={`${detailClass} mb-2`}>{t('topicMastery', { percent: percent(share) })}</p>
       <MasteryBar mastery={share} />
     </Block>

@@ -126,9 +126,6 @@ Cool zinc greys with a hue near 286, a sky-blue accent, and three status hues. E
 
 These are calibrated for both themes and are never derived from or changed by the semantic tokens.
 
-### Legacy mirroring (temporary)
-Pages not yet migrated still use raw `zinc-*` and `sky-*` classes, written dark-first. Under `html:not(.dark)` the zinc scale is mirrored (zinc-950 becomes the lightest shade, zinc-50 the darkest), and sky-300/400 are darkened. This block is removed once tickets 35–37 have moved every page to the tokens. New code must not rely on it.
-
 ### Named Rules
 **The Token-Only Rule.** Components use the semantic tokens, never raw `zinc-*`, `sky-*`, `red-*`, `rose-*`, `amber-*` or `emerald-*` classes.
 
@@ -250,7 +247,18 @@ Lesson list, Lesson, Glossary, Solutions, Solution and Study Guide.
 - **Read marker:** a `success` ✓ with a screen-reader label.
 
 ### Practice pages (ticket 36)
-_To be recorded by ticket 36._
+Dashboard, Flashcards, Calculators, Skill Tree and Settings.
+
+- **Page heading:** as on the reading pages, `text-2xl` 600 `text` over a `text-sm` `text-muted` description. A long description is capped at `max-w-prose` with `text-pretty` (the Skill Tree's ran to 122 characters a line).
+- **Stat tiles** (Dashboard blocks): bordered `rounded-lg p-4` sections in a two-column grid from `sm` up. The label is the `h2`, `text-sm` 500 `text-muted`. The figure is `text-3xl` 600 `text` with `tabular-nums`, or a `text-lg` 500 title when the tile names a Lesson, Challenge or topic. A `text-sm text-muted` detail sits under it, and the tile's one action is a `link` pinned to the bottom (`mt-auto`). A streak that counts today says so in `success`, in words.
+- **Deck stats:** each Deck is a bordered card with a five-column `dl`: `text-xs text-muted` labels over `text-lg` `text` numbers in `tabular-nums`.
+- **Mastery:** four levels, each with a colour and a mark, so a level reads without its colour. The mark is a 12px circle filled as far as the level goes: an empty ring (none, `text-muted`), a quarter (started, `warning`), a half (past half, `accent`) and a full disc (mastered, `success`). The legend, the map's nodes and the list rows show the mark before the percentage. The bar is a 6px `rounded-full` track in `border` with the level's colour as its fill. A map node is a `surface-raised` card with a 2px border in the level's colour (plain `border` with no Mastery), and a topic recommended for later is dashed `text-muted` with the words. The selected node has a 2px `accent` ring offset by 2px from its border, so it shows on a past-half node whose border is `accent` too. Measured in the light theme, the weaker one: the `warning` bar on its track is 3.4:1, and the marks are at least 4.5:1 on `surface-raised`.
+- **Skill Tree map:** React Flow's chrome follows the tokens (see Challenges and sandbox). Its edges are `text-muted` (`--xy-edge-stroke-default`, set on the map only): React Flow's own grey was 2:1 on the page in both themes. Met prerequisites are solid and unmet ones dashed.
+- **Lists:** the Skill Tree list is a list of links (see Reading pages), with the mark and percentage on the right. Its rows are `py-3`, because each holds a title and a bar. In a topic's details every link is 44px tall on a phone, where the details fill the page, and inline text from `sm` up. The prerequisites are text links, not bordered chips.
+- **Flashcard review:** the card is a bordered `rounded-lg` article. "Cavabı göstər" is the Primary button, 48px tall (`min-h-12`), because it is the one action at that point. The four grades are 48px outlined buttons in a grid: "Yenidən" has a `danger/60` border and a `danger/10` hover, "Çətin" `border` and a `surface-raised` hover, "Yaxşı" `success/60` and `success/10`, and "Asan" `accent/60` and `accent/10`. The label and the next interval are in words, so the colour is only a hint. On a phone both bars stick to the bottom of the screen on `surface`, above the safe area. The explanation is a `surface-raised/50` box under a `text-xs` uppercase `text-muted` `h2`.
+- **Form controls:** text fields and selects are `surface-raised` with a `border` outline and `text`, 44px on a phone and 32px from `sm` up. An invalid count field turns its border `danger`. The Calculators show an invalid entry as a `danger` alert under the fields. Radio options are whole `label`s, 44px on a phone. A hint under a Settings control is `text-xs text-muted` at `max-w-prose`. A Calculator field's hint is a `text-muted` aside in brackets inside its label.
+- **Calculator results:** a bordered `dl` with `divide-border/60` rows, `text-sm text-muted` names and `text` values. The other periods of a rate are `text-sm text-muted` after the per-second value. The worked steps are `font-mono text-xs text-muted` on `surface-raised/50`, with each step's name and result in `text`. The latency examples are Secondary buttons, one per line, and the ratio is `text-3xl` 600 `tabular-nums`.
+- **Settings actions:** export, import and reset are Secondary buttons. The import button is a `label` around a visually hidden file input, so it draws the focus ring itself (`has-focus-visible:outline-2`). The confirming "Bəli, sıfırla" is a danger fill: `danger` fill and border with `surface` text (6.2:1 light, 6.9:1 dark). The result line under the actions is `success` or `danger` text, in words.
 
 ### Challenges and sandbox (ticket 37)
 Challenges, Challenge (its Stages, Hints, scoring and the Reference Solution), Sandbox, and the chrome of the Design Canvas, the Traffic Simulation panel, the UML Class Builder and the Concept Simulations.
