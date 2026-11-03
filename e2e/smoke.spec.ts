@@ -1,6 +1,9 @@
 import { readFileSync } from 'node:fs'
 import { expect, test, type Locator, type Page } from '@playwright/test'
 
+/** How long a primer diagram may take to load from the dev server. */
+const IMAGE_TIMEOUT = 15_000
+
 test('opens the app and reads a Lesson', async ({ page }) => {
   await page.goto('/')
   await expect(page.getByRole('heading', { level: 1, name: 'Bu gün' })).toBeVisible()
@@ -47,8 +50,8 @@ test('moves through Lessons with the sidebar, primer links and next/previous', a
 
   const diagram = page.getByRole('article').locator('img').first()
   await expect(diagram).toBeVisible()
-  // Visible means laid out, not loaded: wait for the image itself.
-  await expect.poll(() => diagram.evaluate((img: HTMLImageElement) => img.naturalWidth)).toBeGreaterThan(0)
+  // Visible means laid out, not loaded: wait for the image itself. A cold dev server on CI can take longer than 5 s.
+  await expect.poll(() => diagram.evaluate((img: HTMLImageElement) => img.naturalWidth), { timeout: IMAGE_TIMEOUT }).toBeGreaterThan(0)
 
   await page.getByRole('link', { name: 'active-passive' }).first().click()
   await expect(page).toHaveURL(/\/lessons\/fail-over#active-passive$/)
@@ -315,14 +318,16 @@ test('reads a Solution page from the primer, with its diagrams and links back to
   )
   const diagram = page.getByRole('article').locator('img').first()
   await diagram.scrollIntoViewIfNeeded()
-  await expect.poll(() => diagram.evaluate((img: HTMLImageElement) => img.naturalWidth)).toBeGreaterThan(0)
+  await expect.poll(() => diagram.evaluate((img: HTMLImageElement) => img.naturalWidth), { timeout: IMAGE_TIMEOUT }).toBeGreaterThan(0)
 
   // A link to a section of the primer on GitHub opens its Lesson in the app.
   await page.getByRole('article').getByRole('link', { name: 'system design topics', exact: true }).first().click()
   await expect(page).toHaveURL(/\/lessons\/index-of-system-design-topics$/)
 
   await page.getByRole('banner').getByRole('link', { name: 'Həllər' }).click()
-  await expect(page.getByRole('main').getByRole('link')).toHaveCount(8)
+  // Each Solution links to its page and to its Challenge.
+  await expect(page.getByRole('main').getByRole('link', { name: 'Çağırış kimi həll et' })).toHaveCount(8)
+  await expect(page.getByRole('main').getByRole('link')).toHaveCount(16)
   await page.getByRole('main').getByRole('link', { name: 'Design a system that scales to millions of users on AWS' }).click()
   await expect(page).toHaveURL(/\/solutions\/scaling_aws$/)
   await expect(page.getByRole('heading', { level: 1, name: 'Design a system that scales to millions of users on AWS' })).toBeVisible()
@@ -461,8 +466,8 @@ test('builds a sandbox Design by drag and drop, and keeps it after a reload', as
   const palette = page.getByRole('navigation', { name: 'Komponentlər' })
   const canvas = page.getByTestId('rf__wrapper')
 
-  await palette.getByRole('button', { name: 'Web server: kətana əlavə et' }).dragTo(canvas, { targetPosition: { x: 200, y: 150 } })
-  await palette.getByRole('button', { name: 'Cache: kətana əlavə et' }).dragTo(canvas, { targetPosition: { x: 550, y: 300 } })
+  await addToCanvas(palette, canvas, 'Web server', 200, 150)
+  await addToCanvas(palette, canvas, 'Cache', 550, 300)
   const webServer = page.getByTestId('node-web-server-1')
   const cache = page.getByTestId('node-cache-1')
   await expect(webServer).toBeVisible()
@@ -526,6 +531,15 @@ test('deletes, undoes and redoes on the canvas with the keyboard', async ({ page
 })
 
 /** Drags with the mouse from the middle of `from` by an offset, for elements Playwright's `dragTo` cannot target. */
+/**
+ * Drags a palette component onto the canvas. The editor is no taller than the viewport, so it is first
+ * scrolled to the viewport's bottom edge: a drag that has to scroll the page on the way drops nowhere.
+ */
+async function addToCanvas(palette: Locator, canvas: Locator, component: string, x: number, y: number) {
+  await palette.evaluate((element) => element.scrollIntoView({ block: 'end' }))
+  await palette.getByRole('button', { name: `${component}: kətana əlavə et` }).dragTo(canvas, { targetPosition: { x, y } })
+}
+
 async function dragBy(page: Page, from: Locator, dx: number, dy: number) {
   const box = (await from.boundingBox())!
   const start = { x: box.x + box.width / 2, y: box.y + box.height / 2 }
@@ -542,8 +556,8 @@ test('groups Nodes in a zone box that carries them along, and exports the canvas
   const palette = page.getByRole('navigation', { name: 'Komponentlər' })
   const canvas = page.getByTestId('rf__wrapper')
   const panel = page.getByRole('region', { name: 'Tənzimləmə' })
-  await palette.getByRole('button', { name: 'Cache: kətana əlavə et' }).dragTo(canvas, { targetPosition: { x: 650, y: 150 } })
-  await palette.getByRole('button', { name: 'Web server: kətana əlavə et' }).dragTo(canvas, { targetPosition: { x: 200, y: 150 } })
+  await addToCanvas(palette, canvas, 'Cache', 650, 150)
+  await addToCanvas(palette, canvas, 'Web server', 200, 150)
   const webServer = page.getByTestId('node-web-server-1')
   const cache = page.getByTestId('node-cache-1')
 
@@ -714,7 +728,7 @@ test('solves the Pastebin high-level design Stage by drag and drop, then simulat
     ['Object store', 720, 300],
   ]
   for (const [component, x, y] of place) {
-    await palette.getByRole('button', { name: `${component}: kətana əlavə et` }).dragTo(canvas, { targetPosition: { x, y } })
+    await addToCanvas(palette, canvas, component, x, y)
   }
   const connections = [
     ['client-1', 'web-server-1'],
@@ -856,7 +870,8 @@ test('runs the Pastebin Challenge Stage by Stage, scores the Attempt and retries
   await page.getByRole('button', { name: 'Axtar' }).click()
   const search = page.getByRole('dialog', { name: 'Axtar' })
   await search.getByRole('combobox', { name: 'Axtar' }).fill('pastebin')
-  await expect(search.getByRole('option').filter({ hasText: 'Çağırış' })).toHaveCount(1)
+  // Other Challenges that mention Pastebin are found too; the Pastebin Challenge comes first.
+  await expect(search.getByRole('option').filter({ hasText: 'Çağırış' }).first()).toContainText('Pastebin.com (və ya Bit.ly) dizayn edin')
 })
 
 test('runs a Mock Interview against the clock without Hints, self-assesses it and tells it apart in the history', async ({ page }) => {
@@ -939,8 +954,8 @@ test('simulates traffic on an undersized sandbox Design, flags the overloaded No
   await page.goto('/sandbox')
   const palette = page.getByRole('navigation', { name: 'Komponentlər' })
   const canvas = page.getByTestId('rf__wrapper')
-  await palette.getByRole('button', { name: 'Client: kətana əlavə et' }).dragTo(canvas, { targetPosition: { x: 120, y: 150 } })
-  await palette.getByRole('button', { name: 'Web server: kətana əlavə et' }).dragTo(canvas, { targetPosition: { x: 520, y: 150 } })
+  await addToCanvas(palette, canvas, 'Client', 120, 150)
+  await addToCanvas(palette, canvas, 'Web server', 520, 150)
   const client = page.getByTestId('node-client-1')
   const webServer = page.getByTestId('node-web-server-1')
   await client.locator('.react-flow__handle.source').dragTo(webServer.locator('.react-flow__handle.target'))
@@ -982,10 +997,10 @@ test('breaks a sandbox Design with Chaos Scenarios: a load balancer fails over, 
   await page.goto('/sandbox')
   const palette = page.getByRole('navigation', { name: 'Komponentlər' })
   const canvas = page.getByTestId('rf__wrapper')
-  await palette.getByRole('button', { name: 'Client: kətana əlavə et' }).dragTo(canvas, { targetPosition: { x: 100, y: 200 } })
-  await palette.getByRole('button', { name: 'Load balancer: kətana əlavə et' }).dragTo(canvas, { targetPosition: { x: 330, y: 200 } })
-  await palette.getByRole('button', { name: 'Web server: kətana əlavə et' }).dragTo(canvas, { targetPosition: { x: 580, y: 100 } })
-  await palette.getByRole('button', { name: 'Web server: kətana əlavə et' }).dragTo(canvas, { targetPosition: { x: 580, y: 320 } })
+  await addToCanvas(palette, canvas, 'Client', 100, 200)
+  await addToCanvas(palette, canvas, 'Load balancer', 330, 200)
+  await addToCanvas(palette, canvas, 'Web server', 580, 100)
+  await addToCanvas(palette, canvas, 'Web server', 580, 320)
   const connect = (source: string, target: string) =>
     page.getByTestId(`node-${source}`).locator('.react-flow__handle.source').dragTo(page.getByTestId(`node-${target}`).locator('.react-flow__handle.target'))
   await connect('client-1', 'load-balancer-1')
