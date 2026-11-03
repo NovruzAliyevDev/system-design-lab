@@ -6,7 +6,7 @@ const LICENSE_URL = 'https://creativecommons.org/licenses/by/4.0/'
 
 function ExternalLink({ href, children }: { href: string; children: ReactNode }) {
   return (
-    <a href={href} target="_blank" rel="noopener noreferrer" className="text-accent underline decoration-accent/40 underline-offset-2 hover:decoration-accent">
+    <a href={href} target="_blank" rel="noopener noreferrer" className="link">
       {children}
     </a>
   )

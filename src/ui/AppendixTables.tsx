@@ -58,7 +58,7 @@ function SortableTable<Row>({
   return (
     <figure className="my-6">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-        <label htmlFor={filterId} className="text-sm text-zinc-400">
+        <label htmlFor={filterId} className="text-sm text-text-muted">
           {t('tableFilter')}
         </label>
         <input
@@ -67,16 +67,16 @@ function SortableTable<Row>({
           value={query.filter}
           placeholder={t('tableFilterPlaceholder')}
           onChange={(event) => setQuery((current) => ({ ...current, filter: event.target.value }))}
-          className="min-w-0 flex-1 rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm text-zinc-100 placeholder:text-zinc-500 sm:max-w-xs"
+          className="min-h-11 min-w-0 flex-1 rounded border border-border bg-surface-raised px-2 text-sm text-text placeholder:text-text-muted sm:min-h-8 sm:max-w-xs"
         />
-        <span aria-live="polite" className="text-xs text-zinc-500">
+        <span aria-live="polite" className="text-xs text-text-muted">
           {t('tableRowsShown', { shown: shown.length, total: rows.length })}
         </span>
       </div>
-      <div className="mt-3 overflow-x-auto rounded-lg border border-zinc-800">
+      <div className="mt-3 overflow-x-auto rounded-lg border border-border">
         <table className="w-full text-sm">
           <caption className="sr-only">{t(title)}</caption>
-          <thead className="bg-zinc-900 text-left text-zinc-300">
+          <thead className="bg-surface-raised text-left text-text-muted">
             <tr>
               {columns.map((column) => {
                 const direction = column.sortBy && query.sort?.column === column.sortBy ? query.sort.direction : undefined
@@ -85,17 +85,17 @@ function SortableTable<Row>({
                     key={column.label}
                     scope="col"
                     aria-sort={direction ?? (column.sortBy ? 'none' : undefined)}
-                    className={`px-3 py-2 font-medium whitespace-nowrap ${column.numeric ? 'text-right' : ''}`}
+                    className={`px-3 py-1 font-medium whitespace-nowrap ${column.numeric ? 'text-right' : ''}`}
                   >
                     {column.sortBy ? (
                       <button
                         type="button"
                         title={t('tableSortBy', { column: t(column.label) })}
                         onClick={() => sortBy(column.sortBy!)}
-                        className="inline-flex items-center gap-1 hover:text-zinc-50"
+                        className="inline-flex items-center gap-1 py-1 hover:text-text"
                       >
                         {t(column.label)}
-                        <span aria-hidden className="text-xs text-zinc-500">
+                        <span aria-hidden className="text-xs">
                           {direction === 'ascending' ? '▲' : direction === 'descending' ? '▼' : '↕'}
                         </span>
                       </button>
@@ -108,9 +108,9 @@ function SortableTable<Row>({
             </tr>
           </thead>
           {/* Rows are primer content, in English. */}
-          <tbody lang="en" className="divide-y divide-zinc-800 text-zinc-200">
+          <tbody lang="en" className="divide-y divide-border/60 text-text">
             {shown.map((row, i) => (
-              <tr key={i} className="hover:bg-zinc-900/60">
+              <tr key={i} className="hover:bg-surface-raised/60">
                 {columns.map((column) => (
                   <td key={column.label} className={`px-3 py-1.5 ${column.numeric ? 'text-right font-mono whitespace-nowrap' : ''}`}>
                     {column.cell(row)}
@@ -120,7 +120,7 @@ function SortableTable<Row>({
             ))}
           </tbody>
         </table>
-        {shown.length === 0 && <p className="px-3 py-4 text-sm text-zinc-500">{t('tableNoRows')}</p>}
+        {shown.length === 0 && <p className="px-3 py-4 text-sm text-text-muted">{t('tableNoRows')}</p>}
       </div>
     </figure>
   )

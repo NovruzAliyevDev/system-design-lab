@@ -127,6 +127,14 @@ html:not(.dark) {
 }
 
 /*
+ * A text link: accent, and underlined so it stands apart from the text around it by more than colour.
+ * Rows and cards that are links as a whole do not use it.
+ */
+@utility link {
+  @apply text-accent underline decoration-accent/40 underline-offset-2 hover:decoration-accent;
+}
+
+/*
  * Primer text reads in the token colours, so it follows the theme without `prose-invert`. Both
  * variable sets are given, so `dark:prose-invert` resolves to the same values. Unlayered on purpose:
  * it has to win over the typography plugin's own defaults.

@@ -30,10 +30,10 @@ export function StudyGuidePage() {
 
   return (
     <section>
-      <h1 className="text-2xl font-semibold text-zinc-50">{t('studyGuideTitle')}</h1>
-      <p className="mt-1 text-sm text-zinc-400">{t('studyGuideDescription')}</p>
+      <h1 className="text-2xl font-semibold text-text">{t('studyGuideTitle')}</h1>
+      <p className="mt-1 text-sm text-text-muted">{t('studyGuideDescription')}</p>
 
-      <div role="tablist" aria-label={t('studyGuideTimelines')} className="mt-6 flex gap-1 rounded-lg border border-zinc-800 p-1">
+      <div role="tablist" aria-label={t('studyGuideTimelines')} className="mt-6 flex gap-1 rounded-lg border border-border p-1">
         {guide.timelines.map((timeline) => {
           const selected = timeline.id === chosen.id
           return (
@@ -45,8 +45,8 @@ export function StudyGuidePage() {
               aria-selected={selected}
               aria-controls="timeline-panel"
               onClick={() => setParams({ [TIMELINE_PARAM]: timeline.id }, { replace: true })}
-              className={`flex-1 rounded px-2 py-1.5 text-sm ${
-                selected ? 'bg-sky-500/15 font-medium text-sky-300' : 'text-zinc-400 hover:bg-zinc-900 hover:text-zinc-100'
+              className={`min-h-11 flex-1 rounded px-2 text-sm sm:min-h-8 ${
+                selected ? 'bg-accent/10 font-medium text-accent ring-1 ring-accent ring-inset' : 'text-text-muted hover:bg-surface-raised hover:text-text'
               }`}
             >
               {t(TIMELINE_LABELS[timeline.id])}
@@ -56,19 +56,19 @@ export function StudyGuidePage() {
       </div>
 
       <div id="timeline-panel" role="tabpanel" aria-labelledby={`timeline-${chosen.id}`} className="mt-4">
-        <p lang="en" className="text-zinc-300">
+        <p lang="en" className="max-w-prose text-pretty text-text">
           {chosen.summary}
         </p>
         <ol className="mt-4 space-y-2">
           {guide.steps.map((step, i) => {
             const amount = step.amounts[chosen.id]
             return (
-              <li key={i} className="flex gap-3 rounded-lg border border-zinc-800 px-4 py-3">
-                <span aria-hidden className="w-5 shrink-0 text-right font-mono text-sm text-zinc-500">{i + 1}</span>
+              <li key={i} className="flex gap-3 rounded-lg border border-border px-4 py-3">
+                <span aria-hidden className="w-5 shrink-0 text-right font-mono text-sm text-text-muted">{i + 1}</span>
                 <div className="min-w-0">
                   <StepText step={step} isRead={(lessonId) => (progress ? isLessonRead(progress.reading, lessonId) : false)} />
                   {amount !== 'yes' && (
-                    <p className="mt-1 text-xs text-amber-300">{t('studyGuideAmount', { amount: t(AMOUNT_LABELS[amount]) })}</p>
+                    <p className="mt-1 text-xs text-warning">{t('studyGuideAmount', { amount: t(AMOUNT_LABELS[amount]) })}</p>
                   )}
                 </div>
               </li>
@@ -77,14 +77,14 @@ export function StudyGuidePage() {
         </ol>
       </div>
 
-      <p className="mt-6 text-sm text-zinc-500">
-        <Link to={lessonPath(guide.lessonId)} className="text-sky-400 hover:underline">
+      <p className="mt-6 text-sm text-text-muted">
+        <Link to={lessonPath(guide.lessonId)} className="link">
           {t('studyGuideSource')}
         </Link>
         {' · '}
         {source && (
           <>
-            <a href={source.sourceUrl} target="_blank" rel="noopener noreferrer" className="text-sky-400 hover:underline">
+            <a href={source.sourceUrl} target="_blank" rel="noopener noreferrer" className="link">
               {t('viewSource')}
             </a>
             {' · '}
@@ -98,11 +98,11 @@ export function StudyGuidePage() {
 
 function StepText({ step, isRead }: { step: StudyGuideStep; isRead: (lessonId: string) => boolean }) {
   return (
-    <p lang="en" className="text-zinc-200">
+    <p lang="en" className="text-pretty text-text">
       {step.parts.map((part, i) =>
         part.lessonId ? (
           <span key={i}>
-            <Link to={lessonPath(part.lessonId, part.anchor)} className="text-sky-400 hover:underline">
+            <Link to={lessonPath(part.lessonId, part.anchor)} className="link">
               {part.text}
             </Link>
             {isRead(part.lessonId) && <ReadMarker />}

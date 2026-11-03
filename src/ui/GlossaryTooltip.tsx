@@ -103,7 +103,7 @@ export function GlossaryTooltip({ term, children }: { term: GlossaryTerm; childr
         type="button"
         aria-expanded={open}
         aria-controls={open ? popupId : undefined}
-        className="cursor-help underline decoration-zinc-500 decoration-dotted underline-offset-4 hover:decoration-sky-400"
+        className="cursor-help underline decoration-text-muted decoration-dotted underline-offset-4 hover:decoration-accent"
         onClick={() => (open && pinned ? hide() : show(true))}
       >
         {children}
@@ -113,14 +113,14 @@ export function GlossaryTooltip({ term, children }: { term: GlossaryTerm; childr
           ref={popupRef}
           id={popupId}
           lang="az"
-          className="not-prose fixed z-40 block w-72 max-w-[calc(100vw-2rem)] rounded-lg border border-zinc-700 bg-zinc-900 p-3 text-left text-sm font-normal text-zinc-300 shadow-xl"
+          className="not-prose fixed z-40 block w-72 max-w-[calc(100vw-2rem)] rounded-lg border border-border bg-surface-raised p-3 text-left text-sm font-normal text-text shadow-lg"
           style={position ?? { top: 0, left: 0, visibility: 'hidden' }}
         >
-          <span lang="en" className="block font-semibold text-zinc-50">
+          <span lang="en" className="block font-semibold text-text">
             {term.term}
           </span>
           <span className="mt-1 block">{term.explanation}</span>
-          <Link to={glossaryPath(term.id)} className="mt-2 inline-block text-sky-400 hover:underline">
+          <Link to={glossaryPath(term.id)} className="link mt-2 inline-block">
             {t('glossaryOpenEntry')}
           </Link>
         </span>

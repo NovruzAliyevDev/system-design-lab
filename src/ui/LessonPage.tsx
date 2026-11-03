@@ -33,15 +33,15 @@ export function LessonPage() {
   useScrollToHash()
   useOpened(lesson && { kind: 'lesson', lessonId: lesson.id })
 
-  if (!lesson) return <p className="text-zinc-400">{t('lessonNotFound')}</p>
+  if (!lesson) return <p className="text-text-muted">{t('lessonNotFound')}</p>
 
   return (
     <article>
-      <h1 lang="en" className="text-3xl font-semibold text-zinc-50">
+      <h1 lang="en" className="text-3xl font-semibold text-balance text-text">
         {lesson.title}
       </h1>
-      <p className="mt-2 text-sm text-zinc-500">
-        <a href={lesson.sourceUrl} target="_blank" rel="noopener noreferrer" className="text-sky-400 hover:underline">
+      <p className="mt-2 text-sm text-text-muted">
+        <a href={lesson.sourceUrl} target="_blank" rel="noopener noreferrer" className="link">
           {t('viewSource')}
         </a>
         {' · '}
@@ -53,7 +53,7 @@ export function LessonPage() {
           <button
             type="button"
             aria-pressed={isRead}
-            className="rounded border border-zinc-700 px-2 py-0.5 text-zinc-300 hover:border-zinc-500"
+            className="min-h-11 rounded border border-border px-3 hover:border-text-muted sm:min-h-8"
             onClick={() => {
               // A choice made by hand wins over marking at the end for the rest of this visit.
               autoMark.cancel()
@@ -67,7 +67,7 @@ export function LessonPage() {
 
       {cardCount > 0 && (
         <p className="mt-2 text-sm">
-          <Link to={flashcardsPath({ kind: 'lesson', lessonId })} className="text-sky-400 hover:underline">
+          <Link to={flashcardsPath({ kind: 'lesson', lessonId })} className="link">
             {t('studyLessonCards', { count: cardCount })}
           </Link>
         </p>
@@ -80,25 +80,25 @@ export function LessonPage() {
 
       {quiz && progress && <LessonQuiz key={quiz.id} quiz={quiz} />}
 
-      <nav aria-label={t('lessonNavigation')} className="mt-12 grid gap-3 border-t border-zinc-800 pt-6 sm:grid-cols-2">
+      <nav aria-label={t('lessonNavigation')} className="mt-12 grid gap-3 border-t border-border pt-6 sm:grid-cols-2">
         {previous && (
           <Link
             to={lessonPath(previous.id)}
             rel="prev"
-            className="rounded-lg border border-zinc-800 p-4 hover:border-zinc-600"
+            className="rounded-lg border border-border p-4 hover:border-text-muted"
           >
-            <span className="block text-xs text-zinc-500">← {t('previousLesson')}</span>
-            <span lang="en" className="text-zinc-100">{previous.title}</span>
+            <span className="block text-xs text-text-muted">← {t('previousLesson')}</span>
+            <span lang="en" className="text-text">{previous.title}</span>
           </Link>
         )}
         {next && (
           <Link
             to={lessonPath(next.id)}
             rel="next"
-            className="rounded-lg border border-zinc-800 p-4 text-right hover:border-zinc-600 sm:col-start-2"
+            className="rounded-lg border border-border p-4 text-right hover:border-text-muted sm:col-start-2"
           >
-            <span className="block text-xs text-zinc-500">{t('nextLesson')} →</span>
-            <span lang="en" className="text-zinc-100">{next.title}</span>
+            <span className="block text-xs text-text-muted">{t('nextLesson')} →</span>
+            <span lang="en" className="text-text">{next.title}</span>
           </Link>
         )}
       </nav>

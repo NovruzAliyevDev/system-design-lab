@@ -15,3 +15,8 @@
 - [ ] Verify: each page checked in the built-in browser pane in dark, light and at 375px, and the full E2E suite green. One commit on `main`, no push.
 
 ## Comments
+
+### Note from 35 (2026-11-03)
+
+- Flashcard faces use `PRIMER_PROSE_CLASS`, so 35 already gave them the token prose, the running-text cap (`max-w-xl`) and bordered code blocks. Check them in this slice.
+- `CalculatorLinks` in `CalculatorsPage.tsx` is on the tokens already, because Lessons show it. The rest of the file is not.

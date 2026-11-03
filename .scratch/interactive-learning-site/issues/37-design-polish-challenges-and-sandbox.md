@@ -15,3 +15,8 @@
 - [ ] Verify: each page checked in the built-in browser pane in dark, light and at 375px, and the full E2E suite green. One commit on `main`, no push.
 
 ## Comments
+
+### Note from 35 (2026-11-03)
+
+- Measured on `/lessons/cap-theorem` in the light theme: `CapSimulation`'s "Şəbəkəni kəs" button (`border-red-400/70`) is 1.8:1 and its "Uğurlu" label (`text-emerald-300`) is 1.5:1. The status colours are not mirrored, so they fail badly on a light page. In the dark theme its `text-xs text-zinc-500` notes are 4.1:1.
+- `ChoiceOptions` in the Challenge deep-dive stage already uses the tokens, because 35 moved it with the Lesson quiz.

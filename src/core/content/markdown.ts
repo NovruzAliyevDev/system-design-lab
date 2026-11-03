@@ -52,6 +52,26 @@ export function readHeadings(markdown: string): MarkdownHeading[] {
     })
 }
 
+/**
+ * Nests the headings of a text under its page's `h1` title, so no level is skipped: the
+ * primer's sections often open with `####` or jump from `##` to `####`. A heading goes one level below
+ * the nearest heading before it that it sits under in the source; `#` counts as `##`, a page has one title.
+ */
+export function nestHeadings(tree: Root): void {
+  const open: { depth: number; level: number }[] = []
+  const visit = (node: Nodes) => {
+    if (node.type === 'heading') {
+      const depth = Math.max(node.depth, 2)
+      while ((open.at(-1)?.depth ?? 0) >= depth) open.pop()
+      const level = (open.at(-1)?.level ?? 1) + 1
+      open.push({ depth, level })
+      node.depth = Math.min(level, 6) as Heading['depth']
+    }
+    if ('children' in node) node.children.forEach(visit)
+  }
+  visit(tree)
+}
+
 /** Every link and image URL in markdown, in order, including those inside raw HTML. */
 export function linkUrls(markdown: string): string[] {
   const urls: string[] = []

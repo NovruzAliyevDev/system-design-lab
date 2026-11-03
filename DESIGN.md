@@ -168,6 +168,7 @@ Flat by default, separated by tone: `surface` versus `surface-raised`, plus 1px 
 ### Shadow Vocabulary
 - **Prompt** (Tailwind `shadow-lg`): the fixed update prompt.
 - **Modal** (Tailwind `shadow-2xl`, with a `black/60` backdrop): the search dialog.
+- **Tooltip** (Tailwind `shadow-lg`, as the prompt): the Glossary tooltip in primer text.
 
 ### Named Rules
 **The Float-Only Shadow Rule.** A shadow means the element floats over content. Cards and sections in the page flow use a border, not a shadow.
@@ -187,8 +188,8 @@ Buttons are bordered and links are not. The border helps tell them apart, but it
 - **Class constants:** when a button class bundle is repeated 5+ times, it may become a local constant next to where it is used (`UpdatePrompt.tsx` has an older two-use `buttonClass`; new code waits for five uses). Never a shared `Button` component.
 
 ### Links
-- **Inline links** (attribution, prose): `accent` text, underlined at 40% accent with a 2px offset, and the underline becomes full accent on hover.
-- **Navigation links** are not underlined at rest (see Navigation).
+- **Text links** (attribution, meta lines, link lists, prose): the `link` utility in `src/index.css`. It gives `accent` text, underlined at 40% accent with a 2px offset, and the underline becomes full accent on hover. Prose links get the same colour from the prose mapping.
+- **Navigation links** are not underlined at rest (see Navigation). Neither are rows and cards that are a link as a whole.
 
 ### Inputs / Fields
 - **Search input:** no box of its own. It is a full-width row in the dialog with a bottom `border`, a transparent background, and a `text-muted` placeholder. Its focus ring is drawn inset (`-outline-offset-2`, top corners rounded to the dialog), so the dialog edge does not clip it.
@@ -233,7 +234,20 @@ Buttons are bordered and links are not. The border helps tell them apart, but it
 Each slice adds its page-level patterns here, built only on the tokens and rules above.
 
 ### Reading pages (ticket 35)
-_To be recorded by ticket 35._
+Lesson list, Lesson, Glossary, Solutions, Solution and Study Guide.
+
+- **Page heading:** `text-2xl` 600 `text` for list pages, and `text-3xl` 600 for a Lesson or Solution title, which is English and `text-balance`. Under it sits a `text-sm` `text-muted` line: a count, a description, or the source and attribution links.
+- **Primer prose:** `PRIMER_PROSE_CLASS` caps running text (paragraphs, lists, quotes and headings) at `max-w-xl` (576px), about 75 characters a line in Inter at 16px. Images, tables, code blocks and the interactive tables that replace them keep the full `max-w-3xl` column, as do the title, the quiz and Concept Simulations. The same class styles Flashcard faces. Headings are `text-balance` and paragraphs `text-pretty`. Code blocks have a `border` outline, because `surface-raised` alone barely shows on the light page. Images keep their white plate, because primer diagrams are drawn for a white page.
+- **Heading levels:** the primer's sections often open with `####` or skip a level. `nestHeadings` (Core) renumbers the levels under the page's `h1`, so no level is skipped. Anchors are unchanged, because they come from the source. Each stretch of Lesson text between Concept Simulations is nested on its own.
+- **List of links:** a `rounded-lg border border-border` list with `divide-border/60` rows. Each row is a whole-row link, `px-4 py-2.5` (44px for one line), `surface-raised` on hover. The focus ring is drawn inside the row (`-outline-offset-2`). An ordinal is `font-mono text-xs text-muted`. A second link in a row, such as Solutions' "Çağırış kimi həll et", goes under the title on a phone, lined up with it, and to the right of the title from `sm` up.
+- **Glossary entry:** the term is 500 `text`, aliases are `text-xs text-muted`, and the explanation is `text` at `max-w-prose` with `text-pretty`. An entry opened by its link (`:target`) gets an `accent/10` fill and a 1px inset `accent` ring.
+- **Segmented tabs** (Study Guide timelines): a bordered `p-1` strip of equal buttons, 44px on a phone. The selected tab follows the Ten-Percent Tint Rule: `accent/10`, `accent` text, 500 weight, and a 1px inset `accent` ring.
+- **Callout** (Solution's Challenge hint): `accent/30` border, `accent/10` fill, `text` text.
+- **Lesson navigation cards:** bordered `rounded-lg p-4` links, with a `text-xs text-muted` label over the English title. Hover moves the border to `text-muted`.
+- **Quiz:** the question cards are bordered. Each answer row is a whole-row `label`, 44px tall. A checked answer marks the row border `success/60` or `danger/60` and repeats the result in words (✓/✗ plus text), so the colour is never the only cue. The verdict is `success`, `warning` (partly right) or `danger`. Buttons use the secondary style, and ↑/↓ are 44×44px on a phone.
+- **Sortable table** (appendix tables): a `border` outline with a `surface-raised` header in `text-muted`, `divide-border/60` rows and right-aligned mono numbers. The filter field is `surface-raised`, 44px on a phone. A sort button has a 28px target inside its header cell: table headers are not main controls, so they meet the 24px floor of WCAG 2.5.8 rather than 44px.
+- **Glossary term in prose:** a dotted `text-muted` underline that turns `accent` on hover. Its tooltip is `surface-raised`, bordered and `rounded-lg`, with the tooltip shadow.
+- **Read marker:** a `success` ✓ with a screen-reader label.
 
 ### Practice pages (ticket 36)
 _To be recorded by ticket 36._

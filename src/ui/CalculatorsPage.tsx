@@ -24,14 +24,14 @@ export function CalculatorLinks({ calculators, newTab = false }: { calculators: 
       {i > 0 && ' · '}
       <Link
         to={calculatorPath(calculatorId)}
-        className="text-sky-400 hover:underline"
+        className="link"
         {...(newTab && { target: '_blank', rel: 'noopener noreferrer' })}
       >
         {t(CALCULATOR_TITLES[calculatorId])}
       </Link>
     </span>
   ))
-  return <p className="mt-2 text-sm text-zinc-400">{tRich('calculatorsLinks', { links })}</p>
+  return <p className="mt-2 text-sm text-text-muted">{tRich('calculatorsLinks', { links })}</p>
 }
 
 /** The back-of-the-envelope calculator and the latency comparison, each a section a link can point at. */

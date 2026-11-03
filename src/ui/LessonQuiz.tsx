@@ -12,7 +12,7 @@ export const QUESTION_HINTS: Record<Question['type'], StringKey> = {
   'component-fit': 'quizComponentFitHint',
 }
 
-const buttonClass = 'rounded border border-zinc-700 px-3 py-1.5 text-sm text-zinc-200 hover:border-zinc-500 disabled:opacity-50 disabled:hover:border-zinc-700'
+const buttonClass = 'min-h-11 rounded border border-border px-3 text-sm hover:border-text-muted disabled:opacity-50 disabled:hover:border-border sm:min-h-8'
 
 const percent = (score: number) => Math.round(score * 100)
 
@@ -27,13 +27,13 @@ export function LessonQuiz({ quiz }: { quiz: Quiz }) {
   const headingId = useId()
 
   return (
-    <section id={LESSON_QUIZ_ANCHOR} aria-labelledby={headingId} className="mt-12 border-t border-zinc-800 pt-6">
-      <h2 id={headingId} className="text-2xl font-semibold text-zinc-50">
+    <section id={LESSON_QUIZ_ANCHOR} aria-labelledby={headingId} className="mt-12 border-t border-border pt-6">
+      <h2 id={headingId} className="text-2xl font-semibold text-text">
         {t('quizTitle')}
       </h2>
-      <p className="mt-1 text-sm text-zinc-400">{t('quizDescription', { count: quiz.questions.length })}</p>
+      <p className="mt-1 text-sm text-text-muted">{t('quizDescription', { count: quiz.questions.length })}</p>
       {result && (
-        <p className="mt-2 text-sm text-zinc-300">
+        <p className="mt-2 text-sm text-text">
           {t('quizBestScore', { score: percent(result.bestScore), date: formatDate(new Date(result.lastAttemptAt)) })}
         </p>
       )}
@@ -78,11 +78,11 @@ function QuizAttempt({ quiz, onRetry }: { quiz: Quiz; onRetry(): void }) {
         ))}
       </ol>
       {grade && (
-        <div role="status" className="mt-6 flex flex-wrap items-center gap-3 rounded-lg border border-zinc-700 p-4">
-          <p className="font-medium text-zinc-100">
+        <div role="status" className="mt-6 flex flex-wrap items-center gap-3 rounded-lg border border-border p-4">
+          <p className="font-medium text-text">
             {t('quizResult', { points: formatDecimal(grade.points), max: grade.maxPoints, score: percent(grade.score) })}
           </p>
-          {saved && <p className="text-sm text-zinc-400">{t('quizResultSaved')}</p>}
+          {saved && <p className="text-sm text-text-muted">{t('quizResultSaved')}</p>}
           <button type="button" className={`${buttonClass} ml-auto`} onClick={onRetry}>
             {t('quizRetry')}
           </button>
@@ -106,13 +106,13 @@ function QuestionCard({ number, question, answer, grade, onAnswer, onCheck }: Qu
   const promptId = useId()
   const canCheck = question.type === 'ordering' || answer.length > 0
   return (
-    <li className="rounded-lg border border-zinc-800 p-4">
+    <li className="rounded-lg border border-border p-4">
       <fieldset aria-labelledby={promptId} disabled={!!grade}>
-        <p className="text-xs text-zinc-500">{t('quizQuestion', { number })}</p>
-        <p id={promptId} className="mt-1 text-zinc-100">
+        <p className="text-xs text-text-muted">{t('quizQuestion', { number })}</p>
+        <p id={promptId} className="mt-1 text-pretty text-text">
           {question.prompt}
         </p>
-        <p className="mt-1 text-xs text-zinc-500">{t(QUESTION_HINTS[question.type])}</p>
+        <p className="mt-1 text-xs text-text-muted">{t(QUESTION_HINTS[question.type])}</p>
         {question.type === 'component-fit' && <ComponentFlow question={question} answer={answer} />}
         {question.type === 'ordering' ? (
           <OrderingItems question={question} answer={answer} grade={grade} onAnswer={onAnswer} />
@@ -139,10 +139,10 @@ function QuestionCard({ number, question, answer, grade, onAnswer, onCheck }: Qu
 
 function QuestionVerdict({ grade }: { grade: QuestionGrade }) {
   const [text, color] = grade.correct
-    ? [t('quizCorrect'), 'text-emerald-400']
+    ? [t('quizCorrect'), 'text-success']
     : grade.score > 0
-      ? [t('quizPartlyCorrect', { score: percent(grade.score) }), 'text-amber-400']
-      : [t('quizWrong'), 'text-red-400']
+      ? [t('quizPartlyCorrect', { score: percent(grade.score) }), 'text-warning']
+      : [t('quizWrong'), 'text-danger']
   return (
     <p role="status" className={`mt-4 font-medium ${color}`}>
       {text}
@@ -163,10 +163,10 @@ export function ChoiceOptions(props: {
     <ul className="mt-3 space-y-2">
       {options.map((option, i) => {
         const chosen = answer.includes(i)
-        const border = !grade ? 'border-zinc-800' : option.correct ? 'border-emerald-500/60' : chosen ? 'border-red-500/60' : 'border-zinc-800'
+        const border = !grade ? 'border-border' : option.correct ? 'border-success/60' : chosen ? 'border-danger/60' : 'border-border'
         return (
-          <li key={i} className={`rounded border ${border} px-3 py-2`}>
-            <label className="flex cursor-pointer items-start gap-2 text-zinc-200">
+          <li key={i} className={`rounded border ${border} px-3`}>
+            <label className="flex cursor-pointer items-start gap-2 py-2.5 text-text">
               <input
                 type={multiple ? 'checkbox' : 'radio'}
                 name={name}
@@ -177,10 +177,10 @@ export function ChoiceOptions(props: {
               <span>{option.text}</span>
             </label>
             {grade && (
-              <div className="mt-1 pl-6 text-sm">
-                {option.correct && <p className="text-emerald-400">✓ {t('quizCorrectOption')}</p>}
-                {!option.correct && chosen && <p className="text-red-400">✗ {t('quizWrongChoice')}</p>}
-                <p className="text-zinc-400">{option.explanation}</p>
+              <div className="pb-2.5 pl-6 text-sm">
+                {option.correct && <p className="text-success">✓ {t('quizCorrectOption')}</p>}
+                {!option.correct && chosen && <p className="text-danger">✗ {t('quizWrongChoice')}</p>}
+                <p className="text-text-muted">{option.explanation}</p>
               </div>
             )}
           </li>
@@ -202,17 +202,17 @@ function OrderingItems(props: { question: OrderingQuestion; answer: QuestionAnsw
       {answer.map((itemIndex, position) => {
         const item = question.items[itemIndex]
         const right = grade?.marks[position]
-        const border = right === undefined ? 'border-zinc-800' : right ? 'border-emerald-500/60' : 'border-red-500/60'
+        const border = right === undefined ? 'border-border' : right ? 'border-success/60' : 'border-danger/60'
         return (
           <li key={itemIndex} className={`rounded border ${border} px-3 py-2`}>
-            <div className="flex items-center gap-2 text-zinc-200">
-              <span className="w-5 shrink-0 text-sm text-zinc-500">{position + 1}.</span>
+            <div className="flex items-center gap-2 text-text">
+              <span className="w-5 shrink-0 text-sm text-text-muted">{position + 1}.</span>
               <span className="flex-1">{item.text}</span>
               {!grade && (
                 <span className="flex shrink-0 gap-1">
                   <button
                     type="button"
-                    className={buttonClass}
+                    className={`${buttonClass} min-w-11 sm:min-w-8`}
                     aria-label={t('quizMoveUp', { item: item.text })}
                     disabled={position === 0}
                     onClick={() => move(position, position - 1)}
@@ -221,7 +221,7 @@ function OrderingItems(props: { question: OrderingQuestion; answer: QuestionAnsw
                   </button>
                   <button
                     type="button"
-                    className={buttonClass}
+                    className={`${buttonClass} min-w-11 sm:min-w-8`}
                     aria-label={t('quizMoveDown', { item: item.text })}
                     disabled={position === answer.length - 1}
                     onClick={() => move(position, position + 1)}
@@ -234,11 +234,11 @@ function OrderingItems(props: { question: OrderingQuestion; answer: QuestionAnsw
             {grade && (
               <div className="mt-1 pl-7 text-sm">
                 {right ? (
-                  <p className="text-emerald-400">✓ {t('quizRightPosition')}</p>
+                  <p className="text-success">✓ {t('quizRightPosition')}</p>
                 ) : (
-                  <p className="text-red-400">✗ {t('quizWrongPosition', { position: itemIndex + 1 })}</p>
+                  <p className="text-danger">✗ {t('quizWrongPosition', { position: itemIndex + 1 })}</p>
                 )}
-                <p className="text-zinc-400">{item.explanation}</p>
+                <p className="text-text-muted">{item.explanation}</p>
               </div>
             )}
           </li>
@@ -256,16 +256,16 @@ function ComponentFlow({ question, answer }: { question: ComponentFitQuestion; a
       {question.flow.map((step, i) => (
         <li key={i} className="flex items-center gap-2">
           {i > 0 && (
-            <span aria-hidden className="text-zinc-500">
+            <span aria-hidden className="text-text-muted">
               →
             </span>
           )}
           {step === COMPONENT_BLANK ? (
-            <span className="rounded border border-dashed border-sky-500/70 px-2 py-1 text-sky-300">
+            <span className="rounded border border-dashed border-accent/70 px-2 py-1 text-accent">
               {chosen ?? <span aria-label={t('quizBlank')}>?</span>}
             </span>
           ) : (
-            <span lang="en" className="rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-zinc-200">
+            <span lang="en" className="rounded border border-border bg-surface-raised px-2 py-1 text-text">
               {step}
             </span>
           )}

@@ -11,6 +11,7 @@ import type { Root } from 'mdast'
 import { Link } from 'react-router-dom'
 import { headingAnchorAt, type PrimerText } from '../core/content/catalog'
 import { resolveLink, type ResolvedLink } from '../core/content/links'
+import { nestHeadings } from '../core/content/markdown'
 import { createGlossaryMatcher, markGlossaryTerms, type GlossaryTermNode } from '../core/glossary/matching'
 import { catalog } from './catalog'
 import { GlossaryTooltip } from './GlossaryTooltip'
@@ -23,6 +24,11 @@ const glossaryTerms = new Map(catalog.glossary.map((term) => [term.id, term]))
 /** Marks Glossary Terms in the Lesson text (Core decides which occurrences get a tooltip). */
 function remarkGlossary() {
   return (tree: Root) => markGlossaryTerms(tree, glossaryMatcher)
+}
+
+/** Heading levels follow on from the page's title without a gap (Core decides the levels). */
+function remarkNestHeadings() {
+  return (tree: Root) => nestHeadings(tree)
 }
 
 /** A marked term becomes a `<span data-glossary-term>`, which `PrimerSpan` renders with its tooltip. */
@@ -50,9 +56,12 @@ function isPageLink(link: ResolvedLink): link is PageLink {
   return link.kind === 'lesson' || link.kind === 'solution'
 }
 
-/** Typography for primer text on its pages. */
+/**
+ * Typography for primer text on its pages. Running text is kept to about 75 characters a line; images, tables,
+ * code blocks and the interactive blocks in their place keep the column's full width.
+ */
 export const PRIMER_PROSE_CLASS =
-  'prose dark:prose-invert max-w-none prose-a:text-sky-400 prose-img:mx-auto prose-img:rounded-md prose-img:bg-white prose-img:p-2'
+  'prose max-w-none prose-headings:max-w-xl prose-p:not-has-[img]:max-w-xl prose-ul:max-w-xl prose-ol:max-w-xl prose-blockquote:max-w-xl prose-headings:text-balance prose-p:text-pretty prose-pre:border prose-pre:border-border prose-img:mx-auto prose-img:rounded-md prose-img:bg-white prose-img:p-2'
 
 function pathFor(link: PageLink): string {
   return link.kind === 'lesson' ? lessonPath(link.lessonId, link.anchor) : solutionPath(link.solutionId, link.anchor)
@@ -132,7 +141,7 @@ function codeBlock(replacements: ReadonlyMap<number, ReactNode>) {
       <>
         <div className="not-prose">{replacement}</div>
         <details>
-          <summary lang="az" className="cursor-pointer text-sm text-zinc-400">
+          <summary lang="az" className="cursor-pointer py-3 text-sm text-text-muted hover:text-text sm:py-2">
             {t('primerOriginalText')}
           </summary>
           <pre {...rest} />
@@ -176,7 +185,7 @@ export function PrimerMarkdown({
   return (
     // The primer's raw HTML (centred image blocks, captions) is rendered, then sanitised.
     <Markdown
-      remarkPlugins={[remarkGfm, remarkEmoji, remarkGlossary]}
+      remarkPlugins={[remarkGfm, remarkEmoji, remarkGlossary, remarkNestHeadings]}
       remarkRehypeOptions={remarkRehypeOptions}
       rehypePlugins={[rehypeRaw, [rehypeSanitize, sanitizeSchema]]}
       components={components}
