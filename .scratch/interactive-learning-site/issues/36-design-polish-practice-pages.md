@@ -59,4 +59,7 @@
   - E2E: the full suite passes, 33/33, with one worker (`--workers=1`).
     - With the default parallel workers, one test fails: "deletes, undoes and redoes on the canvas with the keyboard". It fails 32/33 the same way on HEAD `2cae244` with this diff stashed, so it is not caused by this slice.
     - The test passes on its own (3/3 with `--repeat-each 3`), and the full suite was 33/33 in 37's runs. So it looks like a timing problem under load, in a Sandbox test this slice does not touch.
+    - **Fixed in a follow-up commit.** The test failed after `page.reload()`, not on Delete. The Sandbox stores each change in IndexedDB without waiting, and the reload came before the redo's write committed.
+      - The three Sandbox tests that reload after a change now first poll the stored draft (`storedSandboxDraft`) until it holds the change.
+      - Afterwards the full suite passed 33/33 twice with parallel workers, and the three tests passed 15/15 (`--repeat-each 5 --workers 8`).
   - Review fixes: the DESIGN.md text for the grade hovers, the no-Mastery node border, the list row height and the hints now matches the code.

@@ -495,6 +495,7 @@ test('builds a sandbox Design by drag and drop, and keeps it after a reload', as
   await expect(edge.locator('path.react-flow__edge-path')).toHaveAttribute('style', /stroke-dasharray: 6,? 4/)
   await expect(edge.getByText('Oxuma', { exact: true })).toBeVisible()
 
+  await expect.poll(async () => (await storedSandboxDraft(page)).edges).toEqual([expect.objectContaining({ mode: 'async', traffic: 'read' })])
   await page.reload()
   await expect(page.getByTestId('node-cache-1')).toContainText('Redis')
   await expect(page.getByTestId('node-cache-1')).toContainText('×3')
@@ -525,12 +526,12 @@ test('deletes, undoes and redoes on the canvas with the keyboard', async ({ page
   await expect(loadBalancer).toBeHidden()
 
   // The deletion is saved like any other change.
+  await expect.poll(async () => (await storedSandboxDraft(page)).nodes.map((node) => node.id)).toEqual(['web-server-1'])
   await page.reload()
   await expect(webServer).toBeVisible()
   await expect(loadBalancer).toBeHidden()
 })
 
-/** Drags with the mouse from the middle of `from` by an offset, for elements Playwright's `dragTo` cannot target. */
 /**
  * Drags a palette component onto the canvas. The editor is no taller than the viewport, so it is first
  * scrolled to the viewport's bottom edge: a drag that has to scroll the page on the way drops nowhere.
@@ -540,6 +541,37 @@ async function addToCanvas(palette: Locator, canvas: Locator, component: string,
   await palette.getByRole('button', { name: `${component}: kətana əlavə et` }).dragTo(canvas, { targetPosition: { x, y } })
 }
 
+/** The parts of a stored Design the tests look at. */
+interface StoredDesign {
+  nodes: { id: string }[]
+  edges: { mode: string; traffic: string }[]
+  zones: { position: { x: number; y: number } }[]
+}
+
+/**
+ * The sandbox draft as IndexedDB holds it. The Sandbox stores each change without waiting, so a test polls
+ * this before a reload: a reload that comes before the write commits loses the change.
+ */
+async function storedSandboxDraft(page: Page): Promise<StoredDesign> {
+  return page.evaluate(
+    () =>
+      new Promise<StoredDesign>((resolve, reject) => {
+        const open = indexedDB.open('system-design-lab-progress')
+        open.onerror = () => reject(open.error)
+        open.onsuccess = () => {
+          const db = open.result
+          const read = db.transaction('records').objectStore('records').get('area:designs')
+          read.onerror = () => reject(read.error)
+          read.onsuccess = () => {
+            db.close()
+            resolve(read.result?.value.drafts.sandbox ?? { nodes: [], edges: [], zones: [] })
+          }
+        }
+      }),
+  )
+}
+
+/** Drags with the mouse from the middle of `from` by an offset, for elements Playwright's `dragTo` cannot target. */
 async function dragBy(page: Page, from: Locator, dx: number, dy: number) {
   const box = (await from.boundingBox())!
   const start = { x: box.x + box.width / 2, y: box.y + box.height / 2 }
@@ -578,11 +610,14 @@ test('groups Nodes in a zone box that carries them along, and exports the canvas
   // Dragged by its header, the zone takes both along.
   const boxes = () => Promise.all([zone, webServer, cache].map(async (element) => (await element.boundingBox())!))
   const before = await boxes()
+  const storedZoneY = async () => (await storedSandboxDraft(page)).zones[0]?.position.y
+  const zoneYBefore = await storedZoneY()
   await dragBy(page, zone.getByText('us-east-1a'), 0, 120)
   const [zoneMove, ...nodeMoves] = (await boxes()).map((box, i) => box.y - before[i].y)
   expect(zoneMove).toBeGreaterThan(60)
   for (const move of nodeMoves) expect(move).toBeCloseTo(zoneMove, 0)
 
+  await expect.poll(storedZoneY).toBeGreaterThan(zoneYBefore! + 60)
   await page.reload()
   await page.getByTestId('zone-zone-1').getByText('us-east-1a').click()
   await expect(panel.getByText('İçindəki komponentlər: 2')).toBeVisible()
