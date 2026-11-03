@@ -187,7 +187,7 @@ function Editor({ history, onChange, readOnly, compact = false, label = t('umlLa
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [readOnly])
 
-  const buttonClass = 'rounded border border-zinc-700 px-2 py-1 text-xs text-zinc-200 hover:border-zinc-500 disabled:opacity-40'
+  const buttonClass = 'min-h-11 rounded border border-border px-2 text-xs hover:border-text-muted disabled:opacity-50 disabled:hover:border-border sm:min-h-8'
 
   return (
     <div className={compact ? 'flex flex-col gap-3' : 'flex flex-col gap-3 md:h-[calc(100vh-11rem)] md:min-h-[32rem] md:flex-row'}>
@@ -208,7 +208,7 @@ function Editor({ history, onChange, readOnly, compact = false, label = t('umlLa
                 {t('canvasDelete')}
               </button>
             </div>
-            <p className="mb-2 text-xs text-zinc-500">{t('umlShortcuts')}</p>
+            <p className="mb-2 text-xs text-text-muted">{t('umlShortcuts')}</p>
           </>
         )}
         <div
@@ -216,8 +216,8 @@ function Editor({ history, onChange, readOnly, compact = false, label = t('umlLa
           // React Flow fills its parent's height, so the parent needs one: fixed when stacked, the free space beside the panel from `md`.
           className={
             compact
-              ? 'relative h-[26rem] overflow-hidden rounded border border-zinc-800'
-              : 'relative h-[26rem] overflow-hidden rounded border border-zinc-800 md:h-auto md:min-h-0 md:flex-1'
+              ? 'relative h-[26rem] overflow-hidden rounded border border-border'
+              : 'relative h-[26rem] overflow-hidden rounded border border-border md:h-auto md:min-h-0 md:flex-1'
           }
         >
           <RelationMarkers prefix={markers} />
@@ -252,7 +252,7 @@ function Editor({ history, onChange, readOnly, compact = false, label = t('umlLa
             <Controls showInteractive={false} />
           </ReactFlow>
         </div>
-        <p className="mt-2 text-xs text-zinc-500">{t('umlLegend')}</p>
+        <p className="mt-2 text-xs text-text-muted">{t('umlLegend')}</p>
       </div>
 
       <aside className={compact ? 'shrink-0' : 'shrink-0 overflow-y-auto md:w-72'}>

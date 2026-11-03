@@ -50,7 +50,7 @@ export function LoadBalancerSimulation() {
               <li key={i} className="flex items-center gap-2 text-sm">
                 <span aria-hidden className="size-2.5 shrink-0 rounded-full" style={{ background: seriesColor(i) }} />
                 <label className="flex min-w-0 flex-1 items-center gap-2">
-                  <span className="shrink-0 whitespace-nowrap text-zinc-300">{t('loadBalancerServerName', { number: i + 1 })}</span>
+                  <span className="shrink-0 whitespace-nowrap text-text">{t('loadBalancerServerName', { number: i + 1 })}</span>
                   <input
                     type="range"
                     min={1}
@@ -61,14 +61,14 @@ export function LoadBalancerSimulation() {
                     onChange={(event) => setServerSpeeds((speeds) => speeds.map((old, j) => (j === i ? Number(event.target.value) : old)))}
                     className="min-w-0 flex-1"
                   />
-                  <span className="shrink-0 whitespace-nowrap text-zinc-400 tabular-nums">{t('loadBalancerServerSpeedValue', { speed })}</span>
+                  <span className="shrink-0 whitespace-nowrap text-text-muted tabular-nums">{t('loadBalancerServerSpeedValue', { speed })}</span>
                 </label>
                 <button
                   type="button"
                   disabled={serverSpeeds.length <= MIN_SERVERS}
                   aria-label={t('loadBalancerRemoveServer', { number: i + 1 })}
                   onClick={() => setServerSpeeds((speeds) => speeds.filter((_, j) => j !== i))}
-                  className="rounded px-1.5 text-zinc-400 hover:text-zinc-100 disabled:opacity-30"
+                  className="min-h-11 min-w-11 rounded text-text-muted hover:text-text disabled:opacity-30 sm:min-h-6 sm:min-w-6"
                 >
                   ×
                 </button>
@@ -79,7 +79,7 @@ export function LoadBalancerSimulation() {
             type="button"
             disabled={serverSpeeds.length >= MAX_SERVERS}
             onClick={() => setServerSpeeds((speeds) => [...speeds, 2])}
-            className="mt-2 rounded border border-zinc-700 px-2 py-0.5 text-sm text-zinc-300 hover:border-zinc-500 disabled:opacity-40"
+            className="mt-2 min-h-11 rounded border border-border px-2 text-sm text-text hover:border-text-muted disabled:opacity-50 disabled:hover:border-border sm:min-h-8"
           >
             + {t('loadBalancerAddServer')}
           </button>
@@ -95,7 +95,7 @@ export function LoadBalancerSimulation() {
             onChange={(event) => setArrivalRate(Number(event.target.value))}
             className="w-full"
           />
-          <p className="text-sm text-zinc-300">
+          <p className="text-sm text-text">
             {t('loadBalancerArrivalRateValue', { rate: arrivalRate, percent: formatInteger((arrivalRate / capacity) * 100) })}
           </p>
         </Control>
@@ -110,7 +110,7 @@ export function LoadBalancerSimulation() {
             onChange={(event) => setClientCount(Number(event.target.value))}
             className="w-full"
           />
-          <p className="text-sm text-zinc-300">{t('loadBalancerClientsValue', { count: clientCount })}</p>
+          <p className="text-sm text-text">{t('loadBalancerClientsValue', { count: clientCount })}</p>
         </Control>
       </div>
 
@@ -159,10 +159,10 @@ function QueueChart({ result, tick }: { result: LoadBalancerResult; tick: number
 function ServerTable({ result, speeds }: { result: LoadBalancerResult; speeds: number[] }) {
   return (
     <details className="mt-4 text-sm">
-      <summary className="cursor-pointer text-zinc-300">{t('loadBalancerTableTitle')}</summary>
+      <summary className="cursor-pointer py-3 text-text sm:py-1">{t('loadBalancerTableTitle')}</summary>
       <div className="mt-2 overflow-x-auto">
         <table className="w-full text-left tabular-nums">
-          <thead className="text-zinc-400">
+          <thead className="text-text-muted">
             <tr>
               {(['loadBalancerColumnServer', 'loadBalancerColumnSpeed', 'loadBalancerColumnAssigned', 'loadBalancerColumnCompleted', 'loadBalancerColumnMaxQueue', 'loadBalancerColumnMeanQueue'] as const).map((key) => (
                 <th key={key} className="py-1 pr-3 font-normal">
@@ -171,9 +171,9 @@ function ServerTable({ result, speeds }: { result: LoadBalancerResult; speeds: n
               ))}
             </tr>
           </thead>
-          <tbody className="text-zinc-200">
+          <tbody className="text-text">
             {result.servers.map((server, i) => (
-              <tr key={i} className="border-t border-zinc-800">
+              <tr key={i} className="border-t border-border">
                 <td className="py-1 pr-3">{t('loadBalancerServerName', { number: i + 1 })}</td>
                 <td className="py-1 pr-3">{t('loadBalancerServerSpeedValue', { speed: speeds[i] })}</td>
                 <td className="py-1 pr-3">{server.assigned}</td>

@@ -121,11 +121,11 @@ export function CapSimulation() {
           <button
             type="button"
             onClick={changeNetwork}
-            className={`rounded border px-3 py-1 text-sm ${!cut ? 'border-red-400/70 text-red-300 hover:bg-red-400/10' : 'border-zinc-700 text-zinc-300 hover:border-zinc-500'}`}
+            className={`min-h-11 rounded border px-3 text-sm sm:min-h-8 ${!cut ? 'border-danger/60 text-danger hover:bg-danger/10' : 'border-border text-text hover:border-text-muted'}`}
           >
             {t(networkAction)}
           </button>
-          <p className="mt-2 text-sm text-zinc-300">
+          <p className="mt-2 text-sm text-text">
             {!cut
               ? t('capNetworkWhole')
               : cut.to === undefined
@@ -136,7 +136,7 @@ export function CapSimulation() {
       </div>
 
       <PlaybackBar playback={playback} total={TICKS} onRerun={() => setSeed(newSeed)} />
-      <p className="mt-1 text-xs text-zinc-500">
+      <p className="mt-1 text-xs text-text-muted">
         {t('capTickHint', { ms: TICK_MS, rate: RATE, percent: formatInteger(WRITE_SHARE * 100), keys: KEY_COUNT })}
       </p>
 
@@ -182,18 +182,18 @@ function Cluster({ mode, cut, tick }: { mode: CapMode; cut: boolean; tick: CapTi
     !cut ? t('capSideConnected') : mode === 'ap' ? t('capSideAnswers') : side === 'majority' ? t('capSideQuorum') : t('capSideNoQuorum')
   return (
     <figure className="mt-4">
-      <figcaption className="text-sm font-medium text-zinc-200">{t('capClusterTitle')}</figcaption>
-      <p className="text-xs text-zinc-500">{t('capClusterHint')}</p>
+      <figcaption className="text-sm font-medium text-text">{t('capClusterTitle')}</figcaption>
+      <p className="text-xs text-text-muted">{t('capClusterHint')}</p>
       <div className="mt-2 grid items-stretch gap-3 sm:grid-cols-[1fr_auto_1fr]">
         {(['majority', 'minority'] as const).map((side, i) => (
-          <div key={side} className={`${i === 1 ? 'sm:order-3' : ''} rounded border border-zinc-800 bg-zinc-900/40 p-3 text-sm`}>
-            <p className="font-medium text-zinc-100">{t(SIDE_NAMES[side], { count: SIDE_NODES[side] })}</p>
-            <p className={`mt-1 text-xs ${cut && mode === 'cp' && side === 'minority' ? 'text-red-300' : 'text-zinc-400'}`}>{sideNote(side)}</p>
+          <div key={side} className={`${i === 1 ? 'sm:order-3' : ''} rounded border border-border bg-surface-raised/50 p-3 text-sm`}>
+            <p className="font-medium text-text">{t(SIDE_NAMES[side], { count: SIDE_NODES[side] })}</p>
+            <p className={`mt-1 text-xs ${cut && mode === 'cp' && side === 'minority' ? 'text-danger' : 'text-text-muted'}`}>{sideNote(side)}</p>
             <ul className="mt-2 flex flex-wrap gap-1.5" aria-label={t('capKeysLabel')}>
               {tick.versions[side].map((version, key) => (
                 <li
                   key={key}
-                  className={`rounded border px-1.5 py-0.5 text-xs tabular-nums ${differs(key) ? 'border-amber-400/60 text-amber-300' : 'border-zinc-700 text-zinc-300'}`}
+                  className={`rounded border px-1.5 py-0.5 text-xs tabular-nums ${differs(key) ? 'border-warning/60 text-warning' : 'border-border text-text'}`}
                 >
                   {t('capKeyVersion', { key: key + 1, version })}
                 </li>
@@ -202,13 +202,13 @@ function Cluster({ mode, cut, tick }: { mode: CapMode; cut: boolean; tick: CapTi
           </div>
         ))}
         <p
-          className={`flex items-center justify-center px-2 text-sm sm:order-2 ${cut ? 'text-red-300' : 'text-zinc-500'}`}
+          className={`flex items-center justify-center px-2 text-sm sm:order-2 ${cut ? 'text-danger' : 'text-text-muted'}`}
           aria-label={cut ? t('capLinkCut') : t('capLinkWhole')}
         >
           <span aria-hidden>{cut ? '— ✕ —' : '———'}</span>
         </p>
       </div>
-      {tick.divergentKeys > 0 && <p className="mt-2 text-xs text-amber-300">{t('capDivergentNow', { count: tick.divergentKeys })}</p>}
+      {tick.divergentKeys > 0 && <p className="mt-2 text-xs text-warning">{t('capDivergentNow', { count: tick.divergentKeys })}</p>}
     </figure>
   )
 }
@@ -217,11 +217,11 @@ function Cluster({ mode, cut, tick }: { mode: CapMode; cut: boolean; tick: CapTi
 function RequestLog({ entries }: { entries: CapLogEntry[] }) {
   return (
     <figure>
-      <figcaption className="text-sm font-medium text-zinc-200">{t('capLogTitle')}</figcaption>
-      <p className="text-xs text-zinc-500">{t('capLogHint', { count: LOG_ROWS })}</p>
+      <figcaption className="text-sm font-medium text-text">{t('capLogTitle')}</figcaption>
+      <p className="text-xs text-text-muted">{t('capLogHint', { count: LOG_ROWS })}</p>
       <div className="mt-2 overflow-x-auto">
         <table className="w-full text-left text-sm tabular-nums">
-          <thead className="text-xs text-zinc-400">
+          <thead className="text-xs text-text-muted">
             <tr>
               {(['capColumnTime', 'capColumnSide', 'capColumnRequest', 'capColumnOutcome'] as const).map((key) => (
                 <th key={key} className="py-1 pr-3 font-normal">
@@ -230,17 +230,17 @@ function RequestLog({ entries }: { entries: CapLogEntry[] }) {
               ))}
             </tr>
           </thead>
-          <tbody className="text-zinc-200">
+          <tbody className="text-text">
             {entries.length === 0 && (
               <tr>
-                <td colSpan={4} className="py-1 text-zinc-500">
+                <td colSpan={4} className="py-1 text-text-muted">
                   {t('capLogEmpty')}
                 </td>
               </tr>
             )}
             {entries.map((entry, i) => (
-              <tr key={`${entry.time} ${i}`} className="border-t border-zinc-800">
-                <td className="py-1 pr-3 whitespace-nowrap text-zinc-400">{t('capTime', { ms: formatInteger(entry.time) })}</td>
+              <tr key={`${entry.time} ${i}`} className="border-t border-border">
+                <td className="py-1 pr-3 whitespace-nowrap text-text-muted">{t('capTime', { ms: formatInteger(entry.time) })}</td>
                 <td className="py-1 pr-3">{t(entry.side === 'majority' ? 'capLogMajority' : 'capLogMinority')}</td>
                 <td className="py-1 pr-3">{requestText(entry)}</td>
                 <td className="py-1 pr-3">
@@ -261,9 +261,9 @@ function requestText({ kind, key, version, outcome }: CapLogEntry): string {
 }
 
 function Outcome({ entry }: { entry: CapLogEntry }) {
-  if (entry.outcome === 'rejected') return <span className="text-red-300">{t('capOutcomeRejected')}</span>
-  if (entry.outcome === 'stale') return <span className="text-amber-300">{t('capOutcomeStale', { latest: entry.latest! })}</span>
-  return <span className="text-emerald-300">{t('capOutcomeOk')}</span>
+  if (entry.outcome === 'rejected') return <span className="text-danger">{t('capOutcomeRejected')}</span>
+  if (entry.outcome === 'stale') return <span className="text-warning">{t('capOutcomeStale', { latest: entry.latest! })}</span>
+  return <span className="text-success">{t('capOutcomeOk')}</span>
 }
 
 /** The metrics over the ticks played so far, each with what it means in the chosen mode. */
@@ -294,10 +294,10 @@ function ModeTable({ settings, current }: { settings: Omit<CapInput, 'mode'>; cu
   const rows = useMemo(() => CAP_MODES.map((mode) => ({ mode, totals: simulateCap({ ...settings, mode }).totals })), [settings])
   return (
     <details className="mt-4 text-sm">
-      <summary className="cursor-pointer text-zinc-300">{t('capCompareTitle')}</summary>
+      <summary className="cursor-pointer py-3 text-text sm:py-1">{t('capCompareTitle')}</summary>
       <div className="mt-2 overflow-x-auto">
         <table className="w-full text-left tabular-nums">
-          <thead className="text-zinc-400">
+          <thead className="text-text-muted">
             <tr>
               {(['capColumnMode', 'capColumnAvailability', 'capColumnRejected', 'capColumnStale', 'capColumnDivergent', 'capColumnConflicts'] as const).map((key) => (
                 <th key={key} className="py-1 pr-3 font-normal">
@@ -306,9 +306,9 @@ function ModeTable({ settings, current }: { settings: Omit<CapInput, 'mode'>; cu
               ))}
             </tr>
           </thead>
-          <tbody className="text-zinc-200">
+          <tbody className="text-text">
             {rows.map(({ mode, totals }) => (
-              <tr key={mode} aria-current={mode === current || undefined} className={`border-t border-zinc-800 ${mode === current ? 'text-sky-300' : ''}`}>
+              <tr key={mode} aria-current={mode === current || undefined} className={`border-t border-border ${mode === current ? 'text-accent' : ''}`}>
                 <td className="py-1 pr-3">{t(MODE_NAMES[mode])}</td>
                 <td className="py-1 pr-3">{answeredShare(totals)}</td>
                 <td className="py-1 pr-3">{formatInteger(totals.rejectedReads + totals.rejectedWrites)}</td>

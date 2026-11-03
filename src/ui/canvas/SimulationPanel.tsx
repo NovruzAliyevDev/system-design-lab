@@ -74,7 +74,7 @@ export function useSimulation(
 const SLIDER_MIN = 2
 const SLIDER_MAX = 5
 
-const fieldClass = 'mt-1 w-28 rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm text-zinc-100'
+const fieldClass = 'mt-1 min-h-11 w-28 rounded border border-border bg-surface-raised px-2 text-sm text-text sm:min-h-8'
 
 const formatSignificant = (ms: number) => formatNumber(Number(ms.toPrecision(3)))
 const formatMs = (ms: number) => t('trafficMs', { ms: formatSignificant(ms) })
@@ -105,7 +105,7 @@ export function LoadControls(props: {
 
   const field = (key: keyof LoadDraft, label: string) => (
     <div>
-      <label htmlFor={`${id}-${key}`} className="block text-xs text-zinc-400">
+      <label htmlFor={`${id}-${key}`} className="block text-xs text-text-muted">
         {label}
       </label>
       <input
@@ -119,17 +119,17 @@ export function LoadControls(props: {
   )
 
   return (
-    <section aria-labelledby={`${id}-title`} className="mb-3 rounded border border-zinc-800 p-3">
-      <h2 id={`${id}-title`} className="text-sm font-semibold text-zinc-100">
+    <section aria-labelledby={`${id}-title`} className="mb-3 rounded border border-border p-3">
+      <h2 id={`${id}-title`} className="text-sm font-semibold text-text">
         {t('trafficTitle')}
       </h2>
-      <p className="mt-1 text-xs text-zinc-400">{t('trafficDescription')}</p>
+      <p className="mt-1 text-xs text-text-muted">{t('trafficDescription')}</p>
       <div className="mt-2 flex flex-wrap items-end gap-3">
         {field('read', t('trafficReadQps'))}
         {field('write', t('trafficWriteQps'))}
         {field('requestKb', t('trafficRequestKb'))}
         <div className="min-w-56 flex-1">
-          <label htmlFor={`${id}-slider`} className="block text-xs text-zinc-400">
+          <label htmlFor={`${id}-slider`} className="block text-xs text-text-muted">
             {t('trafficLoad', { qps: formatInteger(total) })}
           </label>
           <input
@@ -148,28 +148,28 @@ export function LoadControls(props: {
         <button
           type="button"
           aria-pressed={simulating}
-          className={simulating ? 'rounded border border-sky-500 bg-sky-500/15 px-3 py-1.5 text-sm text-zinc-50' : 'rounded bg-sky-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-sky-500'}
+          className={`min-h-11 rounded border border-accent px-3 text-sm font-medium sm:min-h-8 ${simulating ? 'bg-accent/10 text-accent ring-1 ring-accent ring-inset' : 'bg-accent text-surface hover:opacity-90'}`}
           onClick={onToggle}
         >
           {simulating ? t('trafficStop') : t('trafficStart')}
         </button>
       </div>
       <fieldset className="mt-3">
-        <legend className="text-xs text-zinc-400">{t('trafficMode')}</legend>
+        <legend className="text-xs text-text-muted">{t('trafficMode')}</legend>
         <div className="mt-1 flex flex-wrap gap-4">
           {SIMULATION_MODES.map((option) => (
-            <label key={option} className="flex items-center gap-1.5 text-sm text-zinc-200">
+            <label key={option} className="flex items-center gap-1.5 text-sm text-text">
               <input type="radio" name={`${id}-mode`} value={option} checked={mode === option} onChange={() => onModeChange(option)} />
               {t(MODE_LABELS[option])}
             </label>
           ))}
         </div>
-        <p className="mt-1 text-xs text-zinc-400">
+        <p className="mt-1 text-xs text-text-muted">
           {mode === 'simple' ? t('trafficModeSimpleHelp') : t('trafficModeRealisticHelp', { samples: formatInteger(REALISTIC_SAMPLES) })}
         </p>
       </fieldset>
       {!profile && (
-        <p role="alert" className="mt-2 text-xs text-rose-400">
+        <p role="alert" className="mt-2 text-xs text-danger">
           {t('trafficInvalid')}
         </p>
       )}
@@ -228,29 +228,29 @@ export function SimulationSummary({ design, result, label = t('trafficSummary') 
   ]
   const pathItem = (path: RequestPath) => (
     <li key={`${path.kind}:${path.nodeIds.join('>')}`}>
-      <span className="text-zinc-500">{t(path.kind === 'read' ? 'trafficPathRead' : 'trafficPathWrite')}:</span> {path.nodeIds.map(nodeLabel).join(' → ')} ·{' '}
+      <span className="text-text-muted">{t(path.kind === 'read' ? 'trafficPathRead' : 'trafficPathWrite')}:</span> {path.nodeIds.map(nodeLabel).join(' → ')} ·{' '}
       {formatMs(path.latencyMs)} · {t('trafficPathShare', { percent: formatPercent(path.share) })}
-      {path.errorRate > 0 && <span className="text-rose-300"> · {t('trafficPathErrors', { percent: formatPercent(path.errorRate) })}</span>}
+      {path.errorRate > 0 && <span className="text-danger"> · {t('trafficPathErrors', { percent: formatPercent(path.errorRate) })}</span>}
     </li>
   )
 
   return (
-    <section aria-label={label} className="mt-3 rounded border border-zinc-800 p-3 text-sm">
-      <h2 className="font-semibold text-zinc-100">{label}</h2>
-      {!hasClient && <p className="mt-1 text-xs text-amber-300">{t('trafficNoClient')}</p>}
+    <section aria-label={label} className="mt-3 rounded border border-border p-3 text-sm">
+      <h2 className="font-semibold text-text">{label}</h2>
+      {!hasClient && <p className="mt-1 text-xs text-warning">{t('trafficNoClient')}</p>}
       <dl className="mt-2 grid grid-cols-2 gap-x-6 gap-y-1 sm:grid-cols-4 lg:grid-cols-7">
         {stats.map(({ name, value, bad }) => (
           <div key={name}>
-            <dt className="text-xs text-zinc-500">{name}</dt>
-            <dd className={bad ? 'text-rose-300' : 'text-zinc-100'}>{value}</dd>
+            <dt className="text-xs text-text-muted">{name}</dt>
+            <dd className={bad ? 'text-danger' : 'text-text'}>{value}</dd>
           </div>
         ))}
       </dl>
       {broken.length > 0 && (
         <div className="mt-3 grid gap-4 lg:grid-cols-2">
           <div>
-            <h3 className="text-xs font-semibold text-zinc-300">{t('trafficBroken')}</h3>
-            <ul className="mt-1 space-y-0.5 text-xs text-rose-300">
+            <h3 className="text-xs font-semibold text-text">{t('trafficBroken')}</h3>
+            <ul className="mt-1 space-y-0.5 text-xs text-danger">
               {broken.map((text) => (
                 <li key={text}>{text}</li>
               ))}
@@ -258,23 +258,23 @@ export function SimulationSummary({ design, result, label = t('trafficSummary') 
           </div>
           {failing.length > 0 && (
             <div>
-              <h3 className="text-xs font-semibold text-zinc-300">{t('trafficFailingPaths')}</h3>
-              <ul className="mt-1 space-y-0.5 text-xs text-zinc-300">{failing.slice(0, 8).map(pathItem)}</ul>
+              <h3 className="text-xs font-semibold text-text">{t('trafficFailingPaths')}</h3>
+              <ul className="mt-1 space-y-0.5 text-xs text-text">{failing.slice(0, 8).map(pathItem)}</ul>
             </div>
           )}
         </div>
       )}
       <div className="mt-3 grid gap-4 lg:grid-cols-2">
         <div>
-          <h3 className="text-xs font-semibold text-zinc-300">{t('trafficBottlenecks')}</h3>
+          <h3 className="text-xs font-semibold text-text">{t('trafficBottlenecks')}</h3>
           {result.bottlenecks.length === 0 ? (
-            <p className="mt-1 text-xs text-zinc-500">{t('trafficNoBottleneck')}</p>
+            <p className="mt-1 text-xs text-text-muted">{t('trafficNoBottleneck')}</p>
           ) : (
             <ol className="mt-1 space-y-0.5 text-xs">
               {result.bottlenecks.slice(0, 5).map((nodeId) => {
                 const metrics = result.nodes[nodeId]
                 return (
-                  <li key={nodeId} className={metrics.overloaded ? 'text-rose-300' : 'text-zinc-300'}>
+                  <li key={nodeId} className={metrics.overloaded ? 'text-danger' : 'text-text'}>
                     {nodeLabel(nodeId)}: {t('trafficPercent', { percent: formatPercent(metrics.utilisation) })}
                     {metrics.overloaded && ` · ${t('nodeOverloaded')}`}
                   </li>
@@ -284,8 +284,8 @@ export function SimulationSummary({ design, result, label = t('trafficSummary') 
           )}
         </div>
         <div>
-          <h3 className="text-xs font-semibold text-zinc-300">{t('trafficPaths')}</h3>
-          <ul className="mt-1 space-y-0.5 text-xs text-zinc-300">{paths.slice(0, 8).map(pathItem)}</ul>
+          <h3 className="text-xs font-semibold text-text">{t('trafficPaths')}</h3>
+          <ul className="mt-1 space-y-0.5 text-xs text-text">{paths.slice(0, 8).map(pathItem)}</ul>
         </div>
       </div>
     </section>

@@ -28,7 +28,7 @@ const TYPE_LABELS: Record<ChaosType, StringKey> = {
   partition: 'chaosPartition',
 }
 
-const fieldClass = 'mt-1 rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm text-zinc-100'
+const fieldClass = 'mt-1 min-h-11 rounded border border-border bg-surface-raised px-2 text-sm text-text sm:min-h-8'
 
 /**
  * The scenario picker, with the scenario it describes for a Design. The Stage's Chaos tasks apply to any
@@ -93,12 +93,12 @@ function ChaosControls(props: {
   }
 
   return (
-    <section aria-labelledby={`${id}-title`} className="mb-3 rounded border border-zinc-800 p-3">
-      <h2 id={`${id}-title`} className="text-sm font-semibold text-zinc-100">
+    <section aria-labelledby={`${id}-title`} className="mb-3 rounded border border-border p-3">
+      <h2 id={`${id}-title`} className="text-sm font-semibold text-text">
         {t('chaosTitle')}
       </h2>
-      <p className="mt-1 text-xs text-zinc-400">{t('chaosDescription')}</p>
-      <label htmlFor={`${id}-scenario`} className="mt-2 block text-xs text-zinc-400">
+      <p className="mt-1 text-xs text-text-muted">{t('chaosDescription')}</p>
+      <label htmlFor={`${id}-scenario`} className="mt-2 block text-xs text-text-muted">
         {t('chaosScenario')}
       </label>
       <select id={`${id}-scenario`} className={`${fieldClass} max-w-full`} value={choiceValue(choice)} onChange={(event) => choose(event.target.value)}>
@@ -114,7 +114,7 @@ function ChaosControls(props: {
           </option>
         ))}
       </select>
-      {task && <p className="mt-2 text-sm text-amber-200">{task.prompt}</p>}
+      {task && <p className="mt-2 text-sm text-warning">{task.prompt}</p>}
       {choice.kind === 'custom' && design && <CustomPicks type={choice.type} design={design} picks={picks} onPicks={onPicks} />}
     </section>
   )
@@ -126,7 +126,7 @@ function CustomPicks({ type, design, picks, onPicks }: { type: ChaosType; design
   const nodeName = (node: DesignNode) => node.label || componentName(node.componentType)
   // Clients stand for the users and never go down, though a partition can cut them off.
   const servers = design.nodes.filter((node) => node.componentType !== 'client')
-  const empty = (key: StringKey) => <p className="mt-2 text-xs text-zinc-500">{t(key)}</p>
+  const empty = (key: StringKey) => <p className="mt-2 text-xs text-text-muted">{t(key)}</p>
 
   if (type === 'node-down' || type === 'cache-cold') {
     const candidates = type === 'node-down' ? servers : servers.filter((node) => nodeSimulation(node)?.hitRatio !== undefined)
@@ -138,10 +138,10 @@ function CustomPicks({ type, design, picks, onPicks }: { type: ChaosType; design
     }
     return (
       <fieldset className="mt-2">
-        <legend className="text-xs text-zinc-400">{t(type === 'node-down' ? 'chaosPickNodes' : 'chaosPickCaches')}</legend>
+        <legend className="text-xs text-text-muted">{t(type === 'node-down' ? 'chaosPickNodes' : 'chaosPickCaches')}</legend>
         <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1">
           {candidates.map((node) => (
-            <label key={node.id} className="flex items-center gap-1.5 text-sm text-zinc-200">
+            <label key={node.id} className="flex items-center gap-1.5 text-sm text-text">
               <input type="checkbox" checked={picked.has(node.id)} onChange={(event) => toggle(node.id, event.target.checked)} />
               {nodeName(node)}
             </label>
@@ -155,7 +155,7 @@ function CustomPicks({ type, design, picks, onPicks }: { type: ChaosType; design
     if (design.zones.length === 0) return empty('chaosNoZones')
     return (
       <div className="mt-2">
-        <label htmlFor={`${id}-zone`} className="block text-xs text-zinc-400">
+        <label htmlFor={`${id}-zone`} className="block text-xs text-text-muted">
           {t('chaosPickZone')}
         </label>
         <select id={`${id}-zone`} className={fieldClass} value={picks.zoneId} onChange={(event) => onPicks({ ...picks, zoneId: event.target.value })}>
@@ -177,10 +177,10 @@ function CustomPicks({ type, design, picks, onPicks }: { type: ChaosType; design
   }
   return (
     <fieldset className="mt-2">
-      <legend className="text-xs text-zinc-400">{t('chaosPartitionHelp')}</legend>
+      <legend className="text-xs text-text-muted">{t('chaosPartitionHelp')}</legend>
       <div className="mt-1 grid gap-x-4 gap-y-1 sm:grid-cols-2 lg:grid-cols-3">
         {design.nodes.map((node) => (
-          <label key={node.id} className="flex items-center justify-between gap-2 text-sm text-zinc-200">
+          <label key={node.id} className="flex items-center justify-between gap-2 text-sm text-text">
             <span className="truncate">{nodeName(node)}</span>
             <select
               aria-label={t('chaosSideOf', { node: nodeName(node) })}

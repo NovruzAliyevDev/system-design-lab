@@ -48,12 +48,12 @@ function OpenStage({ stage, work, editable, hints, onChange }: Props) {
   return (
     <>
       {editable && !wideEnough && (
-        <p role="status" className="mt-3 rounded border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-zinc-200">
+        <p role="status" className="mt-3 rounded border border-warning/40 bg-warning/10 px-3 py-2 text-sm text-text">
           {t('canvasDesktopOnly')}
         </p>
       )}
       {editable && (
-        <section aria-label={t('stageCheck')} className="mt-4 rounded border border-zinc-800 bg-zinc-900/60 p-3">
+        <section aria-label={t('stageCheck')} className="mt-4 rounded border border-border bg-surface-raised/50 p-3">
           <button type="button" className={primaryButtonClass} onClick={() => setChecked(history.present)}>
             {t('stageCheck')}
           </button>
@@ -66,7 +66,7 @@ function OpenStage({ stage, work, editable, hints, onChange }: Props) {
               onOpenHint={(ruleId) => onChange({ ...work, hintUsage: openNextHint(work.hintUsage, stage, ruleId) })}
             />
           ) : (
-            <p className="mt-2 text-sm text-zinc-400">{t('stageUmlNotChecked')}</p>
+            <p className="mt-2 text-sm text-text-muted">{t('stageUmlNotChecked')}</p>
           )}
         </section>
       )}
@@ -87,32 +87,32 @@ function OverStage({ stage, work, codeSolutionId }: Props) {
     <>
       <RuleResults stage={stage} evaluation={evaluation} gaveUp={work.outcome?.gaveUp ?? false} />
       <section className="mt-6">
-        <h3 className="mb-2 text-lg font-semibold text-zinc-100">{t('stageYourUml')}</h3>
+        <h3 className="mb-2 text-lg font-semibold text-text">{t('stageYourUml')}</h3>
         <UmlEditor history={yours} onChange={() => {}} readOnly compact label={t('stageYourUml')} />
       </section>
       <section className="mt-6">
-        <h3 className="mb-3 text-lg font-semibold text-zinc-100">{t('stageReferenceUmlTitle')}</h3>
+        <h3 className="mb-3 text-lg font-semibold text-text">{t('stageReferenceUmlTitle')}</h3>
         <div className="grid gap-6 lg:grid-cols-2">
           <div>
-            <h4 className="mb-2 text-sm font-medium text-zinc-300">{t('stageReferenceUml')}</h4>
+            <h4 className="mb-2 text-sm font-medium text-text">{t('stageReferenceUml')}</h4>
             <UmlEditor history={reference} onChange={() => {}} readOnly compact label={t('stageReferenceUml')} />
           </div>
           {code && (
             <div className="min-w-0">
-              <h4 className="mb-2 text-sm font-medium text-zinc-300">{t('stageReferenceCode')}</h4>
-              <p className="mb-2 text-xs text-zinc-500">
+              <h4 className="mb-2 text-sm font-medium text-text">{t('stageReferenceCode')}</h4>
+              <p className="mb-2 text-xs text-text-muted">
                 <span className="font-mono" lang="en">
                   {code.path}
                 </span>
                 {' · '}
-                <a href={code.sourceUrl} target="_blank" rel="noopener noreferrer" className="text-sky-400 hover:underline">
+                <a href={code.sourceUrl} target="_blank" rel="noopener noreferrer" className="link">
                   {t('viewSource')}
                 </a>
               </p>
-              <pre lang="en" className="max-h-[32rem] overflow-auto rounded border border-zinc-800 bg-zinc-900 p-3 text-xs leading-relaxed text-zinc-200">
+              <pre lang="en" className="max-h-[32rem] overflow-auto rounded border border-border bg-surface-raised p-3 text-xs leading-relaxed text-text">
                 <code>{code.code}</code>
               </pre>
-              <p className="mt-2 text-xs text-zinc-500">
+              <p className="mt-2 text-xs text-text-muted">
                 <Attribution textKey="codeAttribution" />
               </p>
             </div>

@@ -52,7 +52,7 @@ export function ConsistentHashingSimulation() {
         <Control label={t('consistentHashingNodes')} hint={t('consistentHashingNodesHint')}>
           <ul className="flex flex-wrap gap-2">
             {nodes.map((name) => (
-              <li key={name} className="flex items-center gap-1.5 rounded border border-zinc-700 py-0.5 pr-1 pl-2 text-sm text-zinc-200">
+              <li key={name} className="flex items-center gap-1.5 rounded border border-border py-0.5 pr-1 pl-2 text-sm text-text">
                 <span aria-hidden className="size-2.5 rounded-full" style={{ background: colorOf(name) }} />
                 {t('consistentHashingNodeName', { name })}
                 <button
@@ -60,7 +60,7 @@ export function ConsistentHashingSimulation() {
                   disabled={nodes.length <= 1}
                   aria-label={t('consistentHashingRemoveNode', { name })}
                   onClick={() => remove(name)}
-                  className="rounded px-1 text-zinc-400 hover:text-zinc-100 disabled:opacity-30"
+                  className="min-h-11 min-w-11 rounded text-text-muted hover:text-text disabled:opacity-30 sm:min-h-6 sm:min-w-6"
                 >
                   ×
                 </button>
@@ -71,7 +71,7 @@ export function ConsistentHashingSimulation() {
             type="button"
             disabled={nodes.length >= NODE_NAMES.length}
             onClick={add}
-            className="mt-2 rounded border border-sky-400 px-2 py-0.5 text-sm text-sky-300 hover:bg-sky-400/10 disabled:opacity-40"
+            className="mt-2 min-h-11 rounded border border-accent px-2 text-sm text-accent hover:bg-accent/10 disabled:opacity-50 sm:min-h-8"
           >
             + {t('consistentHashingAddNode')}
           </button>
@@ -87,11 +87,11 @@ export function ConsistentHashingSimulation() {
             onChange={(event) => setVirtualNodes(Number(event.target.value))}
             className="w-full"
           />
-          <p className="text-sm text-zinc-300">{t('consistentHashingVirtualNodesValue', { count: virtualNodes })}</p>
+          <p className="text-sm text-text">{t('consistentHashingVirtualNodesValue', { count: virtualNodes })}</p>
         </Control>
       </div>
 
-      <p className="mt-4 text-sm text-zinc-300" aria-live="polite">
+      <p className="mt-4 text-sm text-text" aria-live="polite">
         {change
           ? t(change.kind === 'added' ? 'consistentHashingLastChangeAdded' : 'consistentHashingLastChangeRemoved', {
               name: change.name,
@@ -104,16 +104,16 @@ export function ConsistentHashingSimulation() {
 
       <div className="mt-4 grid gap-6 md:grid-cols-2">
         <figure>
-          <figcaption className="text-sm font-medium text-zinc-200">{t('consistentHashingRingTitle')}</figcaption>
+          <figcaption className="text-sm font-medium text-text">{t('consistentHashingRingTitle')}</figcaption>
           {change && <MovedCount moved={result.ringMoved} idealShare={result.idealShare} />}
           <Ring keys={result.keys} points={result.ring} highlight={change !== undefined} />
-          <p className="text-xs text-zinc-500">{t('consistentHashingRingHint')}</p>
+          <p className="text-xs text-text-muted">{t('consistentHashingRingHint')}</p>
         </figure>
         <figure>
-          <figcaption className="text-sm font-medium text-zinc-200">{t('consistentHashingModuloTitle')}</figcaption>
+          <figcaption className="text-sm font-medium text-text">{t('consistentHashingModuloTitle')}</figcaption>
           {change && <MovedCount moved={result.moduloMoved} idealShare={result.idealShare} />}
           <ModuloGrid keys={result.keys} highlight={change !== undefined} />
-          <p className="mt-2 text-xs text-zinc-500">{t('consistentHashingModuloHint')}</p>
+          <p className="mt-2 text-xs text-text-muted">{t('consistentHashingModuloHint')}</p>
         </figure>
       </div>
 
@@ -125,10 +125,10 @@ export function ConsistentHashingSimulation() {
 function MovedCount({ moved, idealShare }: { moved: number; idealShare: number }) {
   return (
     <div className="mt-1">
-      <p className="text-lg font-semibold text-zinc-50 tabular-nums">
+      <p className="text-lg font-semibold text-text tabular-nums">
         {t('consistentHashingMoved', { count: moved, percent: formatDecimal((moved / KEY_COUNT) * 100) })}
       </p>
-      <p className="text-xs text-zinc-400">{t('consistentHashingIdeal', { percent: formatDecimal(idealShare * 100) })}</p>
+      <p className="text-xs text-text-muted">{t('consistentHashingIdeal', { percent: formatDecimal(idealShare * 100) })}</p>
     </div>
   )
 }
@@ -144,7 +144,7 @@ function Ring({ keys, points, highlight }: { keys: KeyPlacement[]; points: RingP
   }
   return (
     <svg viewBox={`0 0 ${RING.size} ${RING.size}`} className="mx-auto mt-2 w-full max-w-xs" role="img" aria-label={t('consistentHashingRingTitle')}>
-      <circle cx={center} cy={center} r={RING.radius} fill="none" className="stroke-zinc-700" strokeWidth={1} />
+      <circle cx={center} cy={center} r={RING.radius} fill="none" className="stroke-border" strokeWidth={1} />
       {points.map((point, i) => {
         const inner = at(point.position, RING.radius - 6)
         const outer = at(point.position, RING.radius + 6)

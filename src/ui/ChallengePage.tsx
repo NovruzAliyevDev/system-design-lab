@@ -26,14 +26,14 @@ export function ChallengePage() {
   const loaded = useProgress((state) => state.progress !== undefined)
   useOpened(challenge && { kind: 'challenge', challengeId: challenge.id })
 
-  if (!challenge) return <p className="text-zinc-400">{t('challengeNotFound')}</p>
+  if (!challenge) return <p className="text-text-muted">{t('challengeNotFound')}</p>
   return (
     <>
-      <p className="text-sm text-zinc-500">
+      <p className="text-sm text-text-muted">
         <SourceBadge source={challenge.source} />
       </p>
-      <h1 className="mt-1 text-2xl font-semibold text-zinc-50">{challenge.title}</h1>
-      {loaded ? <Workspace key={challenge.id} challenge={challenge} /> : <p className="mt-4 text-sm text-zinc-500">{t('designLoading')}</p>}
+      <h1 className="mt-1 text-2xl font-semibold text-balance text-text">{challenge.title}</h1>
+      {loaded ? <Workspace key={challenge.id} challenge={challenge} /> : <p className="mt-4 text-sm text-text-muted">{t('designLoading')}</p>}
     </>
   )
 }
@@ -118,9 +118,9 @@ function Workspace({ challenge }: { challenge: Challenge }) {
   return (
     <>
       {!isCurrent && (
-        <p role="status" className="mt-3 flex flex-wrap items-center gap-3 rounded border border-sky-500/30 bg-sky-500/10 px-3 py-2 text-sm text-zinc-200">
+        <p role="status" className="mt-3 flex flex-wrap items-center gap-3 rounded border border-accent/30 bg-accent/10 px-3 py-2 text-sm text-text">
           {t('attemptViewing', { number: attemptNumber })}
-          <button type="button" className="text-sky-400 hover:underline" onClick={() => show({ attempt: currentNumber })}>
+          <button type="button" className={buttonClass} onClick={() => show({ attempt: currentNumber })}>
             {t('attemptBackToCurrent')}
           </button>
         </p>
@@ -134,16 +134,16 @@ function Workspace({ challenge }: { challenge: Challenge }) {
 
       <section aria-labelledby="stage-heading" className="mt-6">
         <div className="flex flex-wrap items-baseline gap-x-3">
-          <h2 id="stage-heading" className="text-xl font-semibold text-zinc-50">
+          <h2 id="stage-heading" className="text-xl font-semibold text-text">
             {t('stageTitle', { number: stageIndex + 1, name: t(STAGE_NAMES[stage.type]) })}
           </h2>
-          <span className="text-sm text-zinc-500">{t('stageWeight', { weight: stage.weight })}</span>
+          <span className="text-sm text-text-muted">{t('stageWeight', { weight: stage.weight })}</span>
         </div>
-        <p className="mt-2 max-w-4xl text-sm text-zinc-300">{stage.prompt}</p>
+        <p className="mt-2 max-w-prose text-sm text-pretty text-text">{stage.prompt}</p>
         {work.outcome ? (
           <Outcome stage={stage} work={work} solutionId={attempt.finishedAt === undefined ? undefined : challenge.solutionId} />
         ) : (
-          !isCurrent && <p className="mt-3 text-sm text-zinc-400">{t('stageNotOverInAttempt')}</p>
+          !isCurrent && <p className="mt-3 text-sm text-text-muted">{t('stageNotOverInAttempt')}</p>
         )}
         {finishAndGiveUp}
         {/* Keyed by the Attempt and the Stage, so that each starts from its own stored work. */}
@@ -218,14 +218,14 @@ function StageSteps(props: { challenge: Challenge; attempt: Attempt; selected: S
                 disabled={!open}
                 title={open ? undefined : t('stageLocked')}
                 aria-current={stage === selected ? 'step' : undefined}
-                className={`rounded border px-3 py-1.5 text-sm ${stage === selected ? 'border-sky-500 bg-sky-500/10 text-zinc-50' : 'border-zinc-700 text-zinc-300 hover:border-zinc-500'} disabled:opacity-40 disabled:hover:border-zinc-700`}
+                className={`min-h-11 rounded border px-3 text-sm sm:min-h-8 ${stage === selected ? 'border-accent font-medium text-accent ring-1 ring-accent ring-inset' : 'border-border hover:border-text-muted'} disabled:opacity-50 disabled:hover:border-border`}
                 onClick={() => onSelect(stage.id)}
               >
                 {t('stageTitle', { number: i + 1, name: t(STAGE_NAMES[stage.type]) })}
                 {attempt.interview && (
-                  <span className="ml-2 text-xs text-zinc-500">{t('mockInterviewTimeBoxMinutes', { minutes: attempt.interview.timeBoxes[stage.id] ?? '–' })}</span>
+                  <span className="ml-2 text-xs text-text-muted">{t('mockInterviewTimeBoxMinutes', { minutes: attempt.interview.timeBoxes[stage.id] ?? '–' })}</span>
                 )}
-                {status && <span className={`ml-2 text-xs ${outcome?.gaveUp ? 'text-rose-400' : 'text-emerald-400'}`}>{status}</span>}
+                {status && <span className={`ml-2 text-xs ${outcome?.gaveUp ? 'text-danger' : 'text-success'}`}>{status}</span>}
               </button>
             </li>
           )
@@ -244,12 +244,12 @@ function Outcome({ stage, work, solutionId }: { stage: Stage; work: StageWork; s
   if (!outcome) return null
   return (
     <p className="mt-3 flex flex-wrap items-baseline gap-x-3 text-sm">
-      <span className="text-zinc-400">{t('stageFinished')}</span>
-      <span className={outcome.gaveUp ? 'text-rose-400' : 'font-medium text-zinc-100'}>
+      <span className="text-text-muted">{t('stageFinished')}</span>
+      <span className={outcome.gaveUp ? 'text-danger' : 'font-medium text-text'}>
         {outcome.gaveUp ? t('stageGaveUp') : t('stageOutcomeScore', { percent: percent(outcome.score) })}
       </span>
       {solutionId && (
-        <Link to={solutionPath(solutionId, stage.solutionAnchor)} className="text-sky-400 hover:underline">
+        <Link to={solutionPath(solutionId, stage.solutionAnchor)} className="link">
           {t('stageReadSolution')} →
         </Link>
       )}
@@ -261,21 +261,21 @@ function Outcome({ stage, work, solutionId }: { stage: Stage; work: StageWork; s
 function AttemptSummary(props: { challenge: Challenge; attempt: Attempt; editable: boolean; onAssess(input: SelfAssessmentInput): void }) {
   const { challenge, attempt, editable, onAssess } = props
   return (
-    <section aria-labelledby="attempt-summary" className="mt-10 max-w-4xl rounded-lg border border-zinc-700 p-4">
-      <h2 id="attempt-summary" className="text-lg font-semibold text-zinc-50">
+    <section aria-labelledby="attempt-summary" className="mt-10 max-w-4xl rounded-lg border border-border p-4">
+      <h2 id="attempt-summary" className="text-lg font-semibold text-text">
         {t('attemptSummaryTitle')}
-        <span className="ml-2 text-sm font-normal text-zinc-500">{t(MODE_NAMES[attempt.mode])}</span>
+        <span className="ml-2 text-sm font-normal text-text-muted">{t(MODE_NAMES[attempt.mode])}</span>
       </h2>
-      <p className="mt-1 text-xl font-semibold text-zinc-50">{t('attemptScore', { percent: percent(attempt.score ?? 0) })}</p>
-      <p className="text-xs text-zinc-500">{t('attemptScoreHint')}</p>
+      <p className="mt-1 text-xl font-semibold text-text">{t('attemptScore', { percent: percent(attempt.score ?? 0) })}</p>
+      <p className="text-xs text-text-muted">{t('attemptScoreHint')}</p>
       <ul className="mt-3 space-y-1 text-sm">
         {challenge.stages.map((stage, i) => {
           const outcome = attempt.stages[stage.id]?.outcome
           return (
             <li key={stage.id} className="flex flex-wrap gap-x-3">
-              <span className="text-zinc-200">{t('stageTitle', { number: i + 1, name: t(STAGE_NAMES[stage.type]) })}</span>
-              <span className="text-zinc-500">{t('stageWeight', { weight: stage.weight })}</span>
-              <span className={outcome?.gaveUp ? 'text-rose-400' : 'text-zinc-100'}>
+              <span className="text-text">{t('stageTitle', { number: i + 1, name: t(STAGE_NAMES[stage.type]) })}</span>
+              <span className="text-text-muted">{t('stageWeight', { weight: stage.weight })}</span>
+              <span className={outcome?.gaveUp ? 'text-danger' : 'text-text'}>
                 {outcome ? outcomeStatus(outcome) : '–'}
               </span>
             </li>
@@ -322,7 +322,7 @@ function AttemptHistory(props: {
 
   return (
     <section aria-labelledby="attempt-history" className="mt-10 max-w-4xl">
-      <h2 id="attempt-history" className="text-lg font-semibold text-zinc-50">
+      <h2 id="attempt-history" className="text-lg font-semibold text-text">
         {t('attemptsTitle')}
       </h2>
       {last && (
@@ -332,24 +332,24 @@ function AttemptHistory(props: {
         </div>
       )}
       {attempts.length === 0 ? (
-        <p className="mt-2 text-sm text-zinc-400">{t('challengeNotStarted')}</p>
+        <p className="mt-2 text-sm text-text-muted">{t('challengeNotStarted')}</p>
       ) : (
-        <ol className="mt-3 divide-y divide-zinc-800 rounded-lg border border-zinc-800">
+        <ol className="mt-3 divide-y divide-border/60 rounded-lg border border-border">
           {attempts
             .map((attempt, i) => ({ attempt, number: i + 1 }))
             .reverse()
             .map(({ attempt, number }) => (
               <li key={attempt.startedAt + number} className="flex flex-wrap items-baseline gap-x-3 gap-y-1 px-4 py-2.5 text-sm">
-                <span className="font-medium text-zinc-100">{t('attemptLabel', { number })}</span>
-                <span className={attempt.mode === 'mock-interview' ? 'text-sky-300' : 'text-zinc-500'}>{t(MODE_NAMES[attempt.mode])}</span>
-                <span className="text-zinc-500">{t('attemptStarted', { date: formatDate(new Date(attempt.startedAt)) })}</span>
-                <span className="text-zinc-200">
+                <span className="font-medium text-text">{t('attemptLabel', { number })}</span>
+                <span className={attempt.mode === 'mock-interview' ? 'text-accent' : 'text-text-muted'}>{t(MODE_NAMES[attempt.mode])}</span>
+                <span className="text-text-muted">{t('attemptStarted', { date: formatDate(new Date(attempt.startedAt)) })}</span>
+                <span className="text-text">
                   {attempt.score !== undefined ? t('attemptScore', { percent: percent(attempt.score) }) : t('attemptInProgress')}
                 </span>
                 {attempt.selfAssessment && (
-                  <span className="text-zinc-400">{formatAverageRating(attempt.selfAssessment.ratings)}</span>
+                  <span className="text-text-muted">{formatAverageRating(attempt.selfAssessment.ratings)}</span>
                 )}
-                <span className="text-xs text-zinc-500">
+                <span className="text-xs text-text-muted">
                   {challenge.stages
                     .map((stage) => {
                       const outcome = attempt.stages[stage.id]?.outcome
@@ -358,7 +358,7 @@ function AttemptHistory(props: {
                     .join(' · ')}
                 </span>
                 {number !== shown && (
-                  <button type="button" className="ml-auto text-sky-400 hover:underline" onClick={() => onShow(number)}>
+                  <button type="button" className={`${buttonClass} ml-auto`} onClick={() => onShow(number)}>
                     {t('attemptView')}
                   </button>
                 )}

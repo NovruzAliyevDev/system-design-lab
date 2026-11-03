@@ -46,8 +46,8 @@ interface EditProps {
 }
 
 const inputClass =
-  'mt-1 w-full rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm text-zinc-100 aria-invalid:border-red-500 disabled:opacity-70'
-const labelClass = 'mt-3 block text-xs font-medium text-zinc-400'
+  'mt-1 min-h-11 w-full rounded border border-border bg-surface-raised px-2 py-1 text-sm text-text aria-invalid:border-danger disabled:opacity-70 sm:min-h-8'
+const labelClass = 'mt-3 block text-xs font-medium text-text-muted'
 
 export function ConfigPanel({
   nodeId,
@@ -70,8 +70,8 @@ export function ConfigPanel({
   const zone = design.zones.find((candidate) => candidate.id === zoneId)
   return (
     <section aria-label={t('configTitle')} className="text-sm">
-      <h2 className="font-semibold text-zinc-100">{t('configTitle')}</h2>
-      {readOnly && <p className="mt-1 text-xs text-zinc-500">{t('configReadOnly')}</p>}
+      <h2 className="font-semibold text-text">{t('configTitle')}</h2>
+      {readOnly && <p className="mt-1 text-xs text-text-muted">{t('configReadOnly')}</p>}
       {node ? (
         // Keyed by the Node, so that drafts of invalid values do not carry over to another Node.
         <fieldset key={node.id} disabled={readOnly}>
@@ -86,7 +86,7 @@ export function ConfigPanel({
           <ZoneConfig zone={zone} {...edit} />
         </fieldset>
       ) : (
-        <p className="mt-2 text-zinc-500">{selectedCount > 1 ? t('configManySelected', { count: selectedCount }) : t('configNothingSelected')}</p>
+        <p className="mt-2 text-text-muted">{selectedCount > 1 ? t('configManySelected', { count: selectedCount }) : t('configNothingSelected')}</p>
       )}
     </section>
   )
@@ -97,7 +97,7 @@ function ZoneConfig({ design, zone, onCommit, onEndEdit }: EditProps & { zone: D
   const members = design.nodes.filter((node) => node.zoneId === zone.id).length
   return (
     <>
-      <p className="mt-1 text-xs text-zinc-500">{t('zoneTitle')}</p>
+      <p className="mt-1 text-xs text-text-muted">{t('zoneTitle')}</p>
       <label className={labelClass} htmlFor={`${id}-label`}>
         {t('nodeName')}
       </label>
@@ -109,8 +109,8 @@ function ZoneConfig({ design, zone, onCommit, onEndEdit }: EditProps & { zone: D
         onBlur={onEndEdit}
         onChange={(event) => onCommit(renameZone(design, zone.id, event.target.value), `zone-label:${zone.id}`)}
       />
-      <p className="mt-3 text-xs text-zinc-400">{t('zoneMembers', { count: members })}</p>
-      <p className="mt-2 text-xs text-zinc-500">{t('zoneHelp')}</p>
+      <p className="mt-3 text-xs text-text-muted">{t('zoneMembers', { count: members })}</p>
+      <p className="mt-2 text-xs text-text-muted">{t('zoneHelp')}</p>
     </>
   )
 }
@@ -121,7 +121,7 @@ function NodeConfig({ design, node, onCommit, onEndEdit }: EditProps & { node: D
   const config: AnyConfig = node.config
   return (
     <>
-      <p className="mt-1 text-xs text-zinc-500">{componentName(node.componentType)}</p>
+      <p className="mt-1 text-xs text-text-muted">{componentName(node.componentType)}</p>
       <label className={labelClass} htmlFor={`${id}-label`}>
         {t('nodeName')}
       </label>
@@ -233,7 +233,7 @@ function ConfigFieldInput({
         />
       )}
       {problem && (
-        <p id={errorId} role="alert" className="mt-1 text-xs text-red-400">
+        <p id={errorId} role="alert" className="mt-1 text-xs text-danger">
           {problemText(problem, field)}
         </p>
       )}
@@ -273,8 +273,8 @@ function SimulationSettings({ design, node, onCommit, onEndEdit }: EditProps & {
   const defaults = componentDefinition(node.componentType).simulation
   const current = nodeSimulation(node)
   return (
-    <div className="mt-5 border-t border-zinc-800 pt-3">
-      <h3 className="text-xs font-semibold text-zinc-300">{t('simulationTitle')}</h3>
+    <div className="mt-5 border-t border-border pt-3">
+      <h3 className="text-xs font-semibold text-text">{t('simulationTitle')}</h3>
       {defaults && current ? (
         <>
           {SIMULATION_SETTINGS.filter((key) => defaults[key] !== undefined).map((key) => (
@@ -290,8 +290,8 @@ function SimulationSettings({ design, node, onCommit, onEndEdit }: EditProps & {
               onEndEdit={onEndEdit}
             />
           ))}
-          <p className="mt-3 text-xs text-zinc-500">{t('simulationLatencyBasis', { table: 'Latency numbers' })}</p>
-          <ul className="mt-1 space-y-0.5 text-xs text-zinc-400">
+          <p className="mt-3 text-xs text-text-muted">{t('simulationLatencyBasis', { table: 'Latency numbers' })}</p>
+          <ul className="mt-1 space-y-0.5 text-xs text-text-muted">
             {defaults.latency.map((term) => (
               <li key={term.operation}>
                 {term.times} × {term.operation} ({formatDuration(term.nanoseconds)})
@@ -300,7 +300,7 @@ function SimulationSettings({ design, node, onCommit, onEndEdit }: EditProps & {
           </ul>
         </>
       ) : (
-        <p className="mt-2 text-xs text-zinc-500">{t('simulationClient')}</p>
+        <p className="mt-2 text-xs text-text-muted">{t('simulationClient')}</p>
       )}
     </div>
   )
@@ -366,7 +366,7 @@ function SimulationSettingInput(props: {
         {overridden && (
           <button
             type="button"
-            className="mt-1 shrink-0 rounded border border-zinc-700 px-2 py-1 text-xs text-zinc-300 hover:border-zinc-500"
+            className="mt-1 min-h-11 shrink-0 rounded border border-border px-2 text-xs hover:border-text-muted sm:min-h-8"
             title={t('simulationResetTitle', { value: show(defaultValue) })}
             onClick={() => onChange(undefined)}
           >
@@ -374,9 +374,9 @@ function SimulationSettingInput(props: {
           </button>
         )}
       </div>
-      <p className="mt-0.5 text-xs text-zinc-500">{t('simulationDefault', { value: show(defaultValue) })}</p>
+      <p className="mt-0.5 text-xs text-text-muted">{t('simulationDefault', { value: show(defaultValue) })}</p>
       {problem && (
-        <p id={errorId} role="alert" className="mt-1 text-xs text-red-400">
+        <p id={errorId} role="alert" className="mt-1 text-xs text-danger">
           {t(SIMULATION_PROBLEM_TEXT[problem])}
         </p>
       )}
@@ -389,7 +389,7 @@ function EdgeConfig({ design, edge, onCommit }: EditProps & { edge: DesignEdge }
   const label = (nodeId: string) => design.nodes.find((node) => node.id === nodeId)?.label || nodeId
   return (
     <>
-      <p className="mt-1 text-xs text-zinc-500">
+      <p className="mt-1 text-xs text-text-muted">
         {t('edgeTitle')}: {label(edge.source)} → {label(edge.target)}
       </p>
       <label className={labelClass} htmlFor={`${id}-mode`}>

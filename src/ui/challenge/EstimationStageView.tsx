@@ -21,7 +21,7 @@ export function EstimationStageView(props: { stage: EstimationStage; work: Estim
 
   return (
     <div className="mt-4 max-w-4xl">
-      {!over && <p className="text-xs text-zinc-500">{t('estimationTolerance')}</p>}
+      {!over && <p className="text-xs text-text-muted">{t('estimationTolerance')}</p>}
       {/* A new tab keeps the Stage in view; the Attempt is saved either way. */}
       <CalculatorLinks calculators={['back-of-the-envelope', 'latency']} newTab />
       <ol className="mt-2 space-y-3">
@@ -61,25 +61,25 @@ function EstimateInput(props: { question: EstimationQuestion; value?: number; di
   }
 
   return (
-    <li className="rounded border border-zinc-800 px-3 py-2">
-      <label htmlFor={inputId} className="block text-zinc-100">
+    <li className="rounded border border-border px-3 py-2">
+      <label htmlFor={inputId} className="block text-text">
         {question.prompt}
       </label>
       <div className="mt-2 flex flex-wrap items-center gap-2">
         <input
           id={inputId}
           inputMode="decimal"
-          className="w-36 rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-zinc-100"
+          className="min-h-11 w-36 rounded border border-border bg-surface-raised px-2 text-text sm:min-h-8"
           value={draft.text}
           disabled={disabled}
           onChange={(event) => change(event.target.value, draft.unit)}
         />
         {kind === 'requests-per-second' ? (
-          <span className="text-sm text-zinc-400">{t('estimationRequestsPerSecond')}</span>
+          <span className="text-sm text-text-muted">{t('estimationRequestsPerSecond')}</span>
         ) : (
           <select
             aria-label={t('estimationUnit', { question: question.prompt })}
-            className="rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm text-zinc-100"
+            className="min-h-11 rounded border border-border bg-surface-raised px-2 text-sm text-text sm:min-h-8"
             value={draft.unit}
             disabled={disabled}
             onChange={(event) => change(draft.text, event.target.value as ByteUnit)}
@@ -100,13 +100,13 @@ function GradedEstimate({ question, value }: { question: EstimationQuestion; val
   const kind = ESTIMATION_QUANTITIES[question.quantity]
   const grade = value === undefined ? undefined : gradeEstimate(value, question.referenceValue)
   return (
-    <li className={`rounded border px-3 py-2 ${grade?.passed ? 'border-emerald-500/50' : 'border-rose-500/50'}`}>
-      <p className="text-zinc-100">{question.prompt}</p>
+    <li className={`rounded border px-3 py-2 ${grade?.passed ? 'border-success/60' : 'border-danger/60'}`}>
+      <p className="text-text">{question.prompt}</p>
       <p className="mt-1 flex flex-wrap gap-x-4 text-sm">
         <Verdict passed={grade?.passed ?? false} label={t(grade?.passed ? 'estimationPassed' : 'estimationFailed')} />
-        <span className="text-zinc-300">{value === undefined ? t('estimationNoAnswer') : t('estimationYourAnswer', { value: formatMeasure(value, kind) })}</span>
-        <span className="text-zinc-300">{t('estimationReference', { value: formatMeasure(question.referenceValue, kind) })}</span>
-        {grade && grade.ratio > 0 && <span className="text-zinc-500">{t('estimationRatio', { ratio: formatRounded(Number(grade.ratio.toPrecision(2))) })}</span>}
+        <span className="text-text">{value === undefined ? t('estimationNoAnswer') : t('estimationYourAnswer', { value: formatMeasure(value, kind) })}</span>
+        <span className="text-text">{t('estimationReference', { value: formatMeasure(question.referenceValue, kind) })}</span>
+        {grade && grade.ratio > 0 && <span className="text-text-muted">{t('estimationRatio', { ratio: formatRounded(Number(grade.ratio.toPrecision(2))) })}</span>}
       </p>
     </li>
   )
@@ -117,10 +117,10 @@ function WorkedSolution({ stage }: { stage: EstimationStage }) {
   const result = estimate(stage.inputs)
   const needed = new Set(stage.questions.flatMap((question) => workedSteps(result, question.quantity)))
   return (
-    <section className="mt-6 rounded border border-zinc-800 bg-zinc-900/60 p-3 text-sm">
-      <h3 className="font-semibold text-zinc-100">{t('estimationWorkedSolution')}</h3>
-      <p className="mt-2 text-zinc-300">{stage.explanation}</p>
-      <ol className="mt-3 space-y-1 font-mono text-xs text-zinc-300">
+    <section className="mt-6 rounded border border-border bg-surface-raised/50 p-3 text-sm">
+      <h3 className="font-semibold text-text">{t('estimationWorkedSolution')}</h3>
+      <p className="mt-2 text-text">{stage.explanation}</p>
+      <ol className="mt-3 space-y-1 font-mono text-xs text-text">
         {result.steps
           .filter((step) => needed.has(step))
           .map((step) => (

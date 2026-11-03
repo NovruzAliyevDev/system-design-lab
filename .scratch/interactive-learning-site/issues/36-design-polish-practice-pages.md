@@ -20,3 +20,11 @@
 
 - Flashcard faces use `PRIMER_PROSE_CLASS`, so 35 already gave them the token prose, the running-text cap (`max-w-xl`) and bordered code blocks. Check them in this slice.
 - `CalculatorLinks` in `CalculatorsPage.tsx` is on the tokens already, because Lessons show it. The rest of the file is not.
+
+### Note from 37 (2026-11-03)
+
+- **React Flow on the Skill Tree map.**
+  - `src/index.css` now maps React Flow's ground, zoom controls and attribution to the tokens on every canvas, the Skill Tree map included. The 4.3:1 attribution from the audit is now `text-muted`.
+  - The focus ring on keyboard-focused nodes is back too.
+  - The map's own nodes, legend and list in `SkillTreePage.tsx` are still raw `zinc`/`sky`/`emerald`.
+- **Legacy mirror.** After 37, the pages in this slice are the only ones still relying on the legacy `zinc`/`sky` mirror in `src/index.css`. Once they move, remove the mirror and its note in DESIGN.md.

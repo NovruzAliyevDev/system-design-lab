@@ -133,10 +133,10 @@ export function ReplicationSimulation() {
                 onChange={(event) => setReplicas(Number(event.target.value))}
                 className="w-full"
               />
-              <p className="text-sm text-zinc-300">{t('replicationReplicasValue', { count: replicas })}</p>
+              <p className="text-sm text-text">{t('replicationReplicasValue', { count: replicas })}</p>
             </>
           ) : (
-            <p className="text-sm text-zinc-300">{t('replicationReplicasNone')}</p>
+            <p className="text-sm text-text">{t('replicationReplicasNone')}</p>
           )}
         </Control>
 
@@ -160,7 +160,7 @@ export function ReplicationSimulation() {
             onChange={(event) => setLag(Number(event.target.value))}
             className="w-full"
           />
-          <p className="text-sm text-zinc-300">{t('replicationLagValue', { lag: formatInteger(lag) })}</p>
+          <p className="text-sm text-text">{t('replicationLagValue', { lag: formatInteger(lag) })}</p>
         </Control>
 
         <Control
@@ -176,7 +176,7 @@ export function ReplicationSimulation() {
             <button
               type="button"
               onClick={() => setKillTick(playback.tick < TICKS ? playback.tick : DEFAULT_KILL_TICK)}
-              className="rounded border border-red-400/70 px-3 py-1 text-sm text-red-300 hover:bg-red-400/10"
+              className="min-h-11 rounded border border-danger/60 px-3 text-sm text-danger hover:bg-danger/10 sm:min-h-8"
             >
               {t('replicationKill')}
             </button>
@@ -185,12 +185,12 @@ export function ReplicationSimulation() {
               <button
                 type="button"
                 onClick={() => setKillTick(undefined)}
-                className="rounded border border-zinc-700 px-3 py-1 text-sm text-zinc-300 hover:border-zinc-500"
+                className="min-h-11 rounded border border-border px-3 text-sm text-text hover:border-text-muted sm:min-h-8"
               >
                 {t('replicationRestore')}
               </button>
               {failover && (
-                <p className="mt-2 text-sm text-zinc-300">
+                <p className="mt-2 text-sm text-text">
                   {t(text.killed, { tick: killTick + 1, recovered: failover.recoveredAt / TICK_MS + 1, node: failover.takenOverBy + 1 })}
                 </p>
               )}
@@ -200,7 +200,7 @@ export function ReplicationSimulation() {
       </div>
 
       <PlaybackBar playback={playback} total={TICKS} onRerun={() => setSeed(newSeed)} />
-      <p className="mt-1 text-xs text-zinc-500">
+      <p className="mt-1 text-xs text-text-muted">
         {t('replicationTickHint', { ms: TICK_MS, rate: RATE, percent: formatInteger(WRITE_SHARE * 100), keys: KEY_COUNT })}
       </p>
 
@@ -246,8 +246,8 @@ export function ReplicationSimulation() {
 function Nodes({ tick }: { tick: ReplicationTick }) {
   return (
     <figure className="mt-4">
-      <figcaption className="text-sm font-medium text-zinc-200">{t('replicationNodesTitle')}</figcaption>
-      <p className="text-xs text-zinc-500">{t('replicationNodesHint')}</p>
+      <figcaption className="text-sm font-medium text-text">{t('replicationNodesTitle')}</figcaption>
+      <p className="text-xs text-text-muted">{t('replicationNodesHint')}</p>
       <ul className="mt-2 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {tick.nodes.map((node, i) => (
           <NodeCard key={i} number={i + 1} node={node} />
@@ -261,12 +261,12 @@ function NodeCard({ number, node }: { number: number; node: NodeState }) {
   const down = node.role === 'down'
   const stale = node.staleReads > 0
   return (
-    <li className={`rounded border p-3 text-sm ${down ? 'border-red-400/40 bg-red-400/5' : 'border-zinc-800 bg-zinc-900/40'}`}>
+    <li className={`rounded border p-3 text-sm ${down ? 'border-danger/40 bg-danger/5' : 'border-border bg-surface-raised/50'}`}>
       <div className="flex items-center justify-between gap-2">
-        <span className="font-medium text-zinc-100">{t('replicationNodeName', { number })}</span>
+        <span className="font-medium text-text">{t('replicationNodeName', { number })}</span>
         <span
           className={`rounded px-1.5 py-0.5 text-xs ${
-            down ? 'bg-red-400/15 text-red-300' : node.role === 'primary' ? 'bg-sky-400/15 text-sky-300' : 'bg-zinc-700/50 text-zinc-300'
+            down ? 'bg-danger/10 text-danger' : node.role === 'primary' ? 'bg-accent/10 text-accent' : 'bg-border/50 text-text'
           }`}
         >
           {t(ROLE_NAMES[node.role])}
@@ -274,9 +274,9 @@ function NodeCard({ number, node }: { number: number; node: NodeState }) {
       </div>
       {!down && (
         <>
-          <p className="mt-2 text-zinc-300">{node.behind > 0 ? t('replicationNodeBehind', { count: node.behind }) : t('replicationNodeUpToDate')}</p>
-          <p className={`mt-1 flex items-center gap-1.5 ${stale ? 'text-amber-300' : 'text-zinc-500'}`}>
-            <span aria-hidden className={`size-2 rounded-full ${stale ? 'bg-amber-400' : 'bg-zinc-700'}`} />
+          <p className="mt-2 text-text">{node.behind > 0 ? t('replicationNodeBehind', { count: node.behind }) : t('replicationNodeUpToDate')}</p>
+          <p className={`mt-1 flex items-center gap-1.5 ${stale ? 'text-warning' : 'text-text-muted'}`}>
+            <span aria-hidden className={`size-2 rounded-full ${stale ? 'bg-warning' : 'bg-border'}`} />
             {stale ? t('replicationNodeStale', { count: node.staleReads }) : t('replicationNodeNoStale')}
           </p>
         </>

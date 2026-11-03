@@ -28,8 +28,8 @@ interface EditProps {
   onEndEdit: () => void
 }
 
-const inputClass = 'mt-1 w-full rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm text-zinc-100 aria-invalid:border-red-500 disabled:opacity-70'
-const labelClass = 'mt-3 block text-xs font-medium text-zinc-400'
+const inputClass = 'mt-1 min-h-11 w-full rounded border border-border bg-surface-raised px-2 py-1 text-sm text-text aria-invalid:border-danger disabled:opacity-70 sm:min-h-8'
+const labelClass = 'mt-3 block text-xs font-medium text-text-muted'
 
 /** The UML Class Builder's panel: the selected class or relation, one at a time. */
 export function UmlPanel({
@@ -52,8 +52,8 @@ export function UmlPanel({
   const relation = design.relations.find((candidate) => candidate.id === relationId)
   return (
     <section aria-label={t('umlPanelTitle')} className="text-sm">
-      <h2 className="font-semibold text-zinc-100">{t('umlPanelTitle')}</h2>
-      {readOnly && <p className="mt-1 text-xs text-zinc-500">{t('configReadOnly')}</p>}
+      <h2 className="font-semibold text-text">{t('umlPanelTitle')}</h2>
+      {readOnly && <p className="mt-1 text-xs text-text-muted">{t('configReadOnly')}</p>}
       {umlClass ? (
         // Keyed by the class, so that member drafts do not carry over to another class.
         <fieldset key={umlClass.id} disabled={readOnly}>
@@ -64,7 +64,7 @@ export function UmlPanel({
           <RelationConfig relation={relation} readOnly={readOnly} onSelectRelation={onSelectRelation} {...edit} />
         </fieldset>
       ) : (
-        <p className="mt-2 text-zinc-500">{selectedCount > 1 ? t('configManySelected', { count: selectedCount }) : t(readOnly ? 'umlNothingSelectedReadOnly' : 'umlNothingSelected')}</p>
+        <p className="mt-2 text-text-muted">{selectedCount > 1 ? t('configManySelected', { count: selectedCount }) : t(readOnly ? 'umlNothingSelectedReadOnly' : 'umlNothingSelected')}</p>
       )}
     </section>
   )
@@ -113,7 +113,7 @@ function ClassConfig({ design, umlClass, onCommit, onEndEdit }: EditProps & { um
         onChange={(methods) => onCommit(updateClass(design, umlClass.id, { methods }), `class-methods:${umlClass.id}`)}
         onEndEdit={onEndEdit}
       />
-      <p className="mt-2 text-xs text-zinc-500">{t('umlMembersHint')}</p>
+      <p className="mt-2 text-xs text-text-muted">{t('umlMembersHint')}</p>
     </>
   )
 }
@@ -156,7 +156,7 @@ function MemberList({ label, members, onChange, onEndEdit }: { label: string; me
         }}
       />
       {invalid && (
-        <p id={`${id}-error`} className="mt-1 text-xs text-red-400">
+        <p id={`${id}-error`} className="mt-1 text-xs text-danger">
           {t('umlMembersTooMany', { members: MAX_MEMBERS, length: MEMBER_MAX_LENGTH })}
         </p>
       )}
@@ -197,7 +197,7 @@ function RelationConfig({
   )
   return (
     <>
-      <p className="mt-1 font-mono text-xs text-zinc-300" lang="en">
+      <p className="mt-1 font-mono text-xs text-text" lang="en">
         {source} → {target}
       </p>
       <label className={labelClass} htmlFor={`${id}-kind`}>
@@ -215,14 +215,14 @@ function RelationConfig({
           </option>
         ))}
       </select>
-      <p className="mt-2 text-xs text-zinc-400">{t(RELATION_KIND_HINTS[relation.kind], { source, target })}</p>
+      <p className="mt-2 text-xs text-text-muted">{t(RELATION_KIND_HINTS[relation.kind], { source, target })}</p>
       {multiplicity('sourceMultiplicity', source)}
       {multiplicity('targetMultiplicity', target)}
       {!readOnly && (
         <>
           <button
             type="button"
-            className="mt-3 rounded border border-zinc-700 px-2 py-1 text-xs text-zinc-200 hover:border-zinc-500 disabled:opacity-40"
+            className="mt-3 min-h-11 rounded border border-border px-2 text-xs hover:border-text-muted disabled:opacity-50 disabled:hover:border-border sm:min-h-8"
             disabled={reverseTaken}
             onClick={() => {
               onCommit(reverseRelation(design, relation.id))
@@ -232,7 +232,7 @@ function RelationConfig({
           >
             {t('umlReverse')}
           </button>
-          {reverseTaken && <p className="mt-1 text-xs text-zinc-500">{t('umlReverseTaken')}</p>}
+          {reverseTaken && <p className="mt-1 text-xs text-text-muted">{t('umlReverseTaken')}</p>}
         </>
       )}
     </>

@@ -27,7 +27,7 @@ export function newSeed(): number {
 /** A link to a Lesson, named by its primer title unless `children` name it. */
 export function LessonLink({ lessonId, children }: { lessonId: string; children?: ReactNode }) {
   return (
-    <Link to={lessonPath(lessonId)} className="text-sky-400 hover:underline">
+    <Link to={lessonPath(lessonId)} className="link">
       {children ?? <span lang="en">{findLesson(catalog, lessonId)?.title ?? lessonId}</span>}
     </Link>
   )
@@ -50,12 +50,12 @@ export function SimulationFrame({
 }) {
   const wide = useMediaQuery(TABLET_QUERY)
   return (
-    <section lang="az" className="my-10 rounded-lg border border-zinc-800 p-4 sm:p-5">
-      <p className="text-xs font-medium tracking-wide text-sky-400 uppercase">{t('conceptSimulationLabel')}</p>
-      <h2 className="mt-1 text-xl font-semibold text-zinc-50">{title}</h2>
-      <p className="mt-1 text-sm text-zinc-400">{description}</p>
+    <section lang="az" className="my-10 rounded-lg border border-border p-4 sm:p-5">
+      <p className="text-xs font-medium tracking-wide text-accent uppercase">{t('conceptSimulationLabel')}</p>
+      <h2 className="mt-1 text-xl font-semibold text-text">{title}</h2>
+      <p className="mt-1 text-sm text-text-muted">{description}</p>
       {related.length > 0 && (
-        <p className="mt-1 text-sm text-zinc-400">
+        <p className="mt-1 text-sm text-text-muted">
           {t('conceptSimulationRelated')}{' '}
           {related.map((lessonId, i) => (
             <Fragment key={lessonId}>
@@ -66,7 +66,7 @@ export function SimulationFrame({
         </p>
       )}
       {!wide && (
-        <p role="status" className="mt-3 rounded border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-zinc-200">
+        <p role="status" className="mt-3 rounded border border-warning/40 bg-warning/10 px-3 py-2 text-sm text-text">
           {t('conceptSimulationDesktopBetter')}
         </p>
       )}
@@ -78,12 +78,12 @@ export function SimulationFrame({
 /** A control with its Azerbaijani explanation beside it. */
 export function Control({ label, hint, labelId, children }: { label: string; hint: ReactNode; labelId?: string; children: ReactNode }) {
   return (
-    <div className="min-w-0 rounded border border-zinc-800 bg-zinc-900/40 p-3">
-      <p id={labelId} className="text-sm font-medium text-zinc-200">
+    <div className="min-w-0 rounded border border-border bg-surface-raised/50 p-3">
+      <p id={labelId} className="text-sm font-medium text-text">
         {label}
       </p>
       <div className="mt-2">{children}</div>
-      <p className="mt-2 text-xs text-zinc-400">{hint}</p>
+      <p className="mt-2 text-xs text-text-muted">{hint}</p>
     </div>
   )
 }
@@ -111,7 +111,7 @@ export function Choice<T extends string>({
           role="radio"
           aria-checked={value === option}
           onClick={() => onChange(option)}
-          className={`rounded border px-2 py-1 text-sm ${value === option ? 'border-sky-400 text-sky-300' : 'border-zinc-700 text-zinc-300 hover:border-zinc-500'}`}
+          className={`min-h-11 rounded border px-2 text-sm sm:min-h-8 ${value === option ? 'border-accent bg-accent/10 font-medium text-accent ring-1 ring-accent ring-inset' : 'border-border text-text hover:border-text-muted'}`}
         >
           {name(option)}
         </button>
@@ -123,10 +123,10 @@ export function Choice<T extends string>({
 /** A metric card: its value over the ticks played so far, and what it means. Inside a `<dl>`. */
 export function Metric({ label, value, children }: { label: string; value: string; children: ReactNode }) {
   return (
-    <div className="rounded border border-zinc-800 bg-zinc-900/40 p-3">
-      <dt className="text-sm text-zinc-400">{label}</dt>
-      <dd className="mt-1 text-2xl font-semibold text-zinc-50 tabular-nums">{value}</dd>
-      <dd className="mt-1 text-xs text-zinc-400">{children}</dd>
+    <div className="rounded border border-border bg-surface-raised/50 p-3">
+      <dt className="text-sm text-text-muted">{label}</dt>
+      <dd className="mt-1 text-2xl font-semibold text-text tabular-nums">{value}</dd>
+      <dd className="mt-1 text-xs text-text-muted">{children}</dd>
     </div>
   )
 }
@@ -144,17 +144,17 @@ export function ShareBars({ title, bars, valueKey }: { title: string; bars: Shar
   const most = Math.max(1, ...bars.map((bar) => bar.count))
   return (
     <figure>
-      <figcaption className="text-sm font-medium text-zinc-200">{title}</figcaption>
+      <figcaption className="text-sm font-medium text-text">{title}</figcaption>
       <ul className="mt-2 space-y-2">
         {bars.map((bar) => (
           <li key={bar.key} className="text-sm">
-            <div className="flex justify-between gap-2 text-zinc-300">
+            <div className="flex justify-between gap-2 text-text">
               <span>{bar.label}</span>
-              <span className="text-zinc-400 tabular-nums">
+              <span className="text-text-muted tabular-nums">
                 {t(valueKey, { count: bar.count, percent: formatInteger(total > 0 ? (bar.count / total) * 100 : 0) })}
               </span>
             </div>
-            <div className="mt-1 h-2.5 rounded-sm bg-zinc-800">
+            <div className="mt-1 h-2.5 rounded-sm bg-border/60">
               <div className="h-full rounded-sm" style={{ width: `${(bar.count / most) * 100}%`, background: bar.color }} />
             </div>
           </li>
@@ -216,7 +216,7 @@ export function PlaybackBar({ playback, total, onRerun }: { playback: ReturnType
       <button
         type="button"
         onClick={playback.toggle}
-        className="rounded border border-sky-400 px-3 py-1 text-sky-300 hover:bg-sky-400/10"
+        className="min-h-11 rounded border border-accent px-3 text-accent hover:bg-accent/10 sm:min-h-8"
       >
         {playback.playing ? t('conceptSimulationPause') : t('conceptSimulationPlay')}
       </button>
@@ -232,12 +232,12 @@ export function PlaybackBar({ playback, total, onRerun }: { playback: ReturnType
         onChange={(event) => playback.seek(Number(event.target.value))}
         className="min-w-0 flex-1 basis-40"
       />
-      <span className="text-zinc-400 tabular-nums">{t('conceptSimulationTickValue', { tick: playback.tick, total })}</span>
+      <span className="text-text-muted tabular-nums">{t('conceptSimulationTickValue', { tick: playback.tick, total })}</span>
       <button
         type="button"
         title={t('conceptSimulationRerunHint')}
         onClick={onRerun}
-        className="rounded border border-zinc-700 px-2 py-1 text-zinc-300 hover:border-zinc-500"
+        className="min-h-11 rounded border border-border px-2 text-text hover:border-text-muted sm:min-h-8"
       >
         {t('conceptSimulationRerun')}
       </button>
@@ -312,8 +312,8 @@ export function TimelineChart({
 
   return (
     <figure>
-      <figcaption className="text-sm font-medium text-zinc-200">{title}</figcaption>
-      <p className="text-xs text-zinc-500">{hint}</p>
+      <figcaption className="text-sm font-medium text-text">{title}</figcaption>
+      <p className="text-xs text-text-muted">{hint}</p>
       <div className="relative mt-2">
         <svg
           viewBox={`0 0 ${CHART.width} ${CHART.height}`}
@@ -336,7 +336,7 @@ export function TimelineChart({
                 x2={x(event.from)}
                 y1={CHART.top}
                 y2={CHART.top + plotHeight}
-                className="stroke-zinc-400"
+                className="stroke-text-muted"
                 strokeWidth={1}
                 strokeDasharray="4 3"
               />
@@ -348,22 +348,22 @@ export function TimelineChart({
                 width={Math.min(CHART.width - CHART.right, x(Math.min(event.to, shown - 1)) + halfTick) - Math.max(CHART.left, x(event.from) - halfTick)}
                 y={CHART.top}
                 height={plotHeight}
-                className="fill-zinc-500/15"
+                className="fill-text-muted/15"
               />
             ),
           )}
           {[0, highest / 2, highest].map((value) => (
             <g key={value}>
-              <line x1={CHART.left} x2={CHART.width - CHART.right} y1={y(value)} y2={y(value)} className="stroke-zinc-800" strokeWidth={1} />
-              <text x={CHART.left - 4} y={y(value) + 3} textAnchor="end" className="fill-zinc-500 text-[10px]">
+              <line x1={CHART.left} x2={CHART.width - CHART.right} y1={y(value)} y2={y(value)} className="stroke-border" strokeWidth={1} />
+              <text x={CHART.left - 4} y={y(value) + 3} textAnchor="end" className="fill-text-muted text-[10px]">
                 {Math.round(value)}
               </text>
             </g>
           ))}
-          <text x={CHART.left} y={CHART.height - 4} className="fill-zinc-500 text-[10px]">
+          <text x={CHART.left} y={CHART.height - 4} className="fill-text-muted text-[10px]">
             1
           </text>
-          <text x={CHART.width - CHART.right} y={CHART.height - 4} textAnchor="end" className="fill-zinc-500 text-[10px]">
+          <text x={CHART.width - CHART.right} y={CHART.height - 4} textAnchor="end" className="fill-text-muted text-[10px]">
             {total}
           </text>
           {series.map((line) => (
@@ -381,25 +381,25 @@ export function TimelineChart({
           ))}
           {hovered !== undefined && (
             <g>
-              <line x1={x(hovered)} x2={x(hovered)} y1={CHART.top} y2={CHART.top + plotHeight} className="stroke-zinc-500" strokeWidth={1} />
+              <line x1={x(hovered)} x2={x(hovered)} y1={CHART.top} y2={CHART.top + plotHeight} className="stroke-text-muted" strokeWidth={1} />
               {series.map((line) => (
-                <circle key={line.key} cx={x(hovered)} cy={y(line.values[hovered])} r={4} fill={line.color} className="stroke-zinc-950" strokeWidth={2} />
+                <circle key={line.key} cx={x(hovered)} cy={y(line.values[hovered])} r={4} fill={line.color} className="stroke-surface" strokeWidth={2} />
               ))}
             </g>
           )}
         </svg>
         {hovered !== undefined && (
           <div
-            className="pointer-events-none absolute top-0 rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-xs whitespace-nowrap shadow"
+            className="pointer-events-none absolute top-0 rounded border border-border bg-surface-raised px-2 py-1 text-xs whitespace-nowrap shadow-lg"
             // Beside the crosshair, on the side with room.
             style={{
               left: `${(x(hovered) / CHART.width) * 100}%`,
               transform: hovered > total / 2 ? 'translateX(calc(-100% - 8px))' : 'translateX(8px)',
             }}
           >
-            <p className="font-medium text-zinc-200">{t('conceptSimulationTickAt', { tick: hovered + 1 })}</p>
+            <p className="font-medium text-text">{t('conceptSimulationTickAt', { tick: hovered + 1 })}</p>
             {series.map((line) => (
-              <p key={line.key} className="flex items-center gap-1.5 text-zinc-300">
+              <p key={line.key} className="flex items-center gap-1.5 text-text">
                 <span aria-hidden className="size-2 rounded-full" style={{ background: line.color }} />
                 {line.label}: {formatValue(line.values[hovered])}
               </p>
@@ -407,14 +407,14 @@ export function TimelineChart({
             {reached
               .filter((event) => event.from <= hovered && hovered <= (event.to ?? event.from))
               .map((event) => (
-                <p key={event.key} className="text-zinc-400">
+                <p key={event.key} className="text-text-muted">
                   {event.label}
                 </p>
               ))}
           </div>
         )}
       </div>
-      <ul className="mt-1 flex flex-wrap gap-x-3 text-xs text-zinc-400">
+      <ul className="mt-1 flex flex-wrap gap-x-3 text-xs text-text-muted">
         {series.map((line) => (
           <li key={line.key} className="flex items-center gap-1.5">
             <span aria-hidden className="h-0.5 w-3" style={{ background: line.color }} />
@@ -424,9 +424,9 @@ export function TimelineChart({
         {reached.map((event) => (
           <li key={event.key} className="flex items-center gap-1.5">
             {event.to === undefined ? (
-              <span aria-hidden className="h-3 border-l border-dashed border-zinc-400" />
+              <span aria-hidden className="h-3 border-l border-dashed border-text-muted" />
             ) : (
-              <span aria-hidden className="h-2.5 w-3 bg-zinc-500/30" />
+              <span aria-hidden className="h-2.5 w-3 bg-text-muted/30" />
             )}
             {event.label}
           </li>

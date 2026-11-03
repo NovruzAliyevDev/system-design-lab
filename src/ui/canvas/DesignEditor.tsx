@@ -65,7 +65,7 @@ const TRAFFIC_COLORS: Record<EdgeTraffic, string> = {
 }
 
 /** Edges whose requests a Chaos Scenario fails. */
-const FAILED_COLOR = 'var(--color-rose-500)'
+const FAILED_COLOR = 'var(--color-danger)'
 
 interface Selection {
   nodeIds: string[]
@@ -212,7 +212,7 @@ function Editor({ history, onChange, readOnly, compact = false, label = t('canva
           label,
           animated: qps > 0 && !failed,
           labelStyle: { fill: stroke, fontSize: 11 },
-          labelBgStyle: { fill: 'var(--color-zinc-950)' },
+          labelBgStyle: { fill: 'var(--color-surface)' },
           markerEnd: { type: MarkerType.ArrowClosed, color: stroke },
           style: { stroke, strokeWidth: width, strokeDasharray: failed ? '2 6' : edge.mode === 'async' ? '6 4' : undefined },
           ariaLabel: `${edge.source} → ${edge.target}`,
@@ -419,7 +419,7 @@ function Editor({ history, onChange, readOnly, compact = false, label = t('canva
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [readOnly])
 
-  const buttonClass = 'rounded border border-zinc-700 px-2 py-1 text-xs text-zinc-200 hover:border-zinc-500 disabled:opacity-40'
+  const buttonClass = 'min-h-11 rounded border border-border px-2 text-xs hover:border-text-muted disabled:opacity-50 disabled:hover:border-border sm:min-h-8'
   const empty = design.nodes.length === 0 && design.zones.length === 0
 
   return (
@@ -461,24 +461,24 @@ function Editor({ history, onChange, readOnly, compact = false, label = t('canva
           <button type="button" className={buttonClass} disabled={empty} onClick={() => void exportPng()}>
             {t('canvasExportPng')}
           </button>
-          <label className="flex items-center gap-1.5 text-xs text-zinc-300">
+          <label className="flex min-h-11 items-center gap-1.5 text-xs text-text sm:min-h-8">
             <input type="checkbox" checked={sketch} onChange={(event) => void setCanvasStyle(event.target.checked ? 'sketch' : 'clean')} />
             {t('canvasSketchStyle')}
           </label>
           {exportFailed && (
-            <span role="alert" className="text-xs text-red-400">
+            <span role="alert" className="text-xs text-danger">
               {t('canvasExportFailed')}
             </span>
           )}
         </div>
-        {!readOnly && <p className="mb-2 text-xs text-zinc-500">{t('canvasShortcuts')}</p>}
+        {!readOnly && <p className="mb-2 text-xs text-text-muted">{t('canvasShortcuts')}</p>}
         <div
           ref={canvasRef}
           // React Flow fills its parent's height, so the parent needs one: fixed when stacked, the free space beside the panels from `md`.
           className={
             compact
-              ? 'h-[26rem] overflow-hidden rounded border border-zinc-800'
-              : 'h-[26rem] overflow-hidden rounded border border-zinc-800 md:h-auto md:min-h-0 md:flex-1'
+              ? 'h-[26rem] overflow-hidden rounded border border-border'
+              : 'h-[26rem] overflow-hidden rounded border border-border md:h-auto md:min-h-0 md:flex-1'
           }
           onDragOver={onDragOver}
           onDrop={onDrop}
@@ -520,7 +520,7 @@ function Editor({ history, onChange, readOnly, compact = false, label = t('canva
             <Controls showInteractive={false} />
           </ReactFlow>
         </div>
-        <p className="mt-2 text-xs text-zinc-500">{t('canvasLegend')}</p>
+        <p className="mt-2 text-xs text-text-muted">{t('canvasLegend')}</p>
       </div>
 
       <aside className={compact ? 'shrink-0' : 'shrink-0 overflow-y-auto md:w-72'}>

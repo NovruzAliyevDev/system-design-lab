@@ -109,7 +109,7 @@ export function CacheSimulation() {
             onChange={(event) => setCapacity(Number(event.target.value))}
             className="w-full"
           />
-          <p className="text-sm text-zinc-300">
+          <p className="text-sm text-text">
             {t('cacheSizeValue', { size: capacity, keys: KEY_COUNT, percent: formatInteger((capacity / KEY_COUNT) * 100) })}
           </p>
         </Control>
@@ -122,7 +122,7 @@ export function CacheSimulation() {
             onChange={setDistribution}
             name={(option) => t(DISTRIBUTION_NAMES[option])}
           />
-          <label className="mt-3 block text-sm text-zinc-300">
+          <label className="mt-3 block text-sm text-text">
             <span id={ids.writes}>{t('cacheWriteShare')}</span>
             <input
               type="range"
@@ -149,7 +149,7 @@ export function CacheSimulation() {
       </div>
 
       <PlaybackBar playback={playback} total={TICKS} onRerun={() => setSeed(newSeed)} />
-      <p className="mt-1 text-xs text-zinc-500">{t('cacheTickHint', { count: OPERATIONS_PER_TICK })}</p>
+      <p className="mt-1 text-xs text-text-muted">{t('cacheTickHint', { count: OPERATIONS_PER_TICK })}</p>
 
       <Metrics strategy={strategy} ticks={result.ticks.slice(0, playback.tick)} />
 
@@ -214,14 +214,14 @@ function TimingControl({
           onChange={(event) => onFlushInterval(Number(event.target.value))}
           className="w-full"
         />
-        <p className="text-sm text-zinc-300">{t('cacheFlushIntervalValue', { interval: flushInterval })}</p>
+        <p className="text-sm text-text">{t('cacheFlushIntervalValue', { interval: flushInterval })}</p>
       </Control>
     )
   }
   if (!usesTtl(strategy)) {
     return (
       <Control label={t('cacheTtl')} hint={t('cacheTtlNotUsed')} labelId={labelId}>
-        <p className="text-sm text-zinc-300">{t('cacheTtlNotUsedValue')}</p>
+        <p className="text-sm text-text">{t('cacheTtlNotUsedValue')}</p>
       </Control>
     )
   }
@@ -236,7 +236,7 @@ function TimingControl({
         onChange={(event) => onTtl(Number(event.target.value))}
         className="w-full"
       />
-      <p className="text-sm text-zinc-300">{t('cacheTtlValue', { ttl })}</p>
+      <p className="text-sm text-text">{t('cacheTtlValue', { ttl })}</p>
     </Control>
   )
 }
@@ -278,10 +278,10 @@ function StrategyTable({ settings, current }: { settings: Omit<CacheInput, 'stra
   const dbLoad = (totals: CacheTotals) => percent(totals.dbReads + totals.dbWrites, totals.reads + totals.writes)
   return (
     <details className="mt-4 text-sm">
-      <summary className="cursor-pointer text-zinc-300">{t('cacheCompareTitle')}</summary>
+      <summary className="cursor-pointer py-3 text-text sm:py-1">{t('cacheCompareTitle')}</summary>
       <div className="mt-2 overflow-x-auto">
         <table className="w-full text-left tabular-nums">
-          <thead className="text-zinc-400">
+          <thead className="text-text-muted">
             <tr>
               {(['cacheColumnStrategy', 'cacheColumnHitRatio', 'cacheColumnDbLoad', 'cacheColumnStaleReads', 'cacheColumnLongestStale', 'cacheColumnMostAtRisk'] as const).map((key) => (
                 <th key={key} className="py-1 pr-3 font-normal">
@@ -290,9 +290,9 @@ function StrategyTable({ settings, current }: { settings: Omit<CacheInput, 'stra
               ))}
             </tr>
           </thead>
-          <tbody className="text-zinc-200">
+          <tbody className="text-text">
             {rows.map(({ strategy, totals }) => (
-              <tr key={strategy} aria-current={strategy === current || undefined} className={`border-t border-zinc-800 ${strategy === current ? 'text-sky-300' : ''}`}>
+              <tr key={strategy} aria-current={strategy === current || undefined} className={`border-t border-border ${strategy === current ? 'text-accent' : ''}`}>
                 <td className="py-1 pr-3">{t(STRATEGY_NAMES[strategy])}</td>
                 <td className="py-1 pr-3">{percent(totals.hits, totals.reads)}</td>
                 <td className="py-1 pr-3">{dbLoad(totals)}</td>

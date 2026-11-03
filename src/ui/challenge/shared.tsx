@@ -14,8 +14,8 @@ export const STAGE_NAMES: Record<StageType, StringKey> = {
   scaling: 'stageScaling',
 }
 
-export const buttonClass = 'rounded border border-zinc-700 px-3 py-1.5 text-sm text-zinc-200 hover:border-zinc-500 disabled:opacity-40'
-export const primaryButtonClass = 'rounded bg-sky-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-sky-500'
+export const buttonClass = 'min-h-11 rounded border border-border px-3 text-sm hover:border-text-muted disabled:opacity-50 disabled:hover:border-border sm:min-h-8'
+export const primaryButtonClass = 'min-h-11 rounded border border-accent bg-accent px-3 text-sm font-medium text-surface hover:opacity-90 sm:min-h-8'
 
 /** A share from 0 to 1 as a whole percentage. */
 export const percent = (share: number) => Math.round(share * 100)
@@ -28,13 +28,13 @@ export function outcomeStatus(outcome: StageOutcome): string {
 /** Where a Challenge comes from: plain for the primer's questions, a badge for those not from the primer. */
 export function SourceBadge({ source }: { source: ChallengeSource }) {
   if (source === 'primer') return <span>{t('challengeSourcePrimer')}</span>
-  return <span className="rounded border border-sky-400 px-1.5 text-sky-300">{t('challengeSourceAuthored')}</span>
+  return <span className="rounded border border-accent/60 px-1.5 text-accent">{t('challengeSourceAuthored')}</span>
 }
 
 /** ✓ or ✗ with a label, coloured by the verdict. */
 export function Verdict({ passed, label }: { passed: boolean; label: string }) {
   return (
-    <span className={passed ? 'text-emerald-400' : 'text-rose-400'}>
+    <span className={passed ? 'text-success' : 'text-danger'}>
       {passed ? '✓' : '✗'} {label}
     </span>
   )
@@ -53,7 +53,7 @@ export function ConfirmButton(props: { label: string; confirm: string; yes: stri
   }
   return (
     <span className="flex flex-wrap items-center gap-2 text-sm">
-      <span className="text-zinc-300">{confirm}</span>
+      <span className="text-text">{confirm}</span>
       <button type="button" className={buttonClass} onClick={onConfirm}>
         {yes}
       </button>

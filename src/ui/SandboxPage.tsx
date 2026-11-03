@@ -35,10 +35,10 @@ export function SandboxPage() {
 
   return (
     <>
-      <h1 className="text-2xl font-semibold text-zinc-50">{t('sandboxTitle')}</h1>
-      <p className="mt-1 text-sm text-zinc-400">{t('sandboxDescription')}</p>
+      <h1 className="text-2xl font-semibold text-text">{t('sandboxTitle')}</h1>
+      <p className="mt-1 text-sm text-text-muted">{t('sandboxDescription')}</p>
       {!editable && (
-        <p role="status" className="mt-3 rounded border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-zinc-200">
+        <p role="status" className="mt-3 rounded border border-warning/40 bg-warning/10 px-3 py-2 text-sm text-text">
           {t('canvasDesktopOnly')}
         </p>
       )}
@@ -51,7 +51,7 @@ export function SandboxPage() {
             {result && <SimulationSummary design={history.present} result={result} />}
           </>
         ) : (
-          <p className="text-sm text-zinc-500">{t('designLoading')}</p>
+          <p className="text-sm text-text-muted">{t('designLoading')}</p>
         )}
       </div>
     </>

@@ -45,13 +45,13 @@ function OpenStage(props: { stage: DesignStage; work: DesignWork; editable: bool
   return (
     <>
       {editable && !wideEnough && (
-        <p role="status" className="mt-3 rounded border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-zinc-200">
+        <p role="status" className="mt-3 rounded border border-warning/40 bg-warning/10 px-3 py-2 text-sm text-text">
           {t('canvasDesktopOnly')}
         </p>
       )}
-      {stage.type === 'scaling' && editable && <p className="mt-2 text-sm text-zinc-400">{t('stageScalingStart')}</p>}
+      {stage.type === 'scaling' && editable && <p className="mt-2 text-sm text-text-muted">{t('stageScalingStart')}</p>}
       {editable && (
-        <section aria-label={t('stageCheck')} className="mt-4 rounded border border-zinc-800 bg-zinc-900/60 p-3">
+        <section aria-label={t('stageCheck')} className="mt-4 rounded border border-border bg-surface-raised/50 p-3">
           <button type="button" className={primaryButtonClass} onClick={() => setChecked(history.present)}>
             {t('stageCheck')}
           </button>
@@ -64,7 +64,7 @@ function OpenStage(props: { stage: DesignStage; work: DesignWork; editable: bool
               onOpenHint={(ruleId) => onChange({ ...work, hintUsage: openNextHint(work.hintUsage, stage, ruleId) })}
             />
           ) : (
-            <p className="mt-2 text-sm text-zinc-400">{t('stageNotChecked')}</p>
+            <p className="mt-2 text-sm text-text-muted">{t('stageNotChecked')}</p>
           )}
         </section>
       )}
@@ -100,17 +100,18 @@ function OverStage({ stage, work }: { stage: DesignStage; work: DesignWork }) {
       <RuleResults stage={stage} evaluation={evaluation} gaveUp={work.outcome?.gaveUp ?? false} />
 
       <section className="mt-6">
-        <h3 className="mb-3 text-lg font-semibold text-zinc-100">{t('stageCompareTitle')}</h3>
+        <h3 className="mb-3 text-lg font-semibold text-text">{t('stageCompareTitle')}</h3>
         {load.controls}
         {chaos.controls}
         <div className="grid gap-6 lg:grid-cols-2">
           <div>
-            <h4 className="mb-2 text-sm font-medium text-zinc-300">{t('stageYourDesign')}</h4>
+            {/* h3, not h4: the Traffic Simulation and Chaos panels above are h2, and a heading must not skip a level. */}
+            <h3 className="mb-2 text-sm font-medium text-text">{t('stageYourDesign')}</h3>
             <DesignEditor history={yours} onChange={() => {}} readOnly compact label={t('stageYourDesign')} simulation={yourSimulation} />
             {yourSimulation && <SimulationSummary design={yours.present} result={yourSimulation} label={t('stageYourSimulation')} />}
           </div>
           <div>
-            <h4 className="mb-2 text-sm font-medium text-zinc-300">{t('stageReferenceSolution')}</h4>
+            <h3 className="mb-2 text-sm font-medium text-text">{t('stageReferenceSolution')}</h3>
             <DesignEditor history={reference} onChange={() => {}} readOnly compact label={t('stageReferenceSolution')} simulation={referenceSimulation} />
             {referenceSimulation && <SimulationSummary design={reference.present} result={referenceSimulation} label={t('stageReferenceSimulation')} />}
           </div>

@@ -18,8 +18,8 @@ const ENDS: Record<RelationKind, { start?: Marker; end?: Marker; dashed?: boolea
   association: { end: 'arrow' },
 }
 
-const STROKE = 'var(--color-zinc-400)'
-const BACKGROUND = 'var(--color-zinc-950)'
+const STROKE = 'var(--color-text-muted)'
+const BACKGROUND = 'var(--color-surface)'
 
 /** How far above its ends a class's relation to itself loops, clear of the class box. */
 const LOOP_HEIGHT = 150
@@ -65,7 +65,7 @@ export function RelationEdge({ id, sourceX, sourceY, targetX, targetY, sourcePos
         markerStart={marker(start)}
         markerEnd={marker(end)}
         interactionWidth={interactionWidth}
-        style={{ stroke: selected ? 'var(--color-sky-400)' : STROKE, strokeWidth: selected ? 2.5 : 1.5, strokeDasharray: dashed ? '6 4' : undefined }}
+        style={{ stroke: selected ? 'var(--color-accent)' : STROKE, strokeWidth: selected ? 2.5 : 1.5, strokeDasharray: dashed ? '6 4' : undefined }}
       />
       <EdgeLabelRenderer>
         {/* Above the line, just off each end: the source leaves to the right, the target is entered from the left. */}
@@ -79,7 +79,7 @@ export function RelationEdge({ id, sourceX, sourceY, targetX, targetY, sourcePos
 function MultiplicityLabel({ x, y, text }: { x: number; y: number; text: string }) {
   return (
     <span
-      className="pointer-events-none absolute font-mono text-xs text-zinc-300"
+      className="pointer-events-none absolute font-mono text-xs text-text"
       style={{ transform: `translate(-50%, -50%) translate(${x}px, ${y}px)` }}
     >
       {text}

@@ -40,17 +40,17 @@ function TradeOff(props: {
   const { number, question, answer, grade, disabled, onAnswer } = props
   const promptId = useId()
   return (
-    <li className="rounded-lg border border-zinc-800 p-4">
+    <li className="rounded-lg border border-border p-4">
       <fieldset aria-labelledby={promptId} disabled={disabled}>
-        <p className="text-xs text-zinc-500">{t('quizQuestion', { number })}</p>
-        <p id={promptId} className="mt-1 text-zinc-100">
+        <p className="text-xs text-text-muted">{t('quizQuestion', { number })}</p>
+        <p id={promptId} className="mt-1 text-text">
           {question.prompt}
         </p>
-        <p className="mt-1 text-xs text-zinc-500">{t(QUESTION_HINTS[question.type])}</p>
+        <p className="mt-1 text-xs text-text-muted">{t(QUESTION_HINTS[question.type])}</p>
         <ChoiceOptions options={question.options} multiple={question.type === 'multi-select'} answer={answer} grade={grade} onAnswer={onAnswer} />
       </fieldset>
       {grade && (
-        <p className={`mt-3 text-sm font-medium ${grade.correct ? 'text-emerald-400' : grade.score > 0 ? 'text-amber-400' : 'text-rose-400'}`}>
+        <p className={`mt-3 text-sm font-medium ${grade.correct ? 'text-success' : grade.score > 0 ? 'text-warning' : 'text-danger'}`}>
           {grade.correct ? t('quizCorrect') : grade.score > 0 ? t('quizPartlyCorrect', { score: percent(grade.score) }) : t('quizWrong')}
         </p>
       )}
