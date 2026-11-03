@@ -1,6 +1,16 @@
 import { useId, useMemo, useState, type ReactElement } from 'react'
 import type { Design } from '../../core/design/design'
-import { simulate, type ChaosScenario, type LoadProfile, type RequestPath, type SimulationResult } from '../../core/simulation/simulate'
+import {
+  REALISTIC_SAMPLES,
+  REQUEST_KINDS,
+  SIMULATION_MODES,
+  simulate,
+  type ChaosScenario,
+  type LoadProfile,
+  type RequestPath,
+  type SimulationMode,
+  type SimulationResult,
+} from '../../core/simulation/simulate'
 import { parseDecimal } from '../EstimationSteps'
 import { formatDecimal, formatInteger, formatNumber, t } from '../i18n'
 
@@ -27,25 +37,36 @@ export function loadProfileOf(draft: LoadDraft): LoadProfile | undefined {
   return { readQps: readQps!, writeQps: writeQps!, requestBytes: requestKb! * 1_000 }
 }
 
-/** The Load Profile being typed, starting from `initial`, with the controls that change it; `profile` is set only while the simulation is on. */
-export function useLoadControls(initial: LoadDraft): { profile: LoadProfile | undefined; controls: ReactElement } {
+/**
+ * The Load Profile being typed, starting from `initial`, and the simulation mode, with the controls that
+ * change them; `profile` is set only while the simulation is on.
+ */
+export function useLoadControls(initial: LoadDraft): { profile: LoadProfile | undefined; mode: SimulationMode; controls: ReactElement } {
   const [draft, setDraft] = useState(initial)
   const [simulating, setSimulating] = useState(false)
+  const [mode, setMode] = useState<SimulationMode>('simple')
   const profile = simulating ? loadProfileOf(draft) : undefined
-  const controls = <LoadControls draft={draft} simulating={simulating} onChange={setDraft} onToggle={() => setSimulating((on) => !on)} />
-  return { profile, controls }
+  const controls = (
+    <LoadControls draft={draft} simulating={simulating} mode={mode} onChange={setDraft} onToggle={() => setSimulating((on) => !on)} onModeChange={setMode} />
+  )
+  return { profile, mode, controls }
 }
 
 /**
- * The Traffic Simulation of a Design under a Load Profile, and a Chaos Scenario if any, computed again only
- * when one of them changes; none without a Design and a Load Profile.
+ * The Traffic Simulation of a Design under a Load Profile, and a Chaos Scenario if any, in a mode, computed
+ * again only when one of them changes; none without a Design and a Load Profile.
  */
-export function useSimulation(design: Design | undefined, profile: LoadProfile | undefined, scenario?: ChaosScenario): SimulationResult | undefined {
+export function useSimulation(
+  design: Design | undefined,
+  profile: LoadProfile | undefined,
+  scenario?: ChaosScenario,
+  mode: SimulationMode = 'simple',
+): SimulationResult | undefined {
   // Scenarios are built anew on every render, so they are compared by content.
   const scenarioKey = JSON.stringify(scenario ?? null)
   return useMemo(
-    () => (design && profile ? simulate(design, profile, scenario) : undefined),
-    [design, profile?.readQps, profile?.writeQps, profile?.requestBytes, scenarioKey],
+    () => (design && profile ? simulate(design, profile, scenario, mode) : undefined),
+    [design, profile?.readQps, profile?.writeQps, profile?.requestBytes, scenarioKey, mode],
   )
 }
 
@@ -55,11 +76,21 @@ const SLIDER_MAX = 5
 
 const fieldClass = 'mt-1 w-28 rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm text-zinc-100'
 
-const formatMs = (ms: number) => t('trafficMs', { ms: formatNumber(Number(ms.toPrecision(3))) })
+const formatSignificant = (ms: number) => formatNumber(Number(ms.toPrecision(3)))
+const formatMs = (ms: number) => t('trafficMs', { ms: formatSignificant(ms) })
 const formatPercent = (share: number) => formatDecimal(share * 100)
 
-export function LoadControls(props: { draft: LoadDraft; simulating: boolean; onChange(draft: LoadDraft): void; onToggle(): void }) {
-  const { draft, simulating, onChange, onToggle } = props
+const MODE_LABELS = { simple: 'trafficModeSimple', realistic: 'trafficModeRealistic' } as const
+
+export function LoadControls(props: {
+  draft: LoadDraft
+  simulating: boolean
+  mode: SimulationMode
+  onChange(draft: LoadDraft): void
+  onToggle(): void
+  onModeChange(mode: SimulationMode): void
+}) {
+  const { draft, simulating, mode, onChange, onToggle, onModeChange } = props
   const id = useId()
   const profile = loadProfileOf(draft)
   const total = profile ? profile.readQps + profile.writeQps : 0
@@ -123,6 +154,20 @@ export function LoadControls(props: { draft: LoadDraft; simulating: boolean; onC
           {simulating ? t('trafficStop') : t('trafficStart')}
         </button>
       </div>
+      <fieldset className="mt-3">
+        <legend className="text-xs text-zinc-400">{t('trafficMode')}</legend>
+        <div className="mt-1 flex flex-wrap gap-4">
+          {SIMULATION_MODES.map((option) => (
+            <label key={option} className="flex items-center gap-1.5 text-sm text-zinc-200">
+              <input type="radio" name={`${id}-mode`} value={option} checked={mode === option} onChange={() => onModeChange(option)} />
+              {t(MODE_LABELS[option])}
+            </label>
+          ))}
+        </div>
+        <p className="mt-1 text-xs text-zinc-400">
+          {mode === 'simple' ? t('trafficModeSimpleHelp') : t('trafficModeRealisticHelp', { samples: formatInteger(REALISTIC_SAMPLES) })}
+        </p>
+      </fieldset>
       {!profile && (
         <p role="alert" className="mt-2 text-xs text-rose-400">
           {t('trafficInvalid')}
@@ -145,6 +190,20 @@ export function SimulationSummary({ design, result, label = t('trafficSummary') 
   const stats: { name: string; value: string; bad?: boolean }[] = [
     ...(read !== undefined ? [{ name: t('trafficMeanRead'), value: formatMs(read) }] : []),
     ...(write !== undefined ? [{ name: t('trafficMeanWrite'), value: formatMs(write) }] : []),
+    // Realistic mode only: the spread of the requests drawn, and how long they wait in queues.
+    ...REQUEST_KINDS.flatMap((kind) => {
+      const percentiles = result.latencyPercentilesMs?.[kind]
+      const waitMs = result.queueingDelayMs?.[kind]
+      if (!percentiles || waitMs === undefined) return []
+      const { p50Ms, p95Ms, p99Ms } = percentiles
+      return [
+        {
+          name: t(kind === 'read' ? 'trafficPercentilesRead' : 'trafficPercentilesWrite'),
+          value: t('trafficPercentilesMs', { p50: formatSignificant(p50Ms), p95: formatSignificant(p95Ms), p99: formatSignificant(p99Ms) }),
+        },
+        { name: t(kind === 'read' ? 'trafficQueueingRead' : 'trafficQueueingWrite'), value: formatMs(waitMs) },
+      ]
+    }),
     errorStat(t('trafficErrorRate'), result.errorRate),
     // Per kind only when there are both, or it would repeat the overall rate.
     ...(readErrors !== undefined && writeErrors !== undefined ? [errorStat(t('trafficReadErrors'), readErrors), errorStat(t('trafficWriteErrors'), writeErrors)] : []),

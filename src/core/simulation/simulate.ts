@@ -1,8 +1,12 @@
 import type { ComponentType } from '../design/components'
 import { contains, nodeSimulation, type Design, type DesignEdge, type DesignNode } from '../design/design'
+import { mulberry32 } from '../random'
+import { meanSojournMs, mmcQueue, sampleSojourn, utilisationAtMeanFactor, type Queue } from './queueing'
 
-// The Traffic Simulation, simple mode: steady load pushed through a Design, deterministic and explainable.
+// The Traffic Simulation: steady load pushed through a Design, deterministic and explainable.
 // Traffic enters at the clients and each Node passes on what it serves, by what kind of component it is.
+// Realistic mode routes the same traffic, then models each Node as an M/M/c queue and draws requests through
+// them one by one, with seeded randomness, for the spread of their latency.
 
 /** The traffic the clients send, shared evenly among the clients connected to something. */
 export interface LoadProfile {
@@ -37,8 +41,15 @@ export type ChaosType = ChaosScenario['type']
 
 export const CHAOS_TYPES: readonly ChaosType[] = ['node-down', 'zone-down', 'cache-cold', 'partition']
 
-/** Only the simple model so far; a realistic queueing model comes later behind the same signature. */
-export type SimulationMode = 'simple'
+/**
+ * - `simple`: a Node's latency is its base latency × 1 / (1 − ρ), and a request's is the mean over the ways it goes.
+ * - `realistic`: each Node is an M/M/c queue, its instances the servers and its base latency the mean service
+ *   time; requests are drawn through the queues for their percentiles. Routing, load, utilisation, errors
+ *   and cost are simple mode's.
+ */
+export type SimulationMode = 'simple' | 'realistic'
+
+export const SIMULATION_MODES: readonly SimulationMode[] = ['simple', 'realistic']
 
 export type RequestKind = 'read' | 'write'
 
@@ -62,8 +73,13 @@ export interface NodeMetrics extends Traffic {
   capacityQps?: number
   /** ρ = load ÷ capacity; 0 for a client. */
   utilisation: number
-  /** Base latency × 1 / (1 − ρ), at most `LATENCY_CAP` times the base. */
+  /**
+   * Base latency × 1 / (1 − ρ), at most `LATENCY_CAP` times the base. In realistic mode, the mean time a
+   * request spends in the Node's M/M/c queue, also at most `LATENCY_CAP` times the base.
+   */
   latencyMs: number
+  /** Realistic mode only: the mean time a request waits in the Node's queue before an instance serves it. */
+  queueingDelayMs?: number
   monthlyCostUsd: number
   /** ρ ≥ 1. */
   overloaded: boolean
@@ -128,6 +144,19 @@ export interface SimulationResult {
   monthlyCostUsd: number
   /** Node ids with load, most utilised first. */
   bottlenecks: string[]
+  /**
+   * Realistic mode only: per kind with traffic, the percentiles of the latency of the requests drawn, those
+   * that fail included, as in the mean.
+   */
+  latencyPercentilesMs?: Partial<Record<RequestKind, LatencyPercentiles>>
+  /** Realistic mode only: per kind with traffic, the mean time a request drawn waits in queues, all of them together. */
+  queueingDelayMs?: Partial<Record<RequestKind, number>>
+}
+
+export interface LatencyPercentiles {
+  p50Ms: number
+  p95Ms: number
+  p99Ms: number
 }
 
 /** A Node's latency grows with its load up to this many times its base latency. */
@@ -135,6 +164,12 @@ export const LATENCY_CAP = 10
 
 /** At most this many request paths are listed. */
 export const MAX_PATHS = 100
+
+/** The requests of each kind realistic mode draws through the Design. */
+export const REALISTIC_SAMPLES = 10_000
+
+/** The seed realistic mode draws its requests with unless given another. */
+const DEFAULT_SEED = 1
 
 /** Components that keep data: they answer reads themselves and pass on only writes (replication, indexing). */
 const STORAGE: ReadonlySet<ComponentType> = new Set(['sql-database', 'nosql-store', 'object-store', 'search-index', 'geo-index', 'trie', 'data-warehouse'])
@@ -152,7 +187,7 @@ interface Route {
   group?: string
 }
 
-export function simulate(design: Design, load: LoadProfile, scenario?: ChaosScenario, _mode: SimulationMode = 'simple'): SimulationResult {
+export function simulate(design: Design, load: LoadProfile, scenario?: ChaosScenario, mode: SimulationMode = 'simple', seed = DEFAULT_SEED): SimulationResult {
   const graph = graphOf(design, scenario)
   const routesOf = (node: DesignNode, kind: RequestKind) => routes(node, kind, graph)
   // A client connected to nothing sends nothing.
@@ -172,13 +207,18 @@ export function simulate(design: Design, load: LoadProfile, scenario?: ChaosScen
   let cutQps = 0
   /** Node id → deferred work sent to it along cut Edges, which waits for it as backlog. */
   const stranded = new Map<string, number>()
+  /** Realistic mode: Node id → its queue; none for a Node that is down or serves nothing itself, e.g. a client. */
+  const queues = new Map<string, Queue>()
 
   for (const node of graph.order) {
     const flow = inflow.get(node.id)!
     const state = graph.down.has(node.id) ? 'down' : graph.primaryDown.has(node.id) ? 'primary-down' : 'up'
     const { metrics, served: shares, checked = shares } = nodeMetrics(node, flow, load.requestBytes, state, limitOf(node, graph), sendsPerRequest(node, graph))
+    const queue = mode === 'realistic' ? queueOf(node, metrics) : undefined
+    if (queue) queues.set(node.id, queue)
     nodes[node.id] = {
       ...metrics,
+      ...(queue && { latencyMs: meanSojournMs(queue), queueingDelayMs: queue.meanWaitMs }),
       cold: graph.cold.has(node.id) && nodeSimulation(node)?.hitRatio !== undefined,
       backlogQps: metrics.backlogQps + (stranded.get(node.id) ?? 0),
     }
@@ -205,8 +245,9 @@ export function simulate(design: Design, load: LoadProfile, scenario?: ChaosScen
     }
   }
 
-  /** The Edges a request waits on: not to a queue's consumer, nor asynchronous ones. */
-  const callsOf = (node: DesignNode, kind: RequestKind) => (QUEUES.has(node.componentType) ? [] : routesOf(node, kind).filter(({ edge }) => edge.mode === 'sync'))
+  /** The Edges a request waits on: not to a queue's consumer, nor asynchronous ones; none from a Node that is down. */
+  const callsOf = (node: DesignNode, kind: RequestKind) =>
+    QUEUES.has(node.componentType) || graph.down.has(node.id) ? [] : routesOf(node, kind).filter(({ edge }) => edge.mode === 'sync')
 
   // The expected latency and success of a request reaching a Node, with the calls it makes from there.
   const expected = new Map<string, { latencyMs: number; success: number }>()
@@ -215,7 +256,7 @@ export function simulate(design: Design, load: LoadProfile, scenario?: ChaosScen
     const known = expected.get(key)
     if (known) return known
     // A Node that is down answers nothing and calls nothing.
-    const calls = graph.down.has(node.id) ? [] : callsOf(node, kind)
+    const calls = callsOf(node, kind)
     let latencyMs = nodes[node.id].latencyMs
     const failures = new Map<string, number>()
     for (const { edge, fraction, group } of calls) {
@@ -231,6 +272,65 @@ export function simulate(design: Design, load: LoadProfile, scenario?: ChaosScen
     return result
   }
 
+  // Realistic mode: requests drawn one by one from the clients, through the queue of each Node they reach.
+  /** Kind and Node id → the calls a request makes from the Node, those of one group together as alternatives. */
+  const callGroups = new Map<string, Route[][]>()
+  const callGroupsOf = (node: DesignNode, kind: RequestKind): Route[][] => {
+    const key = `${kind}:${node.id}`
+    let groups = callGroups.get(key)
+    if (!groups) {
+      const byGroup = new Map<string, Route[]>()
+      for (const route of callsOf(node, kind)) {
+        const groupKey = route.group ?? route.edge.id
+        byGroup.set(groupKey, [...(byGroup.get(groupKey) ?? []), route])
+      }
+      groups = [...byGroup.values()]
+      callGroups.set(key, groups)
+    }
+    return groups
+  }
+  /** Adds the time a request reaching the Node spends there, and in the calls it makes from there. */
+  const draw = (node: DesignNode, kind: RequestKind, random: () => number, total: { latencyMs: number; waitMs: number }) => {
+    const queue = queues.get(node.id)
+    if (queue) {
+      const { latencyMs, waitMs } = sampleSojourn(queue, random)
+      total.latencyMs += latencyMs
+      total.waitMs += waitMs
+    }
+    const groups = callGroupsOf(node, kind)
+    if (groups.length === 0) return
+    // A cache answers a hit itself; on a miss each call goes on by its share of the misses.
+    const hit = hitRatioOf(node, kind, graph)
+    if (hit > 0 && random() < hit) return
+    for (const routes of groups) {
+      // At most one of a group's alternatives, by their shares. A call along a cut Edge fails at once.
+      let left = random() * (1 - hit)
+      const taken = routes.find(({ fraction }) => (left -= fraction) < 0)
+      if (taken && !graph.cut.has(taken.edge.id)) draw(graph.byId.get(taken.edge.target)!, kind, random, total)
+    }
+  }
+  const drawRequests = (kind: RequestKind) => {
+    // Each kind from its own stream, so that the load of one leaves the other's draws as they were.
+    const random = mulberry32(seed + REQUEST_KINDS.indexOf(kind))
+    const latencies: number[] = []
+    let waitMs = 0
+    for (let i = 0; i < REALISTIC_SAMPLES; i++) {
+      const total = { latencyMs: 0, waitMs: 0 }
+      draw(clients[Math.floor(random() * clients.length)], kind, random, total)
+      latencies.push(total.latencyMs)
+      waitMs += total.waitMs
+    }
+    latencies.sort((a, b) => a - b)
+    const percentile = (p: number) => latencies[Math.ceil(p * latencies.length) - 1]
+    return {
+      meanLatencyMs: latencies.reduce((sum, latency) => sum + latency, 0) / latencies.length,
+      percentiles: { p50Ms: percentile(0.5), p95Ms: percentile(0.95), p99Ms: percentile(0.99) },
+      queueingDelayMs: waitMs / latencies.length,
+    }
+  }
+  const latencyPercentilesMs: Partial<Record<RequestKind, LatencyPercentiles>> = {}
+  const queueingDelayMs: Partial<Record<RequestKind, number>> = {}
+
   const meanLatencyMs: Partial<Record<RequestKind, number>> = {}
   const errorRateByKind: Partial<Record<RequestKind, number>> = {}
   let failed = 0
@@ -239,7 +339,12 @@ export function simulate(design: Design, load: LoadProfile, scenario?: ChaosScen
     const qps = kind === 'read' ? load.readQps : load.writeQps
     if (qps <= 0 || clients.length === 0) continue
     const perClient = clients.map((client) => expect(client, kind))
-    meanLatencyMs[kind] = perClient.reduce((sum, { latencyMs }) => sum + latencyMs, 0) / clients.length
+    const drawn = mode === 'realistic' ? drawRequests(kind) : undefined
+    meanLatencyMs[kind] = drawn ? drawn.meanLatencyMs : perClient.reduce((sum, { latencyMs }) => sum + latencyMs, 0) / clients.length
+    if (drawn) {
+      latencyPercentilesMs[kind] = drawn.percentiles
+      queueingDelayMs[kind] = drawn.queueingDelayMs
+    }
     const errorRate = 1 - perClient.reduce((sum, { success }) => sum + success, 0) / clients.length
     errorRateByKind[kind] = errorRate
     failed += qps * errorRate
@@ -252,7 +357,7 @@ export function simulate(design: Design, load: LoadProfile, scenario?: ChaosScen
       const end = (endShare: number, errorRate = 1 - pathSuccess) => {
         if (endShare > 0) paths.push({ kind, nodeIds, share: endShare, latencyMs: pathLatency, errorRate })
       }
-      const calls = graph.down.has(node.id) ? [] : callsOf(node, kind)
+      const calls = callsOf(node, kind)
       if (calls.length === 0) return end(share)
       // A cache answers its hits itself; only the misses go on.
       const hit = hitRatioOf(node, kind, graph)
@@ -283,7 +388,22 @@ export function simulate(design: Design, load: LoadProfile, scenario?: ChaosScen
       .filter(([nodeId, node]) => node.loadQps > 0 && !node.down && graph.byId.get(nodeId)!.componentType !== 'client')
       .sort(([, a], [, b]) => b.utilisation - a.utilisation)
       .map(([nodeId]) => nodeId),
+    ...(mode === 'realistic' && { latencyPercentilesMs, queueingDelayMs }),
   }
+}
+
+/**
+ * A Node's M/M/c queue in realistic mode: its instances are the servers, each serving a request in its base
+ * latency on average. Its ρ is simple mode's, load ÷ capacity: capacity and base latency are set apart (a
+ * server works on several requests at once), so the queue keeps that ρ and takes its time from the base
+ * latency. It is modelled at most as busy as takes a request `LATENCY_CAP` times the base on average,
+ * simple mode's cap; beyond, the queue would grow without end, and an overloaded Node drops its excess instead.
+ */
+function queueOf(node: DesignNode, metrics: NodeMetrics): Queue | undefined {
+  const settings = nodeSimulation(node)
+  if (!settings || metrics.down) return undefined
+  const servers = instancesOf(node)
+  return mmcQueue(servers, Math.min(metrics.utilisation, utilisationAtMeanFactor(servers, LATENCY_CAP)), settings.baseLatencyMs)
 }
 
 function noTraffic(): Traffic {

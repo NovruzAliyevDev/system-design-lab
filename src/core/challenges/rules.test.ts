@@ -392,6 +392,25 @@ describe('evaluateDesign predicates', () => {
       expect(passing(setNodeConfig(server, 'web-server-1', 'instances', 2))).toEqual(['stage-load', 'at-800', 'at-1600'])
     })
 
+    it('simulates in simple mode unless the target asks for realistic', () => {
+      // Two instances at half load: 1.04 ms in simple mode; as one M/M/2 queue 0.52 × 4/3 ≈ 0.69 ms on average.
+      const twoInstances = setNodeConfig(server, 'web-server-1', 'instances', 2)
+      const stage = {
+        loadProfile: atLoad(1_000),
+        rules: [
+          rule('simple', { type: 'simulation', maxLatencyMs: { read: 0.8 } }),
+          rule('realistic', { type: 'simulation', mode: 'realistic', maxLatencyMs: { read: 0.8 } }),
+          rule('explicitly-simple', { type: 'simulation', mode: 'simple', maxLatencyMs: { read: 0.8 } }),
+        ],
+      }
+
+      expect(evaluateDesign(stage, twoInstances, {}).rules.map(({ ruleId, passed }) => [ruleId, passed])).toEqual([
+        ['simple', false],
+        ['realistic', true],
+        ['explicitly-simple', false],
+      ])
+    })
+
     it('can limit the error rate of one kind of request only', () => {
       // Reads go to one web server; writes to another, which drops half of its 2,000: 1,000 of 2,500 requests fail.
       const halfDropped = build(['client-1', 'web-server-1', 'web-server-2'], ['client-1->web-server-1:sync:read', 'client-1->web-server-2:sync:write'])

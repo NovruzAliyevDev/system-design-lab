@@ -829,3 +829,144 @@ describe('the summary', () => {
     expect(simulate(design, load(5_000, 500))).toEqual(simulate(design, load(5_000, 500)))
   })
 })
+
+describe('realistic mode', () => {
+  const single = edges(nodes('client', 'web-server'), ['client-1', 'web-server-1'])
+  const cacheInFront = edges(nodes('client', 'cache', 'sql-database'), ['client-1', 'cache-1'], ['cache-1', 'sql-database-1'])
+  /** Within `tolerance` of `expected`, relatively. */
+  const near = (actual: number | undefined, expected: number, tolerance = 0.05) => {
+    expect(actual).toBeDefined()
+    expect(Math.abs(actual! - expected) / expected).toBeLessThan(tolerance)
+  }
+
+  describe('a single M/M/1 Node', () => {
+    // ρ 0.8, service time 0.52 ms: a request spends 0.52 / (1 − 0.8) = 2.6 ms there on average, 2.08 ms of it waiting.
+    const result = simulate(single, load(800, 0), undefined, 'realistic')
+
+    it('has the analytic mean latency and queueing delay', () => {
+      expect(result.nodes['web-server-1'].latencyMs).toBeCloseTo(2.6, 9)
+      expect(result.nodes['web-server-1'].queueingDelayMs).toBeCloseTo(2.08, 9)
+    })
+
+    it('samples requests whose mean latency approaches the analytic value', () => {
+      near(result.meanLatencyMs.read, 2.6)
+      near(result.queueingDelayMs?.read, 2.08, 0.08)
+    })
+
+    it('reports percentiles of the exponential time a request spends there', () => {
+      // The time in an M/M/1 queue is exponential: its p-th percentile is the mean × −ln(1 − p).
+      const percentiles = result.latencyPercentilesMs?.read
+      near(percentiles?.p50Ms, 2.6 * Math.LN2, 0.08)
+      near(percentiles?.p95Ms, 2.6 * Math.log(20), 0.08)
+      near(percentiles?.p99Ms, 2.6 * Math.log(100), 0.1)
+    })
+
+    it('agrees with simple mode on the mean latency of the Node', () => {
+      expect(result.nodes['web-server-1'].latencyMs).toBeCloseTo(simulate(single, load(800, 0)).nodes['web-server-1'].latencyMs, 9)
+    })
+  })
+
+  it('has p99 at least p95, and p95 at least p50, for each kind', () => {
+    const design = cacheInFront
+    const { latencyPercentilesMs } = simulate(design, load(2_000, 300), undefined, 'realistic')
+
+    for (const kind of ['read', 'write'] as const) {
+      const { p50Ms, p95Ms, p99Ms } = latencyPercentilesMs![kind]!
+      expect(p50Ms).toBeGreaterThan(0)
+      expect(p95Ms).toBeGreaterThanOrEqual(p50Ms)
+      expect(p99Ms).toBeGreaterThanOrEqual(p95Ms)
+    }
+  })
+
+  it('still reports ρ ≥ 1 as overloaded, drops the excess and caps the mean latency at 10 times the base', () => {
+    const result = simulate(single, load(1_500, 500), undefined, 'realistic')
+
+    expect(result.nodes['web-server-1']).toMatchObject({ utilisation: 2, overloaded: true, droppedQps: 1_000 })
+    expect(result.nodes['web-server-1'].latencyMs).toBeCloseTo(5.2, 9)
+    expect(result.errorRate).toBe(0.5)
+    expect(result.bottlenecks).toEqual(['web-server-1'])
+  })
+
+  it('caps the mean latency of an overloaded Node at 10 times the base however many instances it has', () => {
+    const result = simulate(setNodeConfig(single, 'web-server-1', 'instances', 10), load(15_000, 5_000), undefined, 'realistic')
+
+    expect(result.nodes['web-server-1']).toMatchObject({ utilisation: 2, overloaded: true })
+    expect(result.nodes['web-server-1'].latencyMs).toBeCloseTo(5.2, 6)
+  })
+
+  it('draws the requests of each kind on their own, so that one kind’s load leaves the other’s percentiles as they were', () => {
+    const design = setNodeConfig(edges(nodes('client', 'web-server', 'web-server'), ['client-1', 'web-server-1', { traffic: 'read' }], ['client-1', 'web-server-2', { traffic: 'write' }]), 'web-server-1', 'instances', 4)
+
+    expect(simulate(design, load(0, 500), undefined, 'realistic').latencyPercentilesMs?.write).toEqual(simulate(design, load(2_000, 500), undefined, 'realistic').latencyPercentilesMs?.write)
+  })
+
+  it('models instances as the servers of one queue, which wait less than one server at the same utilisation', () => {
+    // M/M/2 at ρ 0.5: a request waits with probability 1/3, for 0.52 / (2 × 0.5) ms then.
+    const result = simulate(setNodeConfig(single, 'web-server-1', 'instances', 2), load(1_000, 0), undefined, 'realistic')
+
+    expect(result.nodes['web-server-1'].utilisation).toBe(0.5)
+    expect(result.nodes['web-server-1'].queueingDelayMs).toBeCloseTo(0.52 / 3, 9)
+    expect(result.nodes['web-server-1'].latencyMs).toBeCloseTo(0.52 * (4 / 3), 9)
+    near(result.meanLatencyMs.read, 0.52 * (4 / 3))
+  })
+
+  it('samples the calls a request makes and the alternatives it takes by their shares', () => {
+    const cached = edges(nodes('client', 'web-server', 'cache', 'sql-database'), ['client-1', 'web-server-1'], ['web-server-1', 'cache-1'], ['web-server-1', 'sql-database-1'])
+    const balanced = edges(
+      nodes('client', 'load-balancer', 'web-server', 'web-server', 'sql-database'),
+      ['client-1', 'load-balancer-1'],
+      ['load-balancer-1', 'web-server-1'],
+      ['load-balancer-1', 'web-server-2'],
+      ['web-server-1', 'sql-database-1'],
+      ['web-server-2', 'sql-database-1'],
+    )
+
+    for (const design of [cached, balanced]) {
+      // With a single server per Node the realistic means of the Nodes are simple mode's, and so is a request's.
+      const simple = simulate(design, load(600, 200))
+      const realistic = simulate(design, load(600, 200), undefined, 'realistic')
+      near(realistic.meanLatencyMs.read, simple.meanLatencyMs.read!)
+      near(realistic.meanLatencyMs.write, simple.meanLatencyMs.write!)
+    }
+  })
+
+  it('keeps the shape of simple mode: the same traffic, utilisation, errors, cost and paths', () => {
+    const design = cacheInFront
+    const simple = simulate(design, load(5_000, 1_500))
+    const realistic = simulate(design, load(5_000, 1_500), undefined, 'realistic')
+
+    expect(realistic).toMatchObject({
+      edges: simple.edges,
+      errorRate: simple.errorRate,
+      errorRateByKind: simple.errorRateByKind,
+      droppedQps: simple.droppedQps,
+      monthlyCostUsd: simple.monthlyCostUsd,
+      bottlenecks: simple.bottlenecks,
+    })
+    expect(realistic.paths.map(({ kind, nodeIds, share }) => ({ kind, nodeIds, share }))).toEqual(simple.paths.map(({ kind, nodeIds, share }) => ({ kind, nodeIds, share })))
+    for (const [nodeId, metrics] of Object.entries(simple.nodes)) {
+      expect(realistic.nodes[nodeId]).toMatchObject({ loadQps: metrics.loadQps, utilisation: metrics.utilisation, overloaded: metrics.overloaded })
+    }
+  })
+
+  it('gives the same result for the same seed, and another for another seed', () => {
+    const design = cacheInFront
+    const seeded = (seed: number) => simulate(design, load(5_000, 500), undefined, 'realistic', seed)
+
+    expect(seeded(7)).toEqual(seeded(7))
+    expect(seeded(7).latencyPercentilesMs).not.toEqual(seeded(8).latencyPercentilesMs)
+    expect(simulate(design, load(5_000, 500), undefined, 'realistic')).toEqual(simulate(design, load(5_000, 500), undefined, 'realistic'))
+  })
+
+  it('is left out of simple mode', () => {
+    const result = simulate(single, load(800, 0))
+
+    expect(result.latencyPercentilesMs).toBeUndefined()
+    expect(result.queueingDelayMs).toBeUndefined()
+    expect(result.nodes['web-server-1'].queueingDelayMs).toBeUndefined()
+  })
+
+  it('reports no percentiles for a kind the load does not send', () => {
+    expect(simulate(single, load(800, 0), undefined, 'realistic').latencyPercentilesMs).toEqual({ read: expect.any(Object) })
+  })
+})

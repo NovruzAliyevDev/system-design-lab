@@ -18,12 +18,14 @@ import {
 import {
   CHAOS_TYPES,
   REQUEST_KINDS,
+  SIMULATION_MODES,
   simulate,
   type ChaosScenario,
   type ChaosType,
   type LoadProfile,
   type NodeMetrics,
   type RequestKind,
+  type SimulationMode,
   type SimulationResult,
   type Traffic,
 } from '../simulation/simulate'
@@ -190,6 +192,8 @@ export interface CustomPredicate {
  */
 export interface SimulationPredicate {
   type: 'simulation'
+  /** Simple unless the target asks for realistic; realistic mode draws its requests with the default seed. */
+  mode?: SimulationMode
   /** The id of the Stage's Chaos task to simulate under. */
   chaos?: string
   /** The load to simulate under in place of the Stage's, e.g. one of several successive targets a Design scales to. */
@@ -380,27 +384,27 @@ function tiersOpened(hintUsage: HintUsage, ruleId: string): number {
   return opened
 }
 
-/** What predicates check: the Design and its Traffic Simulation, simulated at most once per evaluation, load and Chaos task. */
+/** What predicates check: the Design and its Traffic Simulation, simulated at most once per evaluation, load, Chaos task and mode. */
 interface CheckContext {
   design: Design
   /** Under `load`, or else the Stage's Load Profile, and under the Chaos task with the id `chaos`, when given. */
-  simulation(load: LoadProfile | undefined, chaos: string | undefined): { load: LoadProfile; result: SimulationResult }
+  simulation(load: LoadProfile | undefined, chaos: string | undefined, mode: SimulationMode): { load: LoadProfile; result: SimulationResult }
 }
 
 function checkContext(design: Design, { loadProfile, chaosTasks = [] }: RuledStage): CheckContext {
-  /** The load and Chaos task id simulated under → the simulation. */
+  /** The load, Chaos task id and mode simulated under → the simulation. */
   const results = new Map<string, SimulationResult>()
   return {
     design,
-    simulation(targetLoad, chaos) {
+    simulation(targetLoad, chaos, mode) {
       const load = targetLoad ?? loadProfile
       if (!load) throw new RangeError('A simulation predicate needs its Stage, or itself, to have a Load Profile.')
       const task = chaos === undefined ? undefined : chaosTasks.find((candidate) => candidate.id === chaos)
       if (chaos !== undefined && !task) throw new RangeError(`No Chaos task ${chaos}.`)
-      const key = JSON.stringify([...[...LOAD_FIELDS].map((field) => load[field as keyof LoadProfile]), chaos ?? null])
+      const key = JSON.stringify([...[...LOAD_FIELDS].map((field) => load[field as keyof LoadProfile]), chaos ?? null, mode])
       let result = results.get(key)
       if (!result) {
-        result = simulate(design, load, task && chaosScenarioOf(task.scenario, design))
+        result = simulate(design, load, task && chaosScenarioOf(task.scenario, design), mode)
         results.set(key, result)
       }
       return { load, result }
@@ -448,7 +452,7 @@ function holds(predicate: Predicate, context: CheckContext): boolean {
       return check(design)
     }
     case 'simulation':
-      return meetsTargets(predicate, context.simulation(predicate.load, predicate.chaos))
+      return meetsTargets(predicate, context.simulation(predicate.load, predicate.chaos, predicate.mode ?? 'simple'))
     case 'class': {
       const count = matchingClasses(design, predicate.class).length
       const max = predicate.max ?? Infinity
@@ -592,7 +596,7 @@ const PREDICATE_FIELDS: Record<Predicate['type'], ReadonlySet<string>> = {
   'any-of': new Set(['type', 'predicates']),
   not: new Set(['type', 'predicate']),
   custom: new Set(['type', 'name']),
-  simulation: new Set(['type', 'chaos', 'load', 'maxLatencyMs', 'maxOverloadedNodes', 'maxErrorRate', 'maxMonthlyCostUsd']),
+  simulation: new Set(['type', 'mode', 'chaos', 'load', 'maxLatencyMs', 'maxOverloadedNodes', 'maxErrorRate', 'maxMonthlyCostUsd']),
   class: new Set(['type', 'class', 'min', 'max']),
   member: new Set(['type', 'class', 'field', 'method']),
   relation: new Set(['type', 'from', 'to', 'kind', 'fromMultiplicity', 'toMultiplicity']),
@@ -755,7 +759,8 @@ function checkPredicate(value: unknown, fail: (message: string) => void, chaosTa
       if (!isText(value.name) || !Object.hasOwn(CUSTOM_PREDICATES, value.name)) fail(`no custom predicate "${String(value.name)}" is registered`)
       return
     case 'simulation': {
-      const { chaos, load, maxLatencyMs, maxOverloadedNodes, maxErrorRate, maxMonthlyCostUsd } = value
+      const { mode, chaos, load, maxLatencyMs, maxOverloadedNodes, maxErrorRate, maxMonthlyCostUsd } = value
+      if (mode !== undefined && !SIMULATION_MODES.includes(mode as SimulationMode)) fail(`"mode" must be one of ${SIMULATION_MODES.join(', ')}`)
       if (chaos !== undefined && !(isText(chaos) && chaosTaskIds.has(chaos))) fail(`"chaos" names no Chaos task of the Stage: "${String(chaos)}"`)
       if (load !== undefined) validateLoadProfile(load, (message) => fail(`load: ${message}`))
       if ([maxLatencyMs, maxOverloadedNodes, maxErrorRate, maxMonthlyCostUsd].every((target) => target === undefined)) return fail('a simulation predicate must set at least one target')

@@ -18,7 +18,7 @@ export function SandboxPage() {
   const load = useLoadControls(DEFAULT_LOAD)
   const chaos = useChaosControls([], history?.present)
   // Once started, the results follow every change to the Design, the load or the Chaos Scenario.
-  const result = useSimulation(history?.present, load.profile, history && chaos.scenarioFor(history.present))
+  const result = useSimulation(history?.present, load.profile, history && chaos.scenarioFor(history.present), load.mode)
 
   useEffect(() => {
     if (!loaded || history) return

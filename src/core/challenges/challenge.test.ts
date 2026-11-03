@@ -231,6 +231,7 @@ describe('authored Challenges', () => {
     ['a budget target that is not positive', withRule({ type: 'simulation', maxMonthlyCostUsd: 0 }), 'check: "maxMonthlyCostUsd" must be a positive number'],
     ['a target Load Profile sending nothing', withRule({ type: 'simulation', load: { readQps: 0, writeQps: 0, requestBytes: 1_000 }, maxErrorRate: 0 }), 'check: load: must send some reads or writes'],
     ['a target Load Profile with an unknown field', withRule({ type: 'simulation', load: { ...pastebin.loadProfile, users: 5 }, maxErrorRate: 0 }), 'check: load: unknown field "users"'],
+    ['an unknown simulation mode', withRule({ type: 'simulation', mode: 'chaotic', maxErrorRate: 0 }), 'check: "mode" must be one of simple, realistic'],
     ['a target Load Profile only', withRule({ type: 'simulation', load: pastebin.loadProfile }), 'check: a simulation predicate must set at least one target'],
     ['no default Load Profile', [{ ...pastebin, loadProfile: undefined }], 'loadProfile: must be an object'],
     ['a Load Profile with a negative rate', [{ ...pastebin, loadProfile: { ...pastebin.loadProfile, writeQps: -1 } }], 'loadProfile: "writeQps" must be a number of at least 0'],

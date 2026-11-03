@@ -34,7 +34,7 @@ function OpenStage(props: { stage: DesignStage; work: DesignWork; editable: bool
   const canEdit = editable && wideEnough
   const load = useLoadControls(draftOf(stage.loadProfile))
   const chaos = useChaosControls(stage.chaosTasks ?? [], history.present)
-  const simulation = useSimulation(history.present, load.profile, chaos.scenarioFor(history.present))
+  const simulation = useSimulation(history.present, load.profile, chaos.scenarioFor(history.present), load.mode)
 
   function change(next: History<Design>) {
     setHistory(next)
@@ -92,8 +92,8 @@ function OverStage({ stage, work }: { stage: DesignStage; work: DesignWork }) {
   const load = useLoadControls(draftOf(stage.loadProfile))
   // Only the Stage's Chaos tasks, which pick their Nodes in each Design alike.
   const chaos = useChaosControls(stage.chaosTasks ?? [])
-  const yourSimulation = useSimulation(yours.present, load.profile, chaos.scenarioFor(yours.present))
-  const referenceSimulation = useSimulation(reference.present, load.profile, chaos.scenarioFor(reference.present))
+  const yourSimulation = useSimulation(yours.present, load.profile, chaos.scenarioFor(yours.present), load.mode)
+  const referenceSimulation = useSimulation(reference.present, load.profile, chaos.scenarioFor(reference.present), load.mode)
 
   return (
     <>
