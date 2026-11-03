@@ -228,6 +228,7 @@ describe('authored Challenges', () => {
     ['a latency target for an unknown kind', withRule({ type: 'simulation', maxLatencyMs: { delete: 5 } }), 'check: "maxLatencyMs" must give positive numbers for "read" and "write" only'],
     ['an overload target that is not a count', withRule({ type: 'simulation', maxOverloadedNodes: 1.5 }), 'check: "maxOverloadedNodes" must be a whole number of at least 0'],
     ['an error-rate target above 1', withRule({ type: 'simulation', maxErrorRate: 2 }), 'check: "maxErrorRate" must be a number from 0 to 1, or such numbers for "read" and "write" only'],
+    ['a budget target that is not positive', withRule({ type: 'simulation', maxMonthlyCostUsd: 0 }), 'check: "maxMonthlyCostUsd" must be a positive number'],
     ['a target Load Profile sending nothing', withRule({ type: 'simulation', load: { readQps: 0, writeQps: 0, requestBytes: 1_000 }, maxErrorRate: 0 }), 'check: load: must send some reads or writes'],
     ['a target Load Profile with an unknown field', withRule({ type: 'simulation', load: { ...pastebin.loadProfile, users: 5 }, maxErrorRate: 0 }), 'check: load: unknown field "users"'],
     ['a target Load Profile only', withRule({ type: 'simulation', load: pastebin.loadProfile }), 'check: a simulation predicate must set at least one target'],

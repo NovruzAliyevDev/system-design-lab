@@ -403,6 +403,83 @@ describe('a coordination service', () => {
   })
 })
 
+describe('a fan-out service', () => {
+  // Sends each request on as `fanOut` copies (1 unless told otherwise); an instance sends 5,000 copies a second in 0.5 ms.
+  const design = edges(nodes('client', 'fan-out', 'cache'), ['client-1', 'fan-out-1'], ['fan-out-1', 'cache-1'])
+  const toFollowers = setNodeConfig(design, 'fan-out-1', 'fanOut', 200)
+
+  it('passes each request on as it is with its default fan-out of 1', () => {
+    expect(simulate(design, load(0, 10)).nodes['cache-1'].writeQps).toBe(10)
+  })
+
+  it('sends every request it serves on as `fanOut` copies along each Edge out', () => {
+    const twoTargets = edges(addNode(toFollowers, 'nosql-store', { x: 0, y: 0 }, 'nosql-store').design, ['fan-out-1', 'nosql-store-1'])
+    const result = simulate(twoTargets, load(0, 10))
+
+    // 2,000 copies to each target: 4,000 of the 5,000 an instance sends.
+    expect(result.nodes['fan-out-1']).toMatchObject({ writeQps: 10, loadQps: 10, capacityQps: 12.5, utilisation: 0.8, overloaded: false })
+    expect(result.edges['fan-out-1->cache-1']).toEqual({ readQps: 0, writeQps: 2_000 })
+    expect(result.nodes['cache-1'].writeQps).toBe(2_000)
+    expect(result.nodes['nosql-store-1'].writeQps).toBe(2_000)
+  })
+
+  it('counts the copies against its capacity: past it, it serves fewer requests and drops the rest', () => {
+    // 30 requests are 6,000 copies, over the 5,000 an instance sends: it serves 25 requests a second.
+    const result = simulate(toFollowers, load(0, 30))
+
+    expect(result.nodes['fan-out-1']).toMatchObject({ loadQps: 30, capacityQps: 25, utilisation: 1.2, overloaded: true })
+    expect(result.nodes['fan-out-1'].droppedQps).toBeCloseTo(5, 9)
+    expect(result.nodes['cache-1'].writeQps).toBeCloseTo(5_000, 9)
+    expect(result.errorRate).toBeCloseTo(5 / 30, 9)
+  })
+
+  it('sends its copies at once: a request waits for them together, not one after another, and fails when they fail', () => {
+    const result = simulate(toFollowers, load(10, 0))
+
+    // Fan-out: 2,000 copies, ρ 0.4 → 0.5 / 0.6 ms; cache: 2,000 reads, ρ 0.04.
+    expect(result.meanLatencyMs.read).toBeCloseTo(0.5 / 0.6 + 0.501 / 0.96, 9)
+    expect(result.paths.map((path) => [path.nodeIds, path.share])).toEqual([[['client-1', 'fan-out-1', 'cache-1'], 1]])
+    expect(simulate(toFollowers, load(10, 0), { type: 'node-down', nodeIds: ['cache-1'] }).errorRate).toBe(1)
+  })
+})
+
+describe('a WebSocket gateway', () => {
+  it('relays messages over connections already open: an instance takes 20,000 a second, where a web server takes 1,000', () => {
+    const design = edges(nodes('client', 'websocket-gateway', 'app-service'), ['client-1', 'websocket-gateway-1'], ['websocket-gateway-1', 'app-service-1'])
+    const result = simulate(setNodeConfig(design, 'app-service-1', 'instances', 40), load(12_000, 6_000))
+
+    expect(result.nodes['websocket-gateway-1']).toMatchObject({ loadQps: 18_000, capacityQps: 20_000, utilisation: 0.9, overloaded: false })
+    expect(result.nodes['app-service-1'].loadQps).toBe(18_000)
+    expect(result.nodes['websocket-gateway-1'].latencyMs).toBeCloseTo(5, 9)
+  })
+})
+
+describe('a push service', () => {
+  // A third-party provider (APNs, FCM, an SMS or e-mail gateway) outside the datacenter, taking 100,000 a second.
+  it('is far away: a request calling it synchronously waits 150 ms for it', () => {
+    const design = edges(nodes('client', 'app-service', 'push-service'), ['client-1', 'app-service-1'], ['app-service-1', 'push-service-1'])
+    const result = simulate(design, load(0, 250))
+
+    expect(result.nodes['push-service-1']).toMatchObject({ loadQps: 250, capacityQps: 100_000 })
+    // App: ρ 0.5 → 3 ms; push service: ρ 0.0025.
+    expect(result.meanLatencyMs.write).toBeCloseTo(3 + 150 / 0.9975, 9)
+  })
+
+  it('behind a queue adds nothing to a request’s latency, and when it is down its notifications wait as backlog', () => {
+    const design = edges(
+      nodes('client', 'app-service', 'message-queue', 'push-service'),
+      ['client-1', 'app-service-1'],
+      ['app-service-1', 'message-queue-1'],
+      ['message-queue-1', 'push-service-1'],
+    )
+    const down = simulate(design, load(0, 250), { type: 'node-down', nodeIds: ['push-service-1'] })
+
+    expect(simulate(design, load(0, 250)).meanLatencyMs.write).toBeLessThan(10)
+    expect(down.nodes['push-service-1']).toMatchObject({ down: true, deferred: true, backlogQps: 250 })
+    expect(down.errorRate).toBe(0)
+  })
+})
+
 describe('routing by traffic', () => {
   it('sends reads and writes only along the Edges that carry them', () => {
     const design = edges(

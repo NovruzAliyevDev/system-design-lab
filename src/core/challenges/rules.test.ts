@@ -333,6 +333,15 @@ describe('evaluateDesign predicates', () => {
       expect(meets({ type: 'simulation', maxErrorRate: 0.5 }, server, atLoad(2_000))).toBe(true)
     })
 
+    it('fails when the Design costs more a month than the budget target, a cost of the Nodes taking no load too', () => {
+      // One web server costs $70 a month; a second, idle one another $70.
+      const idleSpare = build(['client-1', 'web-server-1', 'web-server-2'], ['client-1->web-server-1'])
+
+      expect(meets({ type: 'simulation', maxMonthlyCostUsd: 70 }, server, atLoad(500))).toBe(true)
+      expect(meets({ type: 'simulation', maxMonthlyCostUsd: 69 }, server, atLoad(500))).toBe(false)
+      expect(meets({ type: 'simulation', maxMonthlyCostUsd: 100 }, idleSpare, atLoad(500))).toBe(false)
+    })
+
     it('checks the same Design against the load of the Stage it belongs to', () => {
       const check: Predicate = { type: 'simulation', maxOverloadedNodes: 0 }
 

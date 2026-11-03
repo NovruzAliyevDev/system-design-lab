@@ -55,7 +55,8 @@ export interface NodeMetrics extends Traffic {
   loadQps: number
   /**
    * What the Node serves before it is overloaded, for this mix of reads and writes; none for a client.
-   * It is capacity × instances, except that each copy of a primary with replicas serves a share of the reads.
+   * It is capacity × instances, except that each copy of a primary with replicas serves a share of the reads,
+   * and a fan-out service's capacity counts every copy it sends: `fanOut` along each Edge out, for each request.
    */
   capacityQps?: number
   /** ρ = load ÷ capacity; 0 for a client. */
@@ -174,29 +175,31 @@ export function simulate(design: Design, load: LoadProfile, scenario?: ChaosScen
   for (const node of graph.order) {
     const flow = inflow.get(node.id)!
     const state = graph.down.has(node.id) ? 'down' : graph.primaryDown.has(node.id) ? 'primary-down' : 'up'
-    const { metrics, served: shares, checked = shares } = nodeMetrics(node, flow, load.requestBytes, state, limitOf(node, graph))
+    const { metrics, served: shares, checked = shares } = nodeMetrics(node, flow, load.requestBytes, state, limitOf(node, graph), sendsPerRequest(node, graph))
     nodes[node.id] = {
       ...metrics,
       cold: graph.cold.has(node.id) && nodeSimulation(node)?.hitRatio !== undefined,
       backlogQps: metrics.backlogQps + (stranded.get(node.id) ?? 0),
     }
     servedShare.set(node.id, shares)
+    const fanOut = fanOutOf(node)
     for (const kind of REQUEST_KINDS) {
       for (const { edge, fraction } of routesOf(node, kind)) {
         // A rate limiter checks its counters for every request it serves, those it rejects too.
-        const served = isCounterEdge(edge, graph) ? checked[kind] : shares[kind]
+        // A fan-out service sends each request it serves on as several copies.
+        const sent = (isCounterEdge(edge, graph) ? checked[kind] : shares[kind]) * fraction * fanOut
         // Work handed to a queue, or along an asynchronous Edge, is deferred from then on.
         const sync = edge.mode === 'sync' && !QUEUES.has(node.componentType)
-        add(edges[edge.id], kind, qpsOf(flow.all, kind) * served * fraction)
+        add(edges[edge.id], kind, qpsOf(flow.all, kind) * sent)
         if (graph.cut.has(edge.id)) {
-          const syncQps = sync ? qpsOf(flow.sync, kind) * served * fraction : 0
+          const syncQps = sync ? qpsOf(flow.sync, kind) * sent : 0
           cutQps += syncQps
-          stranded.set(edge.target, (stranded.get(edge.target) ?? 0) + qpsOf(flow.all, kind) * served * fraction - syncQps)
+          stranded.set(edge.target, (stranded.get(edge.target) ?? 0) + qpsOf(flow.all, kind) * sent - syncQps)
           continue
         }
         const target = inflow.get(edge.target)!
-        add(target.all, kind, qpsOf(flow.all, kind) * served * fraction)
-        if (sync) add(target.sync, kind, qpsOf(flow.sync, kind) * served * fraction)
+        add(target.all, kind, qpsOf(flow.all, kind) * sent)
+        if (sync) add(target.sync, kind, qpsOf(flow.sync, kind) * sent)
       }
     }
   }
@@ -302,6 +305,7 @@ type NodeState = 'up' | 'down' | 'primary-down'
  * A Node's metrics, and the share of the requests of each kind reaching it that it serves. `limitQps` is
  * the most requests a second it lets through, of all kinds together: a rate limiter's, or else Infinity.
  * A rate limiter also gives the share it checks before rejecting what is over its limit (`checked`).
+ * `sends` is what one request costs its capacity: more than one for a fan-out service.
  */
 function nodeMetrics(
   node: DesignNode,
@@ -309,6 +313,7 @@ function nodeMetrics(
   requestBytes: number,
   state: NodeState,
   limitQps: number,
+  sends: number,
 ): { metrics: NodeMetrics; served: Record<RequestKind, number>; checked?: Record<RequestKind, number> } {
   const { readQps, writeQps } = flow.all
   const loadQps = readQps + writeQps
@@ -326,7 +331,8 @@ function nodeMetrics(
   const monthlyCostUsd = settings.monthlyCostUsd * instances * copies
   const syncQps = flow.sync.readQps + flow.sync.writeQps
   const deferred = loadQps > 0 && syncQps === 0
-  const perCopy = settings.capacityQps * instances
+  // A fan-out service's capacity is in the copies it sends: it serves that many times fewer requests.
+  const perCopy = (settings.capacityQps * instances) / sends
   const latencyAt = (utilisation: number) => settings.baseLatencyMs * (utilisation >= 1 ? LATENCY_CAP : Math.min(LATENCY_CAP, 1 / (1 - utilisation)))
 
   if (state === 'down') {
@@ -444,7 +450,7 @@ function routes(node: DesignNode, kind: RequestKind, graph: Graph): Route[] {
     // It sends nothing along what is down or cut while some target is left.
     const targets = eligible.some(available) ? eligible.filter(available) : eligible
     const leastConnections = configOf(node).algorithm === 'least-connections'
-    const weights = targets.map((edge) => (leastConnections ? capacityOf(targetOf(edge)) : 1))
+    const weights = targets.map((edge) => (leastConnections ? capacityOf(targetOf(edge), graph) : 1))
     const total = weights.reduce((sum, weight) => sum + weight, 0)
     result = targets.map((edge, i) => ({ edge, fraction: total > 0 ? weights[i] / total : 0, group: 'load-balancer' }))
   } else if (kind === 'read') {
@@ -554,14 +560,30 @@ function instancesOf(node: DesignNode): number {
   return typeof instances === 'number' ? instances : 1
 }
 
+/** The copies a Node sends each request it serves on as: a fan-out service's `fanOut`, or else one. */
+function fanOutOf(node: DesignNode): number {
+  const { fanOut } = configOf(node)
+  return node.componentType === 'fan-out' && typeof fanOut === 'number' ? fanOut : 1
+}
+
+/**
+ * What one request costs a Node's capacity, in sends: one, except that a fan-out service sends `fanOut`
+ * copies along each of its Edges out.
+ */
+function sendsPerRequest(node: DesignNode, graph: Graph): number {
+  const fanOut = fanOutOf(node)
+  return fanOut === 1 ? 1 : fanOut * Math.max(1, (graph.outgoing.get(node.id) ?? []).length)
+}
+
 /** A primary with replicas keeps a copy on each. */
 function copiesOf(node: DesignNode): number {
   const { role, replicas } = configOf(node)
   return role === 'primary' && typeof replicas === 'number' ? 1 + replicas : 1
 }
 
-function capacityOf(node: DesignNode): number {
-  return (nodeSimulation(node)?.capacityQps ?? 0) * instancesOf(node)
+/** The requests a second a Node serves, all its instances together. */
+function capacityOf(node: DesignNode, graph: Graph): number {
+  return ((nodeSimulation(node)?.capacityQps ?? 0) * instancesOf(node)) / sendsPerRequest(node, graph)
 }
 
 /** The share of reads a cache answers itself; none for writes, other Nodes or a cold cache. */

@@ -410,6 +410,20 @@ export const glossary: GlossaryTermInput[] = [
     explanation: 'Növbə dolanda yeni sorğuları rədd etmək (məsələn, HTTP 503). İstifadəçi sonra yenidən cəhd edir və sistem həddən artıq yüklənmir.',
     lessonIds: ['back-pressure'],
   },
+  {
+    term: 'Fan-out',
+    aliases: ['fan out', 'fan-out on write', 'fan-out on read'],
+    explanation:
+      'Bir sorğunu çoxlu nüsxəyə çevirib bir çox yerə göndərmək: məsələn, yeni postu bütün izləyicilərin lentinə yazmaq (fan-out on write, push model) və ya lenti oxuyanda izlənilən hər hesabın postlarını yığmaq (fan-out on read, pull model). Biri yazmanı, digəri oxumanı bahalaşdırır.',
+    lessonIds: ['design-the-twitter-timeline-and-search-or-facebook-feed-and-search', 'asynchronism'],
+  },
+  {
+    term: 'Push notification service',
+    aliases: ['APNs', 'FCM'],
+    explanation:
+      'Bildirişi istifadəçinin cihazına çatdıran üçüncü tərəf provayderi: iOS üçün Apple Push Notification service (APNs), Android üçün Firebase Cloud Messaging (FCM); SMS və e-poçt üçün də oxşar provayderlər var (məsələn, Twilio, SendGrid). Datacenter-dən kənarda olduğu üçün ona növbə vasitəsilə, asinxron müraciət edilir.',
+    lessonIds: ['asynchronism', 'message-queues'],
+  },
 
   // Communication
   {
@@ -429,6 +443,13 @@ export const glossary: GlossaryTermInput[] = [
     aliases: ['User datagram protocol'],
     explanation: 'Əlaqəsiz, çatdırılmaya zəmanət verməyən, amma daha sürətli transport protokolu; VoIP, oyun və video axını üçün uyğundur.',
     lessonIds: ['user-datagram-protocol-udp'],
+  },
+  {
+    term: 'WebSocket',
+    aliases: ['WebSockets'],
+    explanation:
+      'Bir TCP bağlantısı üzərində client ilə server arasında daimi, iki istiqamətli kanal. Bağlantı bir dəfə qurulur və açıq qalır, ona görə server yeni mesajı client soruşmadan dərhal göndərə bilər; HTTP polling-dəki boş sorğular olmur. Chat, canlı bildiriş və oyunlar üçün istifadə olunur.',
+    lessonIds: ['communication', 'transmission-control-protocol-tcp'],
   },
   {
     term: 'RPC',

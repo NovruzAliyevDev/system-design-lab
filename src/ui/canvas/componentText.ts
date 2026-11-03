@@ -10,6 +10,7 @@ const COMPONENT_NAMES: Record<ComponentType, StringKey> = {
   'rate-limiter': 'componentRateLimiter',
   'reverse-proxy': 'componentReverseProxy',
   'web-server': 'componentWebServer',
+  'websocket-gateway': 'componentWebsocketGateway',
   'app-service': 'componentAppService',
   cache: 'componentCache',
   'sql-database': 'componentSqlDatabase',
@@ -17,6 +18,8 @@ const COMPONENT_NAMES: Record<ComponentType, StringKey> = {
   'object-store': 'componentObjectStore',
   'message-queue': 'componentMessageQueue',
   'task-queue': 'componentTaskQueue',
+  'fan-out': 'componentFanOut',
+  'push-service': 'componentPushService',
   'coordination-service': 'componentCoordinationService',
   'search-index': 'componentSearchIndex',
   analytics: 'componentAnalytics',
@@ -34,6 +37,7 @@ export const COMPONENT_TAGS: Record<ComponentType, string> = {
   'rate-limiter': 'RL',
   'reverse-proxy': 'GW',
   'web-server': 'WEB',
+  'websocket-gateway': 'WS',
   'app-service': 'APP',
   cache: 'MEM',
   'sql-database': 'SQL',
@@ -41,6 +45,8 @@ export const COMPONENT_TAGS: Record<ComponentType, string> = {
   'object-store': 'OBJ',
   'message-queue': 'MQ',
   'task-queue': 'WRK',
+  'fan-out': 'FAN',
+  'push-service': 'PUSH',
   'coordination-service': 'ZK',
   'search-index': 'IDX',
   analytics: 'MR',
@@ -59,6 +65,8 @@ const FIELD_LABELS: Record<ConfigFieldKey, StringKey> = {
   shardKey: 'fieldShardKey',
   limitQps: 'fieldLimitQps',
   failMode: 'fieldFailMode',
+  fanOut: 'fieldFanOut',
+  channel: 'fieldChannel',
   instances: 'fieldInstances',
 }
 
@@ -97,6 +105,9 @@ const OPTION_LABELS: Record<ConfigOption, StringKey> = {
   'sliding-window-counter': 'optionSlidingWindowCounter',
   closed: 'optionFailClosed',
   open: 'optionFailOpen',
+  'mobile-push': 'optionMobilePush',
+  sms: 'optionSms',
+  email: 'optionEmail',
 }
 
 /** A choice field's option label; options are listed by their schema, so every value has one. */

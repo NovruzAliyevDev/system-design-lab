@@ -22,7 +22,10 @@
 // deep-dive option carries its Azerbaijani explanation, and their Hints never point at a primer diagram.
 import type { ChallengeInput } from '../src/core/challenges/challenge'
 import type { NodeSelector, Predicate } from '../src/core/challenges/rules'
+import { chatSystem } from './authored-challenges/chat-system'
 import { idGenerator } from './authored-challenges/id-generator'
+import { newsFeed } from './authored-challenges/news-feed'
+import { notificationSystem } from './authored-challenges/notification-system'
 import { rateLimiter } from './authored-challenges/rate-limiter'
 import { urlShortener } from './authored-challenges/url-shortener'
 import { callCenter } from './primer-challenges/call-center'
@@ -683,4 +686,7 @@ export const challenges: ChallengeInput[] = [
   urlShortener,
   rateLimiter,
   idGenerator,
+  chatSystem,
+  newsFeed,
+  notificationSystem,
 ]

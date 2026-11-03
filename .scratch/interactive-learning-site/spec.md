@@ -254,14 +254,15 @@ All Core functions are deterministic. Time (`now`) and randomness (seed) are pas
       - a cache forwards misses (1 − hit ratio) downstream;
       - reads may go to replicas, writes go to the primary;
       - a queue converts synchronous load into deferred work at the consumer;
-      - a rate limiter checks every request against its counter store, lets through up to its limit and rejects the rest at once (HTTP 429, counted as failing); when it can reach none of its counter stores it fails closed (rejects everything) or open (lets everything through unchecked).
+      - a rate limiter checks every request against its counter store, lets through up to its limit and rejects the rest at once (HTTP 429, counted as failing); when it can reach none of its counter stores it fails closed (rejects everything) or open (lets everything through unchecked);
+      - a fan-out service sends each request it serves on as `fanOut` copies along each edge out, and its capacity counts every copy it sends; the copies of a request go out together, so a request waits for them once.
     - Utilisation ρ = load / (capacity × instances). Node latency = base latency × 1/(1 − ρ), capped. ρ ≥ 1 means the node is overloaded, and the excess load is reported as dropped.
   - The result reports:
     - per-node load, utilisation, latency, cost and an overloaded flag;
     - end-to-end latency per request path;
     - error rate and total monthly cost;
     - a ranked list of bottlenecks.
-  - Rules can reference "simulation target met" so that the Scaling Stage and Chaos tasks are checked through this engine.
+  - Rules can reference "simulation target met" so that the Scaling Stage and Chaos tasks are checked through this engine. A target bounds the mean latency per kind, the overloaded Nodes, the error rate and, as a budget, the monthly cost.
   - Realistic mode (M/M/c queueing, seeded randomness, p99) comes later, behind the same signature.
   - **Chaos Scenario** is data: nodes down, zone down, cache cold, partition between node sets. It is applied before routing.
 - **Estimation**: `estimate(inputs) → EstimationResult`, with unit-aware outputs. Separately, `gradeEstimate(userValue, referenceValue) → pass/fail`, which accepts values within a factor of 2 of the reference.

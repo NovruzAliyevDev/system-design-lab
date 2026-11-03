@@ -1,6 +1,7 @@
 // Building blocks the authored Challenges share beyond those of the primer Challenges: the same Rules,
-// with Hints that explain them without pointing at a primer diagram these questions do not have.
-import type { Rule } from '../../src/core/challenges/rules'
+// with Hints that explain them without pointing at a primer diagram these questions do not have, and the
+// selectors several of them use.
+import type { NodeSelector, Rule } from '../../src/core/challenges/rules'
 import { loadBalancerRule as primerLoadBalancerRule, scaleOutRule as primerScaleOutRule } from '../primer-challenges/shared'
 
 /** The primer Challenges' Rule for the Scaling Stage: requests reach the application servers through a load balancer. */
@@ -22,3 +23,6 @@ export const scaleOutRule: Rule = {
     'Horizontal scaling-də eyni serverin bir neçə nüsxəsi load balancer arxasında işləyir: stateless servislər belə asan miqyaslanır, bir nüsxənin çökməsi isə servisi dayandırmır. Hər servis öz yükünə görə ayrıca miqyaslanır: yükü artan servisin nüsxələri artırılır, digərləri olduğu kimi qalır.',
   ],
 }
+
+/** The provider of mobile push notifications: APNs and FCM. */
+export const MOBILE_PUSH: NodeSelector = { component: 'push-service', config: { channel: 'mobile-push' } }

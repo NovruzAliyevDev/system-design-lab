@@ -48,6 +48,7 @@ export const PRIMER_LATENCY_NS = {
   'Read 1 MB sequentially from SSD*': 1_000_000,
   'HDD seek': 10_000_000,
   'Read 1 MB sequentially from HDD': 30_000_000,
+  'Send packet CA->Netherlands->CA': 150_000_000,
 } as const
 
 export type PrimerOperation = keyof typeof PRIMER_LATENCY_NS
@@ -102,6 +103,9 @@ const shardKey: TextField = { kind: 'text', maxLength: 60, default: '' }
 /** The requests per second a rate limiter lets through, all its clients' allowances together. */
 const limitQps: IntegerField = { kind: 'integer', min: 1, max: 10_000_000, default: 1_000 }
 
+/** The copies a fan-out service sends each request on as, e.g. one for each follower's feed. */
+const fanOut: IntegerField = { kind: 'integer', min: 1, max: 10_000, default: 1 }
+
 function simulation(capacityQps: number, terms: [PrimerOperation, number][], monthlyCostUsd: number, hitRatio?: number): SimulationDefaults {
   const latency = terms.map(([operation, times]) => ({ operation, nanoseconds: PRIMER_LATENCY_NS[operation], times }))
   const nanoseconds = latency.reduce((sum, term) => sum + term.nanoseconds * term.times, 0)
@@ -154,6 +158,12 @@ const COMPONENTS = {
     config: { instances },
     simulation: simulation(1_000, [[ROUND_TRIP, 1], ['Send 1 KB bytes over 1 Gbps network', 2]], 70),
   },
+  'websocket-gateway': {
+    glossaryTermId: 'websocket',
+    config: { instances },
+    // Relays small frames over connections already open, with no handshake or request parsing per message.
+    simulation: simulation(20_000, [[ROUND_TRIP, 1]], 70),
+  },
   'app-service': {
     glossaryTermId: 'application-layer',
     config: { instances },
@@ -193,6 +203,20 @@ const COMPONENTS = {
     glossaryTermId: 'task-queue',
     config: { instances },
     simulation: simulation(200, [[ROUND_TRIP, 1], ['Read 1 MB sequentially from memory', 4]], 70),
+  },
+  'fan-out': {
+    glossaryTermId: 'fan-out',
+    config: { fanOut, instances },
+    // Each copy is a small write sent on; the copies of a request go out together, in one nearby round trip.
+    simulation: simulation(5_000, [[ROUND_TRIP, 1]], 70),
+  },
+  'push-service': {
+    glossaryTermId: 'push-notification-service',
+    // A third-party provider: there is nothing of it to scale, so it has no instances.
+    config: { channel: choice(['mobile-push', 'sms', 'email'], 'mobile-push') },
+    // Outside the datacenter, often on another continent: a long-haul round trip. Providers bill per message;
+    // the monthly cost stands for a plan.
+    simulation: simulation(100_000, [['Send packet CA->Netherlands->CA', 1]], 100),
   },
   'coordination-service': {
     glossaryTermId: 'coordination-service',

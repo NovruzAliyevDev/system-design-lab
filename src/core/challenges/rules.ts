@@ -185,8 +185,8 @@ export interface CustomPredicate {
 /**
  * Simulated under its Stage's Load Profile (or its own `load`), and under one of its Chaos tasks when
  * `chaos` names it, the Design meets every target given: each kind of request the load sends reaches some
- * Node that is up, and the mean latency per kind, the number of overloaded Nodes and the share of failing
- * requests stay at most their targets.
+ * Node that is up, and the mean latency per kind, the number of overloaded Nodes, the share of failing
+ * requests and the monthly cost stay at most their targets.
  */
 export interface SimulationPredicate {
   type: 'simulation'
@@ -198,6 +198,8 @@ export interface SimulationPredicate {
   maxOverloadedNodes?: number
   /** From 0 to 1: of all requests, or per kind. */
   maxErrorRate?: number | Partial<Record<RequestKind, number>>
+  /** A budget: what every Node of the Design costs a month together. */
+  maxMonthlyCostUsd?: number
 }
 
 /**
@@ -517,6 +519,7 @@ function meetsTargets(targets: SimulationPredicate, { load, result }: { load: Lo
   }
   const overloaded = Object.values(result.nodes).filter((metrics) => metrics.overloaded).length
   if (targets.maxOverloadedNodes !== undefined && overloaded > targets.maxOverloadedNodes) return false
+  if (targets.maxMonthlyCostUsd !== undefined && result.monthlyCostUsd > targets.maxMonthlyCostUsd) return false
   return typeof maxErrorRate !== 'number' || result.errorRate <= maxErrorRate
 }
 
@@ -589,7 +592,7 @@ const PREDICATE_FIELDS: Record<Predicate['type'], ReadonlySet<string>> = {
   'any-of': new Set(['type', 'predicates']),
   not: new Set(['type', 'predicate']),
   custom: new Set(['type', 'name']),
-  simulation: new Set(['type', 'chaos', 'load', 'maxLatencyMs', 'maxOverloadedNodes', 'maxErrorRate']),
+  simulation: new Set(['type', 'chaos', 'load', 'maxLatencyMs', 'maxOverloadedNodes', 'maxErrorRate', 'maxMonthlyCostUsd']),
   class: new Set(['type', 'class', 'min', 'max']),
   member: new Set(['type', 'class', 'field', 'method']),
   relation: new Set(['type', 'from', 'to', 'kind', 'fromMultiplicity', 'toMultiplicity']),
@@ -752,10 +755,10 @@ function checkPredicate(value: unknown, fail: (message: string) => void, chaosTa
       if (!isText(value.name) || !Object.hasOwn(CUSTOM_PREDICATES, value.name)) fail(`no custom predicate "${String(value.name)}" is registered`)
       return
     case 'simulation': {
-      const { chaos, load, maxLatencyMs, maxOverloadedNodes, maxErrorRate } = value
+      const { chaos, load, maxLatencyMs, maxOverloadedNodes, maxErrorRate, maxMonthlyCostUsd } = value
       if (chaos !== undefined && !(isText(chaos) && chaosTaskIds.has(chaos))) fail(`"chaos" names no Chaos task of the Stage: "${String(chaos)}"`)
       if (load !== undefined) validateLoadProfile(load, (message) => fail(`load: ${message}`))
-      if ([maxLatencyMs, maxOverloadedNodes, maxErrorRate].every((target) => target === undefined)) return fail('a simulation predicate must set at least one target')
+      if ([maxLatencyMs, maxOverloadedNodes, maxErrorRate, maxMonthlyCostUsd].every((target) => target === undefined)) return fail('a simulation predicate must set at least one target')
       const latencies = isRecord(maxLatencyMs) ? Object.entries(maxLatencyMs) : []
       const latenciesFit = latencies.length > 0 && latencies.every(([kind, ms]) => REQUEST_KINDS.includes(kind as RequestKind) && isPositive(ms))
       if (maxLatencyMs !== undefined && !latenciesFit) fail('"maxLatencyMs" must give positive numbers for "read" and "write" only')
@@ -765,6 +768,7 @@ function checkPredicate(value: unknown, fail: (message: string) => void, chaosTa
         ? perKind.length > 0 && perKind.every(([kind, rate]) => REQUEST_KINDS.includes(kind as RequestKind) && isShare(rate))
         : isShare(maxErrorRate)
       if (maxErrorRate !== undefined && !ratesFit) fail('"maxErrorRate" must be a number from 0 to 1, or such numbers for "read" and "write" only')
+      if (maxMonthlyCostUsd !== undefined && !isPositive(maxMonthlyCostUsd)) fail('"maxMonthlyCostUsd" must be a positive number')
       return
     }
     case 'class': {

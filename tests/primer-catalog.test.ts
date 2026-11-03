@@ -735,7 +735,7 @@ describe('catalog of the pinned primer commit', () => {
   })
 
   describe('the authored Challenges', () => {
-    const AUTHORED = ['url-shortener', 'rate-limiter', 'id-generator']
+    const AUTHORED = ['url-shortener', 'rate-limiter', 'id-generator', 'chat-system', 'news-feed', 'notification-system']
     const authored = AUTHORED.map((id) => findChallenge(catalog.challenges, id)!)
     const answersOf = (challenge: Challenge) => Object.fromEntries(stageOfType(challenge, 'estimation').questions.map((question) => [question.id, question.referenceValue]))
     const ruleResult = (stage: DesignStage, design: Design, ruleId: string) => evaluateDesign(stage, design, {}).rules.find((result) => result.ruleId === ruleId)!
@@ -883,6 +883,140 @@ describe('catalog of the pinned primer commit', () => {
         const ensemble = (instances: number) => ruleResult(scaling, setNodeConfig(scaling.referenceSolution, 'coordination-service-1', 'instances', instances), 'coordination-quorum').passed
 
         expect([1, 3, 4, 5].map(ensemble)).toEqual([false, true, false, true])
+      })
+    })
+
+    it('estimate the chat system: 12,000 messages sent and 24,000 delivered a second, 36 TB a year, 180 TB in 5 years', () => {
+      expect(answersOf(findChallenge(catalog.challenges, 'chat-system')!)).toEqual({
+        'write-qps': 12_000,
+        'read-qps': 24_000,
+        'peak-write-qps': 24_000,
+        'storage-per-year': 36e12,
+        'storage-5-years': 180e12,
+      })
+    })
+
+    it('estimate the news feed: 400 posts and 20,000 feed reads a second, 1 TB a month, 60 TB in 5 years', () => {
+      expect(answersOf(findChallenge(catalog.challenges, 'news-feed')!)).toEqual({
+        'write-qps': 400,
+        'read-qps': 20_000,
+        'peak-read-qps': 40_000,
+        'storage-per-month': 1e12,
+        'storage-5-years': 60e12,
+      })
+    })
+
+    it('estimate the notification system: 1,000 notifications a second, 5,000 at a campaign peak, 15 TB of records a year', () => {
+      expect(answersOf(findChallenge(catalog.challenges, 'notification-system')!)).toEqual({
+        'write-qps': 1_000,
+        'peak-write-qps': 5_000,
+        'storage-per-month': 1.25e12,
+        'storage-per-year': 15e12,
+      })
+    })
+
+    describe('chat system', () => {
+      const challenge = findChallenge(catalog.challenges, 'chat-system')!
+      const highLevel = stageOfType(challenge, 'high-level-design')
+      const scaling = stageOfType(challenge, 'scaling')
+
+      it('refuses a way to the messages around the WebSocket gateway', () => {
+        expect(ruleResult(highLevel, connect(highLevel.referenceSolution, 'client-1', 'app-service-1'), 'websocket').passed).toBe(false)
+      })
+
+      it('slows every message past the target when it calls the push provider synchronously', () => {
+        const withoutQueue = removeElements(scaling.referenceSolution, { nodeIds: ['message-queue-1'] })
+        const synchronous = updateEdge(connect(withoutQueue, 'app-service-1', 'app-service-2'), 'app-service-1->app-service-2', { traffic: 'write' })
+        const peak = simulate(synchronous, scaling.loadProfile)
+
+        expect(Object.values(peak.nodes).filter((metrics) => metrics.overloaded)).toEqual([])
+        expect(peak.meanLatencyMs.write).toBeGreaterThan(150)
+        expect(ruleResult(scaling, synchronous, 'peak-load').passed).toBe(false)
+        expect(ruleResult(highLevel, synchronous, 'async-push').passed).toBe(false)
+      })
+
+      it('needs deliveries read from an inbox cache, not a push worker reading presence', () => {
+        const withoutInbox = removeElements(scaling.referenceSolution, { nodeIds: ['cache-2'] })
+        const presenceRead = updateEdge(withoutInbox, 'app-service-2->cache-1', { traffic: 'both' })
+
+        expect(ruleResult(scaling, presenceRead, 'inbox-cache').passed).toBe(false)
+      })
+
+      it('survives the inbox cache going down only with a message store that takes every delivery itself', () => {
+        const withoutReplicas = setNodeConfig(scaling.referenceSolution, 'nosql-store-1', 'replicas', 0)
+
+        expect(ruleResult(scaling, withoutReplicas, 'peak-load').passed).toBe(true)
+        expect(ruleResult(scaling, withoutReplicas, 'cache-down').passed).toBe(false)
+      })
+    })
+
+    describe('news feed', () => {
+      const challenge = findChallenge(catalog.challenges, 'news-feed')!
+      const highLevel = stageOfType(challenge, 'high-level-design')
+      const scaling = stageOfType(challenge, 'scaling')
+      /** The design reading each feed from the 200 friends' posts in the post cache instead of fanning each post out. */
+      const onRead = (design: Design, postCache: string) => {
+        const gathering = removeElements(design, { edgeIds: ['app-service-3->fan-out-1', 'fan-out-1->cache-1', 'app-service-2->cache-1'] })
+        const fromFeed = updateEdge(connect(gathering, 'app-service-2', 'fan-out-1'), 'app-service-2->fan-out-1', { traffic: 'read' })
+        return updateEdge(connect(fromFeed, 'fan-out-1', postCache), `fan-out-1->${postCache}`, { traffic: 'read' })
+      }
+
+      it('accepts a feed built at either time in the high-level design, but only with the fan-out set to the 200 friends', () => {
+        const { design } = addNode(highLevel.referenceSolution, 'cache', { x: 1200, y: 560 }, 'Post Cache')
+        const gathering = onRead(design, 'cache-2')
+
+        expect(ruleResult(highLevel, gathering, 'feed-fan-out').passed).toBe(true)
+        expect(ruleResult(highLevel, setNodeConfig(highLevel.referenceSolution, 'fan-out-1', 'fanOut', 1), 'feed-fan-out').passed).toBe(false)
+      })
+
+      it('fans 800 posts a second out into 160,000 feed writes within the budget, where gathering for 40,000 reads would ask for 8 million copies', () => {
+        const peak = simulate(scaling.referenceSolution, scaling.loadProfile)
+        let gathering = onRead(scaling.referenceSolution, 'cache-2')
+        gathering = setNodeConfig(setNodeConfig(gathering, 'fan-out-1', 'instances', 1_000), 'cache-2', 'instances', 200)
+        const gatheringPeak = simulate(gathering, scaling.loadProfile)
+
+        expect(peak.nodes['cache-1'].writeQps).toBe(160_000)
+        // Even 1,000 instances send 5 million copies a second: enough for 25,000 of the 40,000 reads.
+        expect(gatheringPeak.nodes['fan-out-1']).toMatchObject({ loadQps: 40_000, capacityQps: 25_000, overloaded: true })
+        expect(gatheringPeak.monthlyCostUsd).toBeGreaterThan(40_000)
+        expect(ruleResult(scaling, gathering, 'budget').passed).toBe(false)
+        expect(ruleResult(scaling, gathering, 'peak-load').passed).toBe(false)
+      })
+
+      it('keeps posts and feeds working while the fan-out is down only with a queue before it', () => {
+        const withoutQueue = removeElements(scaling.referenceSolution, { nodeIds: ['message-queue-1'] })
+        const synchronous = connect(withoutQueue, 'app-service-1', 'app-service-3')
+
+        expect(ruleResult(scaling, synchronous, 'peak-load').passed).toBe(true)
+        expect(ruleResult(scaling, synchronous, 'fan-out-down').passed).toBe(false)
+      })
+    })
+
+    describe('notification system', () => {
+      const challenge = findChallenge(catalog.challenges, 'notification-system')!
+      const highLevel = stageOfType(challenge, 'high-level-design')
+      const scaling = stageOfType(challenge, 'scaling')
+
+      it('sends every notification as a push to each of two devices and as an e-mail', () => {
+        const peak = simulate(scaling.referenceSolution, scaling.loadProfile)
+
+        expect(peak.nodes['push-service-1'].writeQps).toBe(10_000)
+        expect(peak.nodes['push-service-2'].writeQps).toBe(5_000)
+        expect(ruleResult(highLevel, setNodeConfig(highLevel.referenceSolution, 'fan-out-1', 'fanOut', 1), 'push-per-device').passed).toBe(false)
+      })
+
+      it('needs a queue of its own for each channel', () => {
+        const oneQueue = connect(removeElements(highLevel.referenceSolution, { nodeIds: ['message-queue-2'] }), 'message-queue-1', 'app-service-2')
+
+        expect(ruleResult(highLevel, oneQueue, 'queued-delivery').passed).toBe(false)
+      })
+
+      it('accepts notifications while the push provider is down only with a queue before it, and keeps the provider’s 150 ms off the request', () => {
+        const synchronous = connect(removeElements(scaling.referenceSolution, { nodeIds: ['message-queue-1'] }), 'app-service-1', 'fan-out-1')
+
+        expect(ruleResult(scaling, synchronous, 'push-provider-down').passed).toBe(false)
+        expect(ruleResult(scaling, synchronous, 'peak-load').passed).toBe(false)
+        expect(ruleResult(scaling, scaling.referenceSolution, 'push-provider-down').passed).toBe(true)
       })
     })
   })
