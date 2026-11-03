@@ -368,7 +368,7 @@ export const rateLimiter: ChallengeInput = {
           hints: [
             'Pik anlarda gələn 10 000 sorğunun hamısı legitimdir. Limitiniz və API serverləriniz onları buraxmağa hazırdırmı?',
             'Trafik simulyasiyasını işə salın: "Limitə görə rədd edilən" sorğular varsa, rate limiter-in "Limit" sahəsini pik yükdən yuxarı qaldırın; həddən artıq yüklənən node varsa, onun "instances" sahəsini artırın.',
-            'Limit iki sərhəd arasında olmalıdır: legitim pikdən (10 000 sorğu/san) yuxarı, ki, heç bir normal sorğu rədd edilməsin, və API serverlərinin tutumundan aşağı, ki, onlar heç vaxt boğulmasın. Bu modeldə API serverinin bir nüsxəsi saniyədə 500 sorğu emal edir: 10 000 üçün ən azı 20, ehtiyatla 30 nüsxə (15 000 tutum), limit isə məsələn 12 000.',
+            'Limit iki sərhəd arasında olmalıdır: legitim pikdən (10 000 sorğu/san) yuxarı, ki, heç bir normal sorğu rədd edilməsin, və API serverlərinin tutumundan aşağı, ki, onlar heç vaxt boğulmasın. Bu modeldə API serverinin bir nüsxəsi saniyədə 500 sorğu emal edir: 10 000 üçün 20-dən çox, ehtiyatla 30 nüsxə (15 000 tutum), limit isə məsələn 12 000.',
           ],
           check: { type: 'simulation', maxLatencyMs: { read: 100, write: 100 }, maxOverloadedNodes: 0, maxErrorRate: 0 },
         },

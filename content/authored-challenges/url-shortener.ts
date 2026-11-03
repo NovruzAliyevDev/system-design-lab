@@ -381,7 +381,7 @@ export const urlShortener: ChallengeInput = {
           hints: [
             'Saniyədə 24 000 yönləndirmə gələndə dizaynınızın hansı node-u ilk tıxanır?',
             'Trafik simulyasiyasını işə salın və "Darboğazlar" siyahısına baxın. Ən çox yüklənən node-ların "instances" sahəsini artırın, oxumaları isə cache və replikalarla bazadan götürün.',
-            'Hər node bir nüsxədə məhdud sorğu emal edir (bu modeldə application service-in bir nüsxəsi saniyədə 500 sorğu). 24 000 yönləndirmə üçün Redirect Service-ə ən azı 48 nüsxə, ehtiyatla 60-dan çox lazımdır; web server-lər və load balancer da ümumi yükü daşımalıdır. Populyar linklər cache-dən verilir, cache-də olmayanlar isə bazanın replikalarından oxunur.',
+            'Hər node bir nüsxədə məhdud sorğu emal edir (bu modeldə application service-in bir nüsxəsi saniyədə 500 sorğu). 24 000 yönləndirmə üçün Redirect Service-ə 48-dən çox, ehtiyatla 60-dan çox nüsxə lazımdır; web server-lər və load balancer da ümumi yükü daşımalıdır. Populyar linklər cache-dən verilir, cache-də olmayanlar isə bazanın replikalarından oxunur.',
           ],
           check: { type: 'simulation', maxLatencyMs: { read: 100, write: 200 }, maxOverloadedNodes: 0, maxErrorRate: 0 },
         },
