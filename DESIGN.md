@@ -145,7 +145,7 @@ Both are self-hosted through `@fontsource-variable/*`, imported in `src/main.tsx
 ### Hierarchy (shell)
 - **Title** (600, 1rem): the site title in the header.
 - **UI** (400–500, 0.875rem): navigation, buttons, search results, prompts.
-- **Label** (400, 0.75rem): metadata, result context, keyboard hints, the footer. The table-of-contents group headings are 0.75rem, 600, uppercase with wide tracking. That style belongs to sidebar navigation groups only and is not used as an eyebrow above page headings.
+- **Label** (400, 0.75rem): metadata, result context, keyboard hints, the footer.
 - **Prose** (Tailwind Typography `.prose`): primer content. Body text is `text` mixed 80% with `text-muted`. Headings, bold, quotes and code use `text`. Links use `accent`. Rules, bullets and table borders use `border`. `pre` uses `surface-raised`. The mapping sets the `--tw-prose-*` and `--tw-prose-invert-*` variables to the same values, so the prose follows the theme with or without `prose-invert`.
 
 Page heading sizes are recorded per slice under **Page patterns**.
@@ -194,7 +194,7 @@ Buttons are bordered and links are not. The border helps tell them apart, but it
 ### Navigation
 - **Header links** (from `xl` up): 0.875rem `text-muted`, `text` on hover. The current page is `text` with a 2px `accent` underline at a 6px offset, so it is marked by more than colour. On a phone the icon-only Settings link has nothing to underline, so the current page gets a 1px `accent` ring instead.
 - **Header controls on phones:** the table-of-contents button, search and settings are 44×44px (`min-h-11 min-w-11`) below `sm`. They show an inline 20px SVG icon only, and the label stays for screen readers (`max-sm:sr-only` or `aria-label`). From `sm` up they show the text label.
-- **Table of contents rows:** 0.875rem, `text-muted`, `surface-raised` fill on hover. The active row is `accent/10` fill with `accent` text and 500 weight. Rows are 44px on phones (`py-3`) and compact from `sm` up (`py-1`).
+- **Table of contents rows:** two levels. Top-level entries (the header pages listed below `xl`, single-Lesson groups and group headings) are 0.875rem `text`: links at 500, group headings at 600 and not links. The Lessons in a group are 0.875rem 400 `text-muted`, `text` on hover, indented on a 1px `border` rule (`ml-2 border-l pl-1.5`). So a level reads from colour, weight and indent together. Groups are 1.25rem apart. Every link row gets a `surface-raised` fill on hover. The active row is `accent/10` fill with `accent` text and 500 weight. Rows are 44px on phones (`py-3`) and compact from `sm` up (`py-1`).
 - **Search results:** the active option has an `accent/10` fill and a 1px inset `accent` ring. The title is `text` and 500 weight, the context and snippet are `text-muted`, and matches are highlighted with `warning/25` in `text` colour (muted text on the highlight would fall to 3.8:1).
 
 ### Overlays
