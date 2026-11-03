@@ -1,9 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { expect, test, type Locator, type Page } from '@playwright/test'
 
-/** How long a primer diagram may take to load from the dev server. */
-const IMAGE_TIMEOUT = 15_000
-
 test('opens the app and reads a Lesson', async ({ page }) => {
   await page.goto('/')
   await expect(page.getByRole('heading', { level: 1, name: 'Bu gün' })).toBeVisible()
@@ -50,8 +47,8 @@ test('moves through Lessons with the sidebar, primer links and next/previous', a
 
   const diagram = page.getByRole('article').locator('img').first()
   await expect(diagram).toBeVisible()
-  // Visible means laid out, not loaded: wait for the image itself. A cold dev server on CI can take longer than 5 s.
-  await expect.poll(() => diagram.evaluate((img: HTMLImageElement) => img.naturalWidth), { timeout: IMAGE_TIMEOUT }).toBeGreaterThan(0)
+  // Visible means laid out, not loaded: wait for the image itself.
+  await expect.poll(() => diagram.evaluate((img: HTMLImageElement) => img.naturalWidth)).toBeGreaterThan(0)
 
   await page.getByRole('link', { name: 'active-passive' }).first().click()
   await expect(page).toHaveURL(/\/lessons\/fail-over#active-passive$/)
@@ -318,7 +315,7 @@ test('reads a Solution page from the primer, with its diagrams and links back to
   )
   const diagram = page.getByRole('article').locator('img').first()
   await diagram.scrollIntoViewIfNeeded()
-  await expect.poll(() => diagram.evaluate((img: HTMLImageElement) => img.naturalWidth), { timeout: IMAGE_TIMEOUT }).toBeGreaterThan(0)
+  await expect.poll(() => diagram.evaluate((img: HTMLImageElement) => img.naturalWidth)).toBeGreaterThan(0)
 
   // A link to a section of the primer on GitHub opens its Lesson in the app.
   await page.getByRole('article').getByRole('link', { name: 'system design topics', exact: true }).first().click()

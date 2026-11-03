@@ -19,14 +19,16 @@ export default defineConfig({
     },
   ],
   testDir: 'e2e',
+  // Both servers start at once, so neither regenerates the content: that empties and refills public/primer,
+  // and the dev server can miss files written under it while running. `npm run test:e2e` generates it first.
   webServer: [
     {
-      command: `npm run dev -- --port ${DEV_PORT} --strictPort`,
+      command: `vite --port ${DEV_PORT} --strictPort`,
       url: `http://localhost:${DEV_PORT}`,
       reuseExistingServer: !process.env.CI,
     },
     {
-      command: `npm run build && tsx e2e/pages-server.ts dist ${PAGES_BASE} ${PAGES_PORT}`,
+      command: `tsc -b && vite build && tsx e2e/pages-server.ts dist ${PAGES_BASE} ${PAGES_PORT}`,
       url: `http://localhost:${PAGES_PORT}${PAGES_BASE}`,
       env: { BASE_PATH: PAGES_BASE },
       reuseExistingServer: !process.env.CI,
