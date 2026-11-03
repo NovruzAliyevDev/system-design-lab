@@ -4,7 +4,7 @@
 
 **Blocked by:** 01
 
-**Status:** ready-for-human (agent work is done; the owner must still create the GitHub repository and enable Pages, see the README)
+**Status:** resolved
 
 - [x] CI workflow builds (with submodule checkout) and deploys to GitHub Pages on push to main.
 - [x] Routing works under the repository base path, including reloads on deep links.
@@ -29,3 +29,12 @@
   - Playwright `pages` project: builds with base `/system-design-lab/`, serves `dist` with `e2e/pages-server.ts` (a stand-in for GitHub Pages: `404.html` for unknown paths), and tests deep-link reloads, offline use after one visit, and the update prompt (on reload and accepted; in a tab left open, via the hourly check, and put off). The server has a test hook that changes `sw.js` to fake a new deploy.
 - **Known gap:** offline, `/<repo>` without the trailing slash is outside the service worker scope and does not load; `/<repo>/` does.
 - **Left for the owner:** create the GitHub repo, set Pages source to GitHub Actions, then push (README "Deploy").
+
+**Owner part done (2026-11-03).**
+- The repo is `NovruzAliyevDev/system-design-lab` (public), with Pages source set to GitHub Actions. The site is at https://novruzaliyevdev.github.io/system-design-lab/.
+- Tickets 05 to 33 were pushed at once, and the first run failed in `npm run test:e2e`. The fixes:
+  - Palette drags scrolled the page and dropped components nowhere. `addToCanvas` in `e2e/smoke.spec.ts` scrolls the editor into view first.
+  - Two assertions were out of date: the Solutions list links each Solution to its Challenge, and "pastebin" also finds the URL shortener Challenge.
+  - The quiz ordering test read the steps before the quiz had shown.
+  - Both Playwright web servers regenerated the content, and the build could rewrite `public/primer` under the running dev server, so a diagram sometimes did not load. `npm run test:e2e` now generates the content once (`pretest:e2e`), and the servers skip it.
+- Run 41612444698 passed and deployed. The live sandbox shows the Sadə / Realist choice from ticket 33.
